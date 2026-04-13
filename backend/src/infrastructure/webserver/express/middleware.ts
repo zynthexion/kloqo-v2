@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { VerifySessionUseCase } from '../../../application/VerifySessionUseCase';
-import { RBACUtils, Role } from '@kloqo/shared';
+import { RBACUtils, Role, KLOQO_ROLES } from '@kloqo/shared';
 
 /**
  * Middleware factory — requires VerifySessionUseCase to be passed in.
@@ -49,7 +49,7 @@ export function createMiddleware(verifySessionUseCase: VerifySessionUseCase) {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     // Root superAdmin global override
-    if (RBACUtils.hasRole(req.user, 'superAdmin')) return next();
+    if (RBACUtils.hasRole(req.user, KLOQO_ROLES.SUPER_ADMIN)) return next();
 
     // Staff permission check
     const hasAccess = req.user.accessibleMenus?.includes(menuKey);

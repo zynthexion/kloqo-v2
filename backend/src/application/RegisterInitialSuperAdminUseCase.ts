@@ -1,4 +1,4 @@
-import { User } from '../../../packages/shared/src/index';
+import { User, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { IAuthService, IUserRepository } from '../domain/repositories';
 
 export class RegisterInitialSuperAdminUseCase {
@@ -9,7 +9,7 @@ export class RegisterInitialSuperAdminUseCase {
 
   async execute(email: string, password: string, name: string): Promise<User> {
     // 1. Fail Fast: Check if any superAdmin already exists
-    const adminCount = await this.userRepo.countByRole('superAdmin');
+    const adminCount = await this.userRepo.countByRole(KLOQO_ROLES.SUPER_ADMIN);
     if (adminCount > 0) {
       throw new Error('Unauthorized: A primary Super Admin is already registered.');
     }
@@ -19,7 +19,7 @@ export class RegisterInitialSuperAdminUseCase {
     const user = await this.authService.createUser(
       email,
       password,
-      'superAdmin',
+      KLOQO_ROLES.SUPER_ADMIN,
       'GLOBAL', 
       name
     );

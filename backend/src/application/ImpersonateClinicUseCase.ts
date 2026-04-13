@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { IClinicRepository } from '../domain/repositories';
+import { KLOQO_ROLES } from '@kloqo/shared';
 
 export class ImpersonateClinicUseCase {
   constructor(private clinicRepo: IClinicRepository) {}
@@ -20,8 +21,8 @@ export class ImpersonateClinicUseCase {
     // and 'clinicAdmin' (for local UI guards to pass).
     const additionalClaims = {
       clinicId: targetClinicId,
-      role: 'superAdmin',           // Legacy compatibility
-      roles: ['superAdmin', 'clinicAdmin'], // Standardized Array RBAC
+      role: KLOQO_ROLES.SUPER_ADMIN,           // Legacy compatibility
+      roles: [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.CLINIC_ADMIN], // Standardized Array RBAC
       isImpersonating: true,
       originalAdminId: superAdminId
     };

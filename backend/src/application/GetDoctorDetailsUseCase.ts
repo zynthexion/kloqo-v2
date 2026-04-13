@@ -1,5 +1,6 @@
 import { IDoctorRepository, IClinicRepository, IDepartmentRepository, IAppointmentRepository, IUserRepository } from '../domain/repositories';
 import * as admin from 'firebase-admin';
+import { KLOQO_ROLES } from '@kloqo/shared';
 
 // Reusing firebase-admin since we have complex querying for appointments
 export class GetDoctorDetailsUseCase {
@@ -32,11 +33,11 @@ export class GetDoctorDetailsUseCase {
     if (doctor.email) {
       const user = await this.userRepo.findByEmail(doctor.email);
       if (user) {
-        doctor.roles = user.roles || (user.role ? [user.role] as any : ['doctor']);
-        doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || 'doctor';
+        doctor.roles = user.roles || (user.role ? [user.role] as any : [KLOQO_ROLES.DOCTOR]);
+        doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || KLOQO_ROLES.DOCTOR;
       } else {
-        doctor.roles = ['doctor'];
-        doctor.role = 'doctor';
+        doctor.roles = [KLOQO_ROLES.DOCTOR];
+        doctor.role = KLOQO_ROLES.DOCTOR;
       }
     }
 

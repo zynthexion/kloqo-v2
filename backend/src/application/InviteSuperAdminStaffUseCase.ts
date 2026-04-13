@@ -1,4 +1,4 @@
-import { User } from '../../../packages/shared/src/index';
+import { User, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { IAuthService, IUserRepository, IEmailService } from '../domain/repositories';
 import * as crypto from 'crypto';
 
@@ -18,7 +18,7 @@ export class InviteSuperAdminStaffUseCase {
     const user = await this.authService.createUser(
       email,
       tempPassword,
-      'superAdmin', // Role from shared type
+      KLOQO_ROLES.SUPER_ADMIN, // Role from shared type
       'GLOBAL',
       name,
       undefined,

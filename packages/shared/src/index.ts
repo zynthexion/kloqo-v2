@@ -1,3 +1,5 @@
+import { KloqoRole } from './constants/roles';
+
 export interface PaginationParams {
   page: number;
   limit: number;
@@ -361,7 +363,6 @@ export interface Patient {
   isPrimary?: boolean;
 }
 
-export type Role = 'superAdmin' | 'clinicAdmin' | 'doctor' | 'nurse' | 'patient' | 'pharmacist' | 'receptionist';
 
 export interface User {
   id?: string;

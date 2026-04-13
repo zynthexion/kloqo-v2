@@ -1,5 +1,5 @@
 import { IPatientRepository, IUserRepository } from '../domain/repositories';
-import { Patient, User } from '@kloqo/shared';
+import { Patient, User, KLOQO_ROLES } from '@kloqo/shared';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface AddRelativeRequest {
@@ -68,8 +68,8 @@ export class AddRelativeUseCase {
       const newUser: User = {
         id: userId,
         phone: relativePhone,
-        role: 'patient',
-        roles: ['patient'],
+        role: KLOQO_ROLES.PATIENT,
+        roles: [KLOQO_ROLES.PATIENT],
         email: '', // Not provided
         name: relative.name,
         clinicId: clinicId,

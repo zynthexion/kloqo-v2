@@ -8,7 +8,7 @@ import {
     getClinicTimeString,
     differenceInMinutes
 } from '../domain/services/DateUtils';
-import { Role } from '../../../packages/shared/src/index';
+import { Role, KLOQO_ROLES } from '../../../packages/shared/src/index';
 
 export interface CancelBreakRequest {
     clinicId: string;
@@ -60,8 +60,8 @@ export class CancelBreakUseCase {
 
         // RBAC: Self, Admins, or Clinical Staff (Nurses/Receptionists)
         const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
-        const isManagement   = ['clinicAdmin', 'superAdmin'].includes(performedBy.role);
-        const isClinicalStaff = ['nurse', 'receptionist'].includes(performedBy.role);
+        const isManagement   = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(performedBy.role);
+        const isClinicalStaff = ([KLOQO_ROLES.NURSE, KLOQO_ROLES.RECEPTIONIST] as Role[]).includes(performedBy.role);
 
         if (!isSelfInitiated && !isManagement && !isClinicalStaff) {
             throw new Error('Unauthorized: You do not have permission to manage this doctor\'s schedule.');

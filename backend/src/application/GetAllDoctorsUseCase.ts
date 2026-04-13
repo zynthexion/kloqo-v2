@@ -1,5 +1,5 @@
 import { IDoctorRepository, IUserRepository } from '../domain/repositories';
-import { Doctor, PaginationParams, PaginatedResponse, User } from '../../../packages/shared/src/index';
+import { Doctor, PaginationParams, PaginatedResponse, User, KLOQO_ROLES } from '../../../packages/shared/src/index';
 
 export class GetAllDoctorsUseCase {
   constructor(
@@ -34,11 +34,11 @@ export class GetAllDoctorsUseCase {
         if (doctor.email) {
           const user = userMap.get(doctor.email);
           if (user) {
-            doctor.roles = user.roles || (user.role ? [user.role] as any : ['doctor']);
-            doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || 'doctor';
+            doctor.roles = user.roles || (user.role ? [user.role] as any : [KLOQO_ROLES.DOCTOR]);
+            doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || KLOQO_ROLES.DOCTOR;
           } else {
-            doctor.roles = ['doctor'];
-            doctor.role = 'doctor';
+            doctor.roles = [KLOQO_ROLES.DOCTOR];
+            doctor.role = KLOQO_ROLES.DOCTOR;
           }
         }
       });

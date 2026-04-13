@@ -1,5 +1,6 @@
 import { IUserRepository, IPatientRepository } from '../domain/repositories';
 import * as admin from 'firebase-admin';
+import { KLOQO_ROLES } from '@kloqo/shared';
 
 export class SyncPatientAuthUseCase {
   constructor(
@@ -35,8 +36,8 @@ export class SyncPatientAuthUseCase {
       // Create standard user document for the V2 backend to recognize them
       const newUser = {
         id: uid,
-        role: 'patient' as const,
-        roles: ['patient'] as const,
+        role: KLOQO_ROLES.PATIENT,
+        roles: [KLOQO_ROLES.PATIENT],
         phone: phone_number,
         name: name || 'Patient User',
         patientId: existingPatientId, // link to patient profile if exists

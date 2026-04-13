@@ -1,6 +1,7 @@
+import * as path from 'path';
 import * as admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
+import { KLOQO_ROLES } from '../../../packages/shared/src/index';
 
 // Load environment variables from backend/.env
 dotenv.config({ path: path.join(__dirname, '../../.env') });
@@ -16,7 +17,7 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // --- CONFIGURATION ---
 const DRY_RUN = true; // SET TO FALSE TO EXECUTE ACTUAL WRITES
-const BATCH_LIMIT = 499;
+const BATCH_LIMIT = 400; // Chunked for production safety
 // ---------------------
 
 if (!admin.apps.length) {
@@ -70,10 +71,10 @@ async function normalizeDoctorRoles() {
           
           // Determine final roles for the user
           const finalRoles = Array.from(new Set([
-            'doctor', 
+            KLOQO_ROLES.DOCTOR, 
             ...(docRoles || []), 
             ...(userData.roles || []),
-            (docRole ? docRole : 'doctor')
+            (docRole ? docRole : KLOQO_ROLES.DOCTOR)
           ]));
 
           if (DRY_RUN) {
@@ -82,7 +83,7 @@ async function normalizeDoctorRoles() {
             // Update User
             batch.update(userDoc.ref, { 
               roles: finalRoles,
-              role: 'doctor' // Authoritative role for doctor personnel
+              role: KLOQO_ROLES.DOCTOR // Authoritative role for doctor personnel
             });
             currentBatchCount++;
           }

@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import { Clinic, User } from '../../../packages/shared/src/index';
+import { Clinic, User, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { IEmailService, IClinicRepository } from '../domain/repositories';
 
 export interface RegisterClinicParams {
@@ -144,8 +144,8 @@ export class RegisterClinicUseCase {
         email: adminData.email,
         name: adminData.name,
         phone: adminData.phone,
-        role: 'clinicAdmin',
-        roles: ['clinicAdmin'],
+        role: KLOQO_ROLES.CLINIC_ADMIN,
+        roles: [KLOQO_ROLES.CLINIC_ADMIN],
         clinicId: clinicId,
         onboarded: false,
         createdAt: new Date(),
@@ -167,7 +167,7 @@ export class RegisterClinicUseCase {
           adminData.email,
           adminData.name,
           adminData.password,
-          'clinicAdmin',
+          KLOQO_ROLES.CLINIC_ADMIN,
           newClinic.name
         );
       } catch (emailError) {

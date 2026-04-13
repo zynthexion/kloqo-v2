@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { IDoctorRepository, IActivityRepository, IAppointmentRepository } from '../domain/repositories';
-import { DoctorAvailability, DoctorOverride, Role } from '../../../packages/shared/src/index';
+import { DoctorAvailability, DoctorOverride, Role, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { parseClinicTime, getClinicDayOfWeek, parseClinicDate } from '../domain/services/DateUtils';
 import { NotificationService } from '../domain/services/NotificationService';
 import { db } from '../infrastructure/firebase/config';
@@ -30,7 +30,7 @@ export class UpdateDoctorAvailabilityUseCase {
 
         // 1. RBAC Softening (Self-Management Check)
         const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
-        const isAdmin = ['clinicAdmin', 'superAdmin'].includes(performedBy.role);
+        const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(performedBy.role);
 
         const isStructuralChange = JSON.stringify(doctor.availabilitySlots) !== JSON.stringify(availabilitySlots);
         

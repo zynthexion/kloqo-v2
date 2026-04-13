@@ -13,6 +13,7 @@ import { UpdateDoctorAccessUseCase } from '../application/UpdateDoctorAccessUseC
 import { RevokeDoctorAccessUseCase } from '../application/RevokeDoctorAccessUseCase';
 import { GetDoctorActivitiesUseCase } from '../application/GetDoctorActivitiesUseCase';
 import { EditBreakUseCase } from '../application/EditBreakUseCase';
+import { KLOQO_ROLES } from '@kloqo/shared';
 
 import { GetAvailableSlotsUseCase } from '../application/GetAvailableSlotsUseCase';
 
@@ -66,7 +67,7 @@ export class DoctorController {
       const docData = req.body;
 
       // 🛡️ RBAC Guard: Only Admin or Self can update doctor meta-data (fees, avg time, etc)
-      const isAdmin = ['clinicAdmin', 'superAdmin'].includes(user.role);
+      const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(user.role);
       const isSelf = user.id === docData.userId || user.id === docData.id;
 
       if (!isAdmin && !isSelf) {
@@ -113,7 +114,7 @@ export class DoctorController {
       }
 
       // 🛡️ IDOR GUARD: Doctors can only manage themselves
-      if (user.role === 'doctor' && (user.id !== doctorId && user.userId !== doctorId)) {
+      if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to modify another doctor's schedule." });
       }
 
@@ -140,7 +141,7 @@ export class DoctorController {
       const { doctorId, clinicId, date, sessions, action } = req.body;
       
       // 🛡️ IDOR GUARD
-      if (user.role === 'doctor' && (user.id !== doctorId && user.userId !== doctorId)) {
+      if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to modify another doctor's leave." });
       }
 
@@ -250,7 +251,7 @@ export class DoctorController {
       const { doctorId, startDate, endDate, forceCancelConflicts = false } = req.body;
 
       // 🛡️ IDOR GUARD
-      if (user.role === 'doctor' && (user.id !== doctorId && user.userId !== doctorId)) {
+      if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to mark leave for another doctor." });
       }
 

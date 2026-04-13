@@ -1,5 +1,5 @@
 import { IUserRepository } from '../domain/repositories';
-import { User } from '@kloqo/shared';
+import { User, KLOQO_ROLES } from '@kloqo/shared';
 
 export class CheckUserByEmailUseCase {
   constructor(private userRepo: IUserRepository) {}
@@ -9,7 +9,7 @@ export class CheckUserByEmailUseCase {
     if (!user) return null;
     
     // Safety check: only allow clinicAdmin to be checked for forgot password in this app context
-    if (user.role !== 'clinicAdmin') {
+    if (user.role !== KLOQO_ROLES.CLINIC_ADMIN) {
       return null;
     }
     

@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { IEmailService } from '../../domain/repositories';
+import { KLOQO_ROLES } from '@kloqo/shared';
 
 export class ResendEmailService implements IEmailService {
   private resend: Resend;
@@ -18,7 +19,7 @@ export class ResendEmailService implements IEmailService {
       ? `Welcome to ${clinicName} on Kloqo`
       : 'Welcome to Kloqo - Your Account Credentials';
 
-    const roleDisplayName = role === 'nurse' ? 'Staff/Doctor' : role;
+    const roleDisplayName = role === KLOQO_ROLES.NURSE ? 'Staff/Doctor' : role;
     const loginUrl = 'https://clinic-admin.kloqo.com'; // Adjust based on production URL
 
     const html = `

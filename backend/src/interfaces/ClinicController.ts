@@ -9,7 +9,7 @@ import { UpdateClinicSettingsUseCase } from '../application/UpdateClinicSettings
 import { UpdateWhatsappConfigUseCase } from '../application/UpdateWhatsappConfigUseCase';
 import { GenerateShortCodeUseCase } from '../application/GenerateShortCodeUseCase';
 import { SyncClinicStatusesUseCase } from '../application/SyncClinicStatusesUseCase';
-import { RBACUtils } from '@kloqo/shared';
+import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
 
 export class ClinicController {
   constructor(
@@ -29,7 +29,7 @@ export class ClinicController {
     try {
       const { date } = req.body;
       // Zero-Trust: Prioritize session clinicId
-      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, ['superAdmin']);
+      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]);
       const clinicId = (isSuperAdmin && req.body.clinicId) 
         ? req.body.clinicId 
         : req.user?.clinicId;
@@ -109,7 +109,7 @@ export class ClinicController {
       const { status } = req.body;
       
       // Zero-Trust: Enforce session clinicId
-      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, ['superAdmin']);
+      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]);
       const clinicId = (isSuperAdmin && req.body.clinicId) 
         ? req.body.clinicId 
         : req.user?.clinicId;
@@ -146,7 +146,7 @@ export class ClinicController {
   async generateShortCode(req: any, res: Response) {
     try {
       // Zero-Trust: Enforce session clinicId
-      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, ['superAdmin']);
+      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]);
       const clinicId = (isSuperAdmin && req.body.clinicId) 
         ? req.body.clinicId 
         : req.user?.clinicId;

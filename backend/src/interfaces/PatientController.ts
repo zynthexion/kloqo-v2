@@ -11,7 +11,7 @@ import { GetPatientAppointmentsUseCase } from '../application/GetPatientAppointm
 import { GetPublicDiscoveryUseCase } from '../application/GetPublicDiscoveryUseCase';
 import { SyncPatientAuthUseCase } from '../application/SyncPatientAuthUseCase';
 import { UnlinkRelativeUseCase } from '../application/UnlinkRelativeUseCase';
-import { RBACUtils } from '@kloqo/shared';
+import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
 
 export class PatientController {
   constructor(
@@ -33,7 +33,7 @@ export class PatientController {
     if (!req.user) return; // Allow public access (if route permits)
     
     // Superadmins have access to all clinics
-    if (RBACUtils.hasAnyRole(req.user, ['superAdmin'])) return;
+    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN])) return;
 
     const hasAccess = req.user.clinicId === clinicId || 
                      (req.user.clinicIds && req.user.clinicIds.includes(clinicId));
@@ -64,7 +64,7 @@ export class PatientController {
       const { phone, id } = req.query;
       
       // Zero-Trust: Prioritize session clinicId. Only SuperAdmins can override it via query.
-      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, ['superAdmin']);
+      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]);
       const clinicId = (isSuperAdmin && req.query.clinicId) 
         ? (req.query.clinicId as string) 
         : req.user?.clinicId;
@@ -93,7 +93,7 @@ export class PatientController {
   async getLinkPending(req: any, res: Response) {
     try {
       // Zero-Trust: Session-based clinicId
-      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, ['superAdmin']);
+      const isSuperAdmin = RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]);
       const clinicId = (isSuperAdmin && req.query.clinicId) 
         ? (req.query.clinicId as string) 
         : req.user?.clinicId;
@@ -111,14 +111,14 @@ export class PatientController {
     try {
       // Zero-Trust: Inject clinicId from session into body payload
       const clinicId = req.user?.clinicId;
-      if (!clinicId && !RBACUtils.hasAnyRole(req.user, ['superAdmin'])) {
+      if (!clinicId && !RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN])) {
         return res.status(401).json({ error: 'No clinic context found in session' });
       }
 
       const payload = { 
         ...req.body, 
         // Only allow body override if SuperAdmin
-        clinicId: (RBACUtils.hasAnyRole(req.user, ['superAdmin']) && req.body.clinicId) 
+        clinicId: (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]) && req.body.clinicId) 
           ? req.body.clinicId 
           : clinicId 
       };
@@ -140,7 +140,7 @@ export class PatientController {
       const clinicId = req.user?.clinicId;
       const payload = { 
         ...req.body, 
-        clinicId: (RBACUtils.hasAnyRole(req.user, ['superAdmin']) && req.body.clinicId) 
+        clinicId: (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]) && req.body.clinicId) 
           ? req.body.clinicId 
           : clinicId 
       };

@@ -1,6 +1,6 @@
 import { NotificationService } from '../domain/services/NotificationService';
 import { IClinicRepository, IPatientRepository, IUserRepository } from '../domain/repositories';
-import { User, Patient } from '../../../packages/shared/src/index';
+import { User, Patient, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { v4 as uuidv4 } from 'uuid';
 
 export class SendBookingLinkUseCase {
@@ -67,8 +67,8 @@ export class SendBookingLinkUseCase {
         phone: phone,
         email: "",
         name: "",
-        role: 'patient',
-        roles: ['patient'],
+        role: KLOQO_ROLES.PATIENT,
+        roles: [KLOQO_ROLES.PATIENT],
         patientId: newPatientId,
         createdAt: new Date(),
         updatedAt: new Date(),

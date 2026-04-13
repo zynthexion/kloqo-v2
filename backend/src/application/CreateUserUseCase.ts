@@ -1,5 +1,5 @@
 import * as admin from 'firebase-admin';
-import { User, RBACUtils } from '@kloqo/shared';
+import { User, RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
 import { IUserRepository, IEmailService, IClinicRepository } from '../domain/repositories';
 
 export class CreateUserUseCase {
@@ -36,10 +36,9 @@ export class CreateUserUseCase {
     let { role, password } = params;
 
     // Standardize roles to unified camelCase identifiers
-    if (['superadmin', 'super-admin'].includes(role as any)) {
-      role = 'superAdmin';
-    } else if (role === 'admin' as any) {
-      role = 'clinicAdmin';
+    const normalizedRoles = RBACUtils.getNormalizedRoles({ role } as any);
+    if (normalizedRoles.length > 0) {
+      role = normalizedRoles[0];
     }
 
     // Generate a temporary password if not provided (common for staff/nurse added by admin)
@@ -90,7 +89,7 @@ export class CreateUserUseCase {
     // Database Optimization: Do not store accessibleMenus for clinical staff 
     // (nurse, pharmacist, receptionist) as they never use the Clinic Admin app.
     // They are hardcoded to operational roles in the frontend apps.
-    const isDashboardAdmin = RBACUtils.hasAnyRole({ role } as any, ['clinicAdmin', 'superAdmin']);
+    const isDashboardAdmin = RBACUtils.hasAnyRole({ role } as any, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN]);
     if (isDashboardAdmin && accessibleMenus) {
       newUser.accessibleMenus = accessibleMenus;
     }

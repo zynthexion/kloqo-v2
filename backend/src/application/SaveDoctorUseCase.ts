@@ -1,5 +1,5 @@
 import { IDoctorRepository, IUserRepository, IAuthService, IEmailService, IClinicRepository } from '../domain/repositories';
-import { Doctor, User } from '../../../packages/shared/src/index';
+import { Doctor, User, KLOQO_ROLES } from '../../../packages/shared/src/index';
 
 export class SaveDoctorUseCase {
   constructor(
@@ -44,8 +44,8 @@ export class SaveDoctorUseCase {
         await this.doctorRepo.update(doctor.id, { userId: associatedUser.id });
         
         await this.userRepo.update(associatedUser.id!, {
-          roles: roles || associatedUser.roles || ['doctor'],
-          role: role || (roles?.[0]) || associatedUser.role || 'doctor'
+          roles: roles || associatedUser.roles || [KLOQO_ROLES.DOCTOR],
+          role: role || (roles?.[0]) || associatedUser.role || KLOQO_ROLES.DOCTOR
         });
       }
     }
@@ -67,11 +67,11 @@ export class SaveDoctorUseCase {
           const newUser = await this.authService.createUser(
             doctor.email,
             tempPassword,
-            'doctor',
+            KLOQO_ROLES.DOCTOR,
             doctor.clinicId,
             doctor.name,
             phone,
-            roles || ['doctor'] // Pass roles array to auth service
+            roles || [KLOQO_ROLES.DOCTOR] // Pass roles array to auth service
           );
 
           // ✅ LINK IDENTITY: Stamp the newly created userId on the Doctor document
@@ -82,7 +82,7 @@ export class SaveDoctorUseCase {
             doctor.email,
             doctor.name,
             tempPassword,
-            'doctor',
+            KLOQO_ROLES.DOCTOR,
             clinic?.name
           );
         } catch (error: any) {

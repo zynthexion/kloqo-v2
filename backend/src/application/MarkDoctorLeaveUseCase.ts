@@ -2,7 +2,7 @@ import { IDoctorRepository, IAppointmentRepository, IActivityRepository } from '
 import { NotificationService } from '../domain/services/NotificationService';
 import { db } from '../infrastructure/firebase/config';
 import { addDays, format, parseISO } from 'date-fns';
-import { Role } from '../../../packages/shared/src/index';
+import { Role, KLOQO_ROLES } from '../../../packages/shared/src/index';
 
 export class MarkDoctorLeaveUseCase {
   constructor(
@@ -18,7 +18,7 @@ export class MarkDoctorLeaveUseCase {
 
     // 1. RBAC Softening (Self-Management Check)
     const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
-    const isAdmin = ['clinicAdmin', 'superAdmin'].includes(performedBy.role);
+    const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(performedBy.role);
 
     if (!isAdmin && !isSelfInitiated) {
         throw new Error('Unauthorized: You can only manage your own schedule or requires Admin privileges.');

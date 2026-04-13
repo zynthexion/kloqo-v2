@@ -20,13 +20,9 @@
  * ============================================================
  */
 
-import * as admin from 'firebase-admin';
 import { KLOQO_ROLES, KloqoRole } from '@kloqo/shared';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-
-// Load env from the backend root
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+import { db } from '../infrastructure/firebase/config';
+import * as admin from 'firebase-admin';
 
 // ─────────────────────────────────────────────────────────────
 // Config
@@ -44,22 +40,6 @@ const ROLE_MIGRATION_MAP: Record<string, KloqoRole> = {
   'super-admin': KLOQO_ROLES.SUPER_ADMIN,
   'superadmin':  KLOQO_ROLES.SUPER_ADMIN,
 };
-
-// ─────────────────────────────────────────────────────────────
-// Firebase Initialization
-// ─────────────────────────────────────────────────────────────
-if (!admin.apps.length) {
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-  if (!serviceAccountPath) {
-    console.error('[FATAL] FIREBASE_SERVICE_ACCOUNT_PATH env var is not set.');
-    process.exit(1);
-  }
-  admin.initializeApp({
-    credential: admin.credential.cert(require(path.resolve(serviceAccountPath))),
-  });
-}
-
-const db = admin.firestore();
 
 // ─────────────────────────────────────────────────────────────
 // Helpers

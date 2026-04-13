@@ -13,7 +13,7 @@ import { ConfirmArrivalUseCase } from '../application/ConfirmArrivalUseCase';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
 import { IAppointmentRepository, IDoctorRepository } from '../domain/repositories';
 import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
-import { RBACUtils } from '@kloqo/shared';
+import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
 
 export class AppointmentController {
   constructor(
@@ -36,7 +36,7 @@ export class AppointmentController {
     if (!req.user) return; // Allow public access (if route permits)
     
     // Superadmins have access to all clinics
-    if (RBACUtils.hasAnyRole(req.user, ['superAdmin'])) return;
+    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN])) return;
 
     const hasAccess = req.user.clinicId === clinicId || 
                      (req.user.clinicIds && req.user.clinicIds.includes(clinicId));
@@ -105,7 +105,7 @@ export class AppointmentController {
     }
   }
 
-  async getNurseDashboard(req: Request, res: Response) {
+  async getNurseDashboard(req: any, res: Response) {
     try {
       const { clinicId, date } = req.query;
       if (!clinicId || !date) {
@@ -136,7 +136,7 @@ export class AppointmentController {
       this.validateClinicAccess(req, clinicId);
 
       // 🛡️ SECURITY: IDR-01 Ownership Guard
-      if (req.user?.role === 'patient') {
+      if (req.user?.role === KLOQO_ROLES.PATIENT) {
         const appointment = await this.appointmentRepo.findById(id);
         if (!appointment || appointment.patientId !== (req.user.id || req.user.patientId)) {
           return res.status(403).json({ error: 'Access Denied: You do not own this appointment.' });
@@ -269,7 +269,7 @@ export class AppointmentController {
       this.validateClinicAccess(req, clinicId);
 
       // 🛡️ SECURITY: IDR-01 Ownership Guard
-      if (req.user?.role === 'patient') {
+      if (req.user?.role === KLOQO_ROLES.PATIENT) {
         const appointment = await this.appointmentRepo.findById(id);
         if (!appointment || appointment.patientId !== (req.user.id || req.user.patientId)) {
           return res.status(403).json({ error: 'Access Denied: You do not own this appointment.' });
@@ -345,7 +345,7 @@ export class AppointmentController {
       const user = req.user;
 
       // 🛡️ SECURITY: IDR-01/Rule 15 Patient Isolation Guard
-      if (user?.role === 'patient') {
+      if (user?.role === KLOQO_ROLES.PATIENT) {
         const tokenPatientId = user.patientId || user.id;
         if (patientId && patientId !== tokenPatientId) {
           console.warn(`[IDOR Guard] Access denied for ${user.email}. Requested patientId (${patientId}) does not match authorized id (${tokenPatientId})`);
