@@ -23,21 +23,24 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
     if (!isPatient) {
       console.warn("Unauthorized access to Patient App. Redirecting to staff portal.");
       
-      // If a Nurse/Pharmacists hits the Patient App, teleport them to the Nurse App (port 3005)
+      // If a Nurse/Pharmacists hits the Patient App, teleport them to the Nurse App
       if (RBACUtils.hasAnyRole(user, ['nurse', 'doctor', 'pharmacist', 'receptionist'] as Role[])) {
-        window.location.href = 'http://localhost:3005/dashboard';
+        const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
+        window.location.href = `${nurseUrl}/dashboard`;
         return;
       }
 
-      // If a Clinic Admin hits the Patient App, teleport them to the Admin App (port 3006)
+      // If a Clinic Admin hits the Patient App, teleport them to the Admin App
       if (RBACUtils.hasAnyRole(user, ['clinicAdmin', 'admin'] as Role[])) {
-        window.location.href = 'http://localhost:3006/dashboard';
+        const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3006';
+        window.location.href = `${adminUrl}/dashboard`;
         return;
       }
 
-      // If a Super Admin hits the Patient App, teleport them to the Super Admin App (port 3004)
+      // If a Super Admin hits the Patient App, teleport them to the Super Admin App
       if (RBACUtils.hasAnyRole(user, ['superAdmin', 'super-admin'] as Role[])) {
-        window.location.href = 'http://localhost:3004/dashboard';
+        const superAdminUrl = process.env.NEXT_PUBLIC_SUPERADMIN_URL || 'http://localhost:3004';
+        window.location.href = `${superAdminUrl}/dashboard`;
         return;
       }
     }

@@ -21,22 +21,25 @@ export default function DashboardLayout({
     if (!user || !isSuperAdmin) {
       console.warn("Unauthorized access to Super Admin dashboard. Redirecting to appropriate operational portal.");
       
-      // If a Clinic Admin hits the Super Admin URL, teleport them to the Admin App (port 3006)
+      // If a Clinic Admin hits the Super Admin URL, teleport them to the Admin App
       if ((user as any)?.roles?.includes('clinicAdmin') || (user as any)?.role === 'clinicAdmin') {
-        window.location.href = 'http://localhost:3006/dashboard';
+        const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3006';
+        window.location.href = `${adminUrl}/dashboard`;
         return;
       }
 
-      // If a Nurse/Pharmacists hits the Super Admin URL, teleport them to the Nurse App (port 3005)
+      // If a Nurse/Pharmacists hits the Super Admin URL, teleport them to the Nurse App
       const isNurse = (user as any)?.roles?.some((r: string) => ['nurse', 'doctor', 'pharmacist', 'receptionist'].includes(r));
       if (isNurse || ['nurse', 'doctor', 'pharmacist', 'receptionist'].includes((user as any)?.role)) {
-        window.location.href = 'http://localhost:3005/dashboard';
+        const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
+        window.location.href = `${nurseUrl}/dashboard`;
         return;
       }
 
-      // If a Patient hits the Super Admin URL, teleport them to the Patient App (port 3003)
+      // If a Patient hits the Super Admin URL, teleport them to the Patient App
       if ((user as any)?.role === 'patient') {
-        window.location.href = 'http://localhost:3003/dashboard';
+        const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
+        window.location.href = `${patientUrl}/dashboard`;
         return;
       }
 

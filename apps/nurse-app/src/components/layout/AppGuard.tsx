@@ -26,7 +26,8 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
     if (!isStaff) {
       console.warn("Unauthorized access to Nurse App. Redirecting to patient portal.");
       if (RBACUtils.hasAnyRole(user, ['patient'] as Role[])) {
-        window.location.href = 'http://localhost:3003/dashboard';
+        const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
+        window.location.href = `${patientUrl}/dashboard`;
         return;
       }
     }

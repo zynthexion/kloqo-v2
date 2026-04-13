@@ -55,13 +55,15 @@ function AppContent({ children }: { children: React.ReactNode }) {
       // Intelligent Redirection to avoid infinite loops
       // If a Nurse/Pharmacists hits the Admin URL, teleport them to the Nurse App
       if (RBACUtils.hasAnyRole(currentUser, ['nurse', 'doctor', 'pharmacist', 'receptionist'] as Role[])) {
-        window.location.href = 'http://localhost:3005/dashboard'; 
+        const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
+        window.location.href = `${nurseUrl}/dashboard`; 
         return;
       }
 
       // If a Patient hits the Admin URL, teleport them to the Patient App
       if (RBACUtils.hasAnyRole(currentUser, ['patient'] as Role[])) {
-        window.location.href = 'http://localhost:3003/dashboard';
+        const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
+        window.location.href = `${patientUrl}/dashboard`;
         return;
       }
 
