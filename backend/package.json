@@ -4,7 +4,7 @@
   "description": "Kloqo V2 Backend following Clean Architecture",
   "main": "dist/index.js",
   "scripts": {
-    "start": "ts-node src/infrastructure/webserver/express/index.ts",
+    "start": "ts-node --transpile-only src/infrastructure/webserver/express/index.ts",
     "dev": "nodemon src/infrastructure/webserver/express/index.ts",
     "dev:prod": "node dist/backend/src/infrastructure/webserver/express/index.js",
     "backup": "ts-node src/scripts/backup-firestore.ts",
