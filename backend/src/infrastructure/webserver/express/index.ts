@@ -33,9 +33,25 @@ const app = express();
 const port = Number(process.env.PORT) || 3001;
 
 app.use(helmet());
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) 
+  : ['*'];
+
+console.log('🌐 CORS Allowed Origins:', allowedOrigins);
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: false // Using Bearer tokens, not cookies
 }));
 app.use(express.json());
 
@@ -87,6 +103,7 @@ app.use((err: any, req: any, res: any, _next: any) => {
 // ── Start ──────────────────────────────────────────────────────────────────
 app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Kloqo V2 Backend listening at http://0.0.0.0:${port}`);
+  console.log(`📡 Ready for traffic on ${process.env.ALLOWED_ORIGINS || 'ALL ORIGINS'}`);
 });
 
 export default app;

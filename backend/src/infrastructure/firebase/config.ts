@@ -22,11 +22,16 @@ if (!admin.apps.length) {
     });
   }
 
-  admin.initializeApp({
-    credential,
-    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'kloqo-nurse-dup-43384903-8d386.firebasestorage.app'
-  });
+  try {
+    admin.initializeApp({
+      credential,
+      databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'kloqo-nurse-dup-43384903-8d386.firebasestorage.app'
+    });
+    console.log('🔥 Firebase Admin initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize Firebase Admin:', error);
+  }
 }
 
 export const db = admin.firestore();
