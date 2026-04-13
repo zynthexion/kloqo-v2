@@ -4,7 +4,7 @@ import { Appointment } from '../../../../packages/shared/src/index';
 import {
   getClinicNow,
   getClinicDateString,
-} from '@kloqo/shared-core/src/utils/date-utils';
+} from '@kloqo/shared-core';
 import { addDays } from 'date-fns';
 import * as admin from 'firebase-admin';
 import { db } from '../../infrastructure/firebase/config';
