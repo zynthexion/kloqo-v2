@@ -1,0 +1,16 @@
+{
+  "placeholderImages": [
+    {
+      "id": "doctor-profile",
+      "description": "A friendly male doctor smiling",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/kloqo-clinic-multi-33968-4c50b.firebasestorage.app/o/doctor.jpg?alt=media&token=1cee71fb-ab82-4392-ab24-0e0aecd8de84",
+      "imageHint": "doctor portrait"
+    },
+    {
+      "id": "doctor-profile-female",
+      "description": "A friendly female doctor smiling",
+      "imageUrl": "https://firebasestorage.googleapis.com/v0/b/kloqo-clinic-multi-33968-4c50b.firebasestorage.app/o/doctor.jpg?alt=media&token=1cee71fb-ab82-4392-ab24-0e0aecd8de84",
+      "imageHint": "female doctor portrait"
+    }
+  ]
+}

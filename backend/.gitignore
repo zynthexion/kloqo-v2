@@ -1,0 +1,5 @@
+*.json
+!package.json
+!tsconfig.json
+!components.json
+!theme.json

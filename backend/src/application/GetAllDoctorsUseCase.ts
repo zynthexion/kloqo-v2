@@ -1,0 +1,49 @@
+import { IDoctorRepository, IUserRepository } from '../domain/repositories';
+import { Doctor, PaginationParams, PaginatedResponse, User } from '../../../packages/shared/src/index';
+
+export class GetAllDoctorsUseCase {
+  constructor(
+    private doctorRepo: IDoctorRepository,
+    private userRepo: IUserRepository
+  ) {}
+
+  async execute(clinicId?: string, params?: PaginationParams): Promise<PaginatedResponse<Doctor> | Doctor[]> {
+    let result: PaginatedResponse<Doctor> | Doctor[];
+    
+    if (clinicId) {
+      result = await this.doctorRepo.findByClinicId(clinicId, params);
+    } else {
+      result = await this.doctorRepo.findAll(params);
+    }
+
+    // Hydrate doctors with roles from the User collection (authoritative source)
+    const doctors = Array.isArray(result) ? result : result.data;
+    if (doctors.length > 0) {
+      // For performance, we fetch all users in the clinic if clinicId is present
+      // or match by email for each if it's a global search (rarer).
+      const users = clinicId 
+        ? await this.userRepo.findAll({ clinicId, page: 1, limit: 100 } as any) 
+        : { data: [] }; // Fallback
+      
+      const userList = Array.isArray(users) ? users : users.data;
+      const userMap = new Map<string, User>(
+        userList.filter(u => !!u.email).map(u => [u.email!, u])
+      );
+
+      doctors.forEach(doctor => {
+        if (doctor.email) {
+          const user = userMap.get(doctor.email);
+          if (user) {
+            doctor.roles = user.roles || (user.role ? [user.role] as any : ['doctor']);
+            doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || 'doctor';
+          } else {
+            doctor.roles = ['doctor'];
+            doctor.role = 'doctor';
+          }
+        }
+      });
+    }
+
+    return result;
+  }
+}

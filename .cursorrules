@@ -1,0 +1,17 @@
+# Kloqo V2 AI Directives
+
+CRITICAL: Before writing or modifying any code, you MUST read and strictly adhere to /ARCHITECTURE.md and /RBAC_AUDIT.md. You are operating in a Clean Architecture environment. Enforce Tenant Isolation (Rule 15) and strict RBAC boundaries at all times.
+
+## Engineering Principles (Quick Reference)
+
+1. **Clean Architecture Layering**: Logic ONLY in `domain/` and `application/`. No I/O in domains.
+2. **Tenant Isolation (Rule 15)**: Never trust client-provided `clinicId` in request bodies. Always use `req.user.clinicId` decoded from the JWT.
+3. **Dependency Inversion**: Use Repository and Strategy Interfaces. No `new` outside of `Container.ts`.
+4. **Dumb Frontend**: Frontends call REST API only. Zero direct Firestore writes allowed.
+5. **Real-time SSE**: Real-time UI updates MUST use the centralized SSE hook/backend bridge.
+6. **24-Hour Time**: All Firestore times are `HH:mm` (24h strings). Format for display ONLY in the view layer.
+7. **Zero Unbounded Queries**: Always include `limit()`, `clinicId`, and date-range filters.
+8. **RBAC Boundaries**: Cross-app switching for hybrid users (Nurse + Pharmacist) must respect the module-level permissions in `accessibleMenus`.
+
+---
+*Failure to adhere to these rules is an architectural violation. Audit all code changes against /ARCHITECTURE.md before completion.*

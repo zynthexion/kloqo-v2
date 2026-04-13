@@ -1,0 +1,45 @@
+
+> patient-app@1.0.0 build
+> next build
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/jinodevasia/package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/package-lock.json
+
+   ▲ Next.js 15.5.13
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+
+warn - The class `duration-[50ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;50ms&rsqb;` to silence this warning.
+ ✓ Compiled successfully in 6.8s
+   Linting and checking validity of types ...
+   Collecting page data ...
+✅ Firebase Admin initialized with default credentials
+   Generating static pages (0/44) ...
+   Generating static pages (11/44) 
+ ⨯ useSearchParams() should be wrapped in a suspense boundary at page "/privacy". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at g (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/apps/patient-app/.next/server/chunks/7490.js:73:55049)
+    at m (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/apps/patient-app/.next/server/chunks/7490.js:22:90048)
+    at f (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/apps/patient-app/.next/server/chunks/2648.js:30:58965)
+    at n3 (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:82831)
+    at n6 (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:84601)
+    at n6 (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:101560)
+    at n5 (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:104801)
+    at n7 (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:102219)
+    at n5 (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:105040)
+    at im (/Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/node_modules/next/dist/compiled/next-server/app-page.runtime.prod.js:2:113907)
+Error occurred prerendering page "/privacy". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /privacy/page: /privacy, exiting the build.
+ ⨯ Next.js build worker exited with code: 1 and signal: null
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path /Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/apps/patient-app
+npm error workspace patient-app@1.0.0
+npm error location /Users/jinodevasia/Desktop/Kloqo-Production copy/kloqo-v2/apps/patient-app
+npm error command failed
+npm error command sh -c next build

@@ -1,0 +1,21 @@
+{
+  "name": "kloqo-v2-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "apps/*",
+    "packages/*",
+    "../packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=kloqo-v2-backend",
+    "dev:nurse": "npm run dev --workspace=nurse-app",
+    "dev:clinic": "npm run dev --workspace=clinic-admin",
+    "dev:superadmin": "npm run dev --workspace=superadmin",
+    "dev:patient": "npm run dev --workspace=patient-app",
+    "backup": "npm run backup --workspace=kloqo-v2-backend",
+    "build:backend": "npm run build --workspace=kloqo-v2-backend",
+    "build:shared": "npm run build --workspace=@kloqo/shared"
+  }
+}

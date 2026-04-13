@@ -1,0 +1,138 @@
+import { 
+  IAppointmentRepository, 
+  IDoctorRepository, 
+  IPatientRepository, 
+  IClinicRepository 
+} from '../domain/repositories';
+import { ManagePatientUseCase } from './ManagePatientUseCase';
+import { ITokenStrategy } from '../domain/services/token/ITokenStrategy';
+import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
+import { Appointment, Patient, User } from '../../../packages/shared/src/index';
+import { format, subMinutes, parse } from 'date-fns';
+import { parseClinicTime, parseClinicDate, getClinicDateString } from '../domain/services/DateUtils';
+import { SlotCalculator } from '../domain/services/SlotCalculator';
+
+export interface BookAdvancedAppointmentRequest {
+  clinicId: string;
+  doctorId: string;
+  patientId?: string;
+  patientName?: string;
+  phone?: string;
+  age?: number;
+  sex?: 'Male' | 'Female' | 'Other' | '';
+  place?: string;
+  date: string; // "d MMMM yyyy"
+  slotIndex: number;
+  sessionIndex: number;
+  slotTime: string; // "HH:mm"
+  source?: string;
+}
+
+import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
+
+export class BookAdvancedAppointmentUseCase {
+  constructor(
+    private appointmentRepo: IAppointmentRepository,
+    private doctorRepo: IDoctorRepository,
+    private patientRepo: IPatientRepository,
+    private clinicRepo: IClinicRepository,
+    private managePatientUseCase: ManagePatientUseCase,
+    private tokenGenerator: TokenGeneratorService
+  ) {}
+
+  async execute(request: BookAdvancedAppointmentRequest): Promise<Appointment> {
+    const { clinicId, doctorId, slotIndex, sessionIndex, source } = request;
+    const patientId = request.patientId || undefined; // Prevents documentPath "" error
+    const slotTime = request.slotTime || (request as any).time;
+
+    console.log('[BookAdvancedAppointmentUseCase] START', { clinicId, doctorId, patientId, slotTime, slotIndex, sessionIndex });
+
+    // Normalize Date to legacy format "d MMMM yyyy" for repository parity
+    const incomingDate = request.date;
+    const date = incomingDate.includes('-') 
+      ? parseClinicDate(incomingDate) 
+      : parse(incomingDate, 'd MMMM yyyy', new Date());
+    
+    const firestoreDateStr = getClinicDateString(date);
+
+    // --- FAIL FAST: Validate all inputs ---
+    if (!doctorId) {
+        console.error('[BookAdvancedAppointmentUseCase] Error: doctorId is empty');
+        throw new Error('Doctor ID is required');
+    }
+    const doctor = await this.doctorRepo.findById(doctorId);
+    if (!doctor) throw new Error('Doctor not found');
+
+    if (!clinicId) {
+        console.error('[BookAdvancedAppointmentUseCase] Error: clinicId is empty');
+        throw new Error('Clinic ID is required');
+    }
+    const clinic = await this.clinicRepo.findById(clinicId);
+    if (!clinic) throw new Error('Clinic not found');
+
+    // --- PATIENT MANAGEMENT ---
+    const finalPatientId = await this.managePatientUseCase.execute({
+      id: patientId,
+      name: request.patientName || '',
+      phone: request.phone || '',
+      age: request.age,
+      sex: request.sex,
+      place: request.place,
+      clinicId: clinicId
+    });
+
+    console.log('[BookAdvancedAppointmentUseCase] Patient managed:', finalPatientId);
+
+    if (!finalPatientId) {
+        console.error('[BookAdvancedAppointmentUseCase] Error: finalPatientId is empty after management');
+        throw new Error('Internal Error: Patient identification failed');
+    }
+    const patient = await this.patientRepo.findById(finalPatientId);
+    if (!patient) throw new Error('Patient not found after management');
+    const patientName = patient.name;
+
+    // --- STRATEGY PATTERN: Factory picks the correct token strategy ---
+    const tokenStrategy = TokenStrategyFactory.create(clinic.tokenDistribution, this.tokenGenerator);
+
+    const tokenResult = await tokenStrategy.generateBookingToken({
+      clinicId,
+      doctorId,
+      doctorName: doctor.name,
+      date: firestoreDateStr,
+      sessionIndex,
+    });
+
+    // Calculate Arrive By Time (15 mins before)
+    const appointmentTime = parseClinicTime(slotTime, date);
+    const arriveByTime = subMinutes(appointmentTime, 15);
+
+    // Create Appointment
+    const appointment: Appointment = {
+      id: `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      patientId: finalPatientId,
+      patientName: patientName!,
+      doctorId,
+      doctorName: doctor.name,
+      clinicId,
+      date: firestoreDateStr,
+      time: format(appointmentTime, 'HH:mm'),
+      arriveByTime: format(arriveByTime, 'HH:mm'),
+      slotIndex,
+      sessionIndex,
+      status: 'Pending',
+      paymentStatus: 'Unpaid',
+      bookedVia: 'Advanced Booking',
+      tokenNumber: (tokenResult?.tokenNumber ?? null) as any,
+      numericToken: tokenResult?.numericToken,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    if (source === 'phone') {
+      appointment.notes = 'Booked via Phone';
+    }
+
+    await this.appointmentRepo.save(appointment);
+    return appointment;
+  }
+}

@@ -1,0 +1,201 @@
+import { apiRequest } from './api-client';
+
+export type ErrorSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface ErrorContext {
+  userId?: string;
+  userRole?: string;
+  page?: string;
+  action?: string;
+  deviceInfo?: {
+    userAgent: string;
+    platform: string;
+    language: string;
+    screenWidth?: number;
+    screenHeight?: number;
+  };
+  appVersion?: string;
+  [key: string]: any;
+}
+
+export interface ErrorLog {
+  error: {
+    name: string;
+    message: string;
+    stack?: string;
+    code?: string;
+  };
+  severity: ErrorSeverity;
+  context: ErrorContext;
+  timestamp: any;
+  appName: 'patient-app' | 'nurse-app' | 'clinic-admin';
+  sessionId?: string;
+}
+
+let errorQueue: ErrorLog[] = [];
+let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    isOnline = true;
+    flushErrorQueue();
+  });
+  window.addEventListener('offline', () => {
+    isOnline = false;
+  });
+}
+
+function getSessionId(): string {
+  if (typeof window === 'undefined') return 'server';
+  
+  let sessionId = sessionStorage.getItem('error_session_id');
+  if (!sessionId) {
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    sessionStorage.setItem('error_session_id', sessionId);
+  }
+  return sessionId;
+}
+
+function getDeviceInfo(): ErrorContext['deviceInfo'] {
+  if (typeof window === 'undefined') {
+    return {
+      userAgent: 'server',
+      platform: 'server',
+      language: 'en',
+    };
+  }
+
+  return {
+    userAgent: navigator.userAgent,
+    platform: (navigator as any).platform || 'unknown',
+    language: navigator.language || 'en',
+    screenWidth: window.screen?.width,
+    screenHeight: window.screen?.height,
+  };
+}
+
+function getCurrentPage(): string {
+  if (typeof window === 'undefined') return 'server';
+  return window.location.pathname;
+}
+
+function determineSeverity(error: Error): ErrorSeverity {
+  if (
+    error.message.includes('network') ||
+    error.message.includes('auth') ||
+    error.message.includes('permission') ||
+    error.message.includes('payment') ||
+    error.message.includes('Failed to fetch')
+  ) {
+    return 'critical';
+  }
+
+  if (
+    error.message.includes('undefined') ||
+    error.message.includes('null') ||
+    error.message.includes('Cannot read') ||
+    error.message.includes('validation')
+  ) {
+    return 'high';
+  }
+
+  if (
+    error.message.includes('render') ||
+    error.message.includes('component') ||
+    error.message.includes('hook')
+  ) {
+    return 'medium';
+  }
+
+  return 'low';
+}
+
+function removeUndefined(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(removeUndefined);
+  
+  const cleaned: any = {};
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      cleaned[key] = removeUndefined(obj[key]);
+    }
+  }
+  return cleaned;
+}
+
+export async function logError(
+  error: Error | string,
+  context: Partial<ErrorContext> = {}
+): Promise<void> {
+  try {
+    const errorObj = typeof error === 'string' 
+      ? new Error(error) 
+      : error;
+
+    const errorData: any = {
+      name: errorObj.name || 'Error',
+      message: errorObj.message || String(error),
+    };
+    
+    if (errorObj.stack) {
+      errorData.stack = errorObj.stack;
+    }
+    if ((errorObj as any).code) {
+      errorData.code = (errorObj as any).code;
+    }
+
+    const errorLog: any = {
+      error: errorData,
+      severity: determineSeverity(errorObj),
+      context: {
+        ...removeUndefined({
+          ...context,
+          deviceInfo: getDeviceInfo(),
+          page: context.page || getCurrentPage(),
+          appVersion: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+        }),
+      },
+      appName: 'clinic-admin',
+      sessionId: getSessionId(),
+    };
+
+    const cleanedErrorLog = removeUndefined(errorLog);
+
+    if (isOnline) {
+      try {
+        await apiRequest('/log-error', {
+          method: 'POST',
+          body: JSON.stringify(cleanedErrorLog)
+        });
+      } catch (apiError) {
+        console.error('Failed to log error to backend:', apiError);
+        errorQueue.push(cleanedErrorLog);
+      }
+    } else {
+      errorQueue.push(cleanedErrorLog);
+    }
+  } catch (loggingError) {
+    console.error('Failed to log error utility:', loggingError);
+  }
+}
+
+async function flushErrorQueue(): Promise<void> {
+  if (!isOnline || errorQueue.length === 0) return;
+
+  const errorsToFlush = [...errorQueue];
+  errorQueue = [];
+
+  for (const errorLog of errorsToFlush) {
+    try {
+      await apiRequest('/log-error', {
+        method: 'POST',
+        body: JSON.stringify(errorLog)
+      });
+    } catch (error) {
+      errorQueue.push(errorLog);
+    }
+  }
+}
+
+export { flushErrorQueue };
