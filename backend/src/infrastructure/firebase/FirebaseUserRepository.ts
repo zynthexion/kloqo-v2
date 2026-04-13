@@ -1,4 +1,4 @@
-import { User, PaginationParams, PaginatedResponse } from '../../../../packages/shared/src/index';
+import { User, PaginationParams, PaginatedResponse, KLOQO_ROLES } from '../../../../packages/shared/src/index';
 import { IUserRepository } from '../../domain/repositories';
 import { db, paginate } from './config';
 
@@ -79,7 +79,7 @@ export class FirebaseUserRepository implements IUserRepository {
   async findAdminsByClinicId(clinicId: string): Promise<User[]> {
     const snapshot = await this.collection
       .where('clinicId', '==', clinicId)
-      .where('role', '==', 'clinicAdmin')
+      .where('role', '==', KLOQO_ROLES.CLINIC_ADMIN)
       .where('isDeleted', '==', false)
       .get();
     

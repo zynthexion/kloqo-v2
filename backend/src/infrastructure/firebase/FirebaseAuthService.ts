@@ -1,6 +1,7 @@
 import { IAuthService, AuthResponse, IClinicRepository, IPatientRepository } from '../../domain/repositories';
 import { IUserRepository } from '../../domain/repositories';
 import { User } from '@kloqo/shared';
+import { KLOQO_ROLES } from '@kloqo/shared';
 import * as admin from 'firebase-admin';
 
 export class FirebaseAuthService implements IAuthService {
@@ -41,12 +42,12 @@ export class FirebaseAuthService implements IAuthService {
 
     // Role-based app restriction
     if (appSource === 'clinic-admin') {
-      if (user.role !== 'superAdmin' && user.role !== 'clinicAdmin') {
+      if (!([KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.CLINIC_ADMIN] as string[]).includes(user.role)) {
         throw new Error('Unauthorized: This account cannot access the Clinic Admin portal.');
       }
     } else if (appSource === 'nurse-app') {
       // Allowed clinical roles for the nurse/tablet app
-      const allowedRoles: User['role'][] = ['nurse', 'doctor', 'receptionist', 'clinicAdmin'];
+      const allowedRoles = [KLOQO_ROLES.NURSE, KLOQO_ROLES.DOCTOR, KLOQO_ROLES.RECEPTIONIST, KLOQO_ROLES.CLINIC_ADMIN] as string[];
       if (!allowedRoles.includes(user.role)) {
         throw new Error('Unauthorized: This account cannot access the clinical application.');
       }
@@ -142,7 +143,7 @@ export class FirebaseAuthService implements IAuthService {
       }
       
       // Database Optimization: Skip accessibleMenus for clinical roles
-      if (role !== 'doctor' && role !== 'nurse') {
+      if (role !== KLOQO_ROLES.DOCTOR && role !== KLOQO_ROLES.NURSE) {
         if (accessibleMenus) {
           userData.accessibleMenus = accessibleMenus;
         }
@@ -234,8 +235,8 @@ export class FirebaseAuthService implements IAuthService {
       if (!user) {
         const newUser: User = {
           id: userRecord.uid,
-          role: 'patient',
-          roles: ['patient'],
+          role: KLOQO_ROLES.PATIENT,
+          roles: [KLOQO_ROLES.PATIENT],
           phone: phone,
           name: 'Patient User',
           patientId: existingPatientId || undefined,

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { container } from '../../infrastructure/webserver/express/Container';
 import { createMiddleware } from '../../infrastructure/webserver/express/middleware';
 
-import { Role } from '@kloqo/shared';
+import { Role, KLOQO_ROLES } from '@kloqo/shared';
 
 const router = Router();
 const { auth, checkRole, checkPermission } = createMiddleware(container.verifySessionUseCase);
@@ -10,7 +10,7 @@ const { appointmentController, analyticsController, clinicController, doctorCont
         patientController, userController, departmentController, notificationController,
         prescriptionController, settingsController, superAdminController } = container;
 
-const superadminGuard = [auth, checkRole('superAdmin' as Role)];
+const superadminGuard = [auth, checkRole(KLOQO_ROLES.SUPER_ADMIN)];
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 router.get('/dashboard', ...superadminGuard, checkPermission('Dashboard'), (req, res) => analyticsController.getDashboard(req, res));

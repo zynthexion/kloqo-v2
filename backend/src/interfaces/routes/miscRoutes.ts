@@ -4,6 +4,9 @@ import multer from 'multer';
 import { container } from '../../infrastructure/webserver/express/Container';
 import { createMiddleware } from '../../infrastructure/webserver/express/middleware';
 import { verifyWhatsAppSignature } from '../../infrastructure/webserver/middleware/VerifyWhatsAppSignature';
+import { KLOQO_ROLES } from '@kloqo/shared';
+
+const { CLINIC_ADMIN, DOCTOR, NURSE, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;
 
 const router = Router();
 const { auth, checkRole } = createMiddleware(container.verifySessionUseCase);
@@ -19,13 +22,13 @@ router.post('/breaks/edit', auth, (req, res) => doctorController.editBreak(req, 
 router.post('/breaks/cancel', auth, (req, res) => doctorController.cancelBreak(req, res));
 
 // ── Prescriptions ─────────────────────────────────────────────────────────
-router.post('/prescriptions/upload', auth, checkRole('nurse', 'doctor', 'clinicAdmin', 'superAdmin'), upload.single('file'), (req, res) => prescriptionController.upload(req, res));
+router.post('/prescriptions/upload', auth, checkRole(NURSE, DOCTOR, CLINIC_ADMIN, SUPER_ADMIN), upload.single('file'), (req, res) => prescriptionController.upload(req, res));
 router.get('/prescriptions/patient/:patientId', auth, (req, res) => prescriptionController.getByPatient(req, res));
-router.patch('/prescriptions/:appointmentId/dispense', auth, checkRole('pharmacist', 'clinicAdmin', 'superAdmin'), (req, res) => prescriptionController.dispense(req, res));
-router.patch('/prescriptions/:appointmentId/abandon', auth, checkRole('pharmacist', 'clinicAdmin', 'superAdmin'), (req, res) => prescriptionController.abandon(req, res));
+router.patch('/prescriptions/:appointmentId/dispense', auth, checkRole(PHARMACIST, CLINIC_ADMIN, SUPER_ADMIN), (req, res) => prescriptionController.dispense(req, res));
+router.patch('/prescriptions/:appointmentId/abandon', auth, checkRole(PHARMACIST, CLINIC_ADMIN, SUPER_ADMIN), (req, res) => prescriptionController.abandon(req, res));
 
 // ── Storage ────────────────────────────────────────────────────────────────
-router.post('/storage/upload', auth, checkRole('nurse', 'doctor', 'pharmacist', 'clinicAdmin', 'superAdmin'), upload.single('file'), (req, res) => storageController.upload(req, res));
+router.post('/storage/upload', auth, checkRole(NURSE, DOCTOR, PHARMACIST, CLINIC_ADMIN, SUPER_ADMIN), upload.single('file'), (req, res) => storageController.upload(req, res));
 
 // ── Payments (unauthenticated — secured by Razorpay signature) ────────────
 router.post('/payments/create-order', (req, res) => paymentController.createOrder(req, res));
