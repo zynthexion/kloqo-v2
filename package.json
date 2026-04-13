@@ -5,8 +5,7 @@
   "workspaces": [
     "backend",
     "apps/*",
-    "packages/*",
-    "../packages/*"
+    "packages/*"
   ],
   "scripts": {
     "dev:backend": "npm run dev --workspace=kloqo-v2-backend",

@@ -14,12 +14,14 @@
       "@kloqo/shared": ["../packages/shared/src/index.ts"],
       "@kloqo/shared-core": ["../packages/shared-core/src/index.ts"],
       "@kloqo/shared-core/*": ["../packages/shared-core/*"],
+      "@kloqo/shared-firebase": ["../packages/shared-firebase/src/index.ts"],
+      "@kloqo/shared-firebase/*": ["../packages/shared-firebase/*"],
       "@domain/*": ["src/domain/*"],
       "@application/*": ["src/application/*"],
       "@infrastructure/*": ["src/infrastructure/*"],
       "@interfaces/*": ["src/interfaces/*"]
     }
   },
-  "include": ["src/**/*", "../packages/shared/src/**/*", "../packages/shared-core/src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "include": ["src/**/*", "../packages/shared/src/**/*", "../packages/shared-core/src/**/*", "../packages/shared-firebase/src/**/*"],
+  "exclude": ["node_modules", "**/*.spec.ts", "../packages/shared-core/src/__tests__/**/*", "../packages/shared-firebase/src/__tests__/**/*"]
 }
