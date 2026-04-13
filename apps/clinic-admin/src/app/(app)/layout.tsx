@@ -10,7 +10,7 @@ import { useClinicSync } from '@/hooks/use-clinic-sync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler';
 import { apiRequest } from '@/lib/api-client';
-import { RBACUtils, Role } from '@kloqo/shared';
+import { RBACUtils, Role, KLOQO_ROLES } from '@kloqo/shared';
 
 function AuthorizedLayout({ children }: { children: React.ReactNode }) {
   // Centralized background sync for clinic/doctor/appointment statuses
@@ -47,31 +47,38 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
 
     // RBAC Guard: Ensure user has administrative privileges for THIS app
-    const isAdmin = RBACUtils.hasAnyRole(currentUser, ['clinicAdmin', 'admin', 'superAdmin', 'super-admin'] as Role[]);
+    // Standardizing on KLOQO_ROLES constants to prevent identity ghosting
+    const { CLINIC_ADMIN, SUPER_ADMIN, NURSE, DOCTOR, PHARMACIST, RECEPTIONIST, PATIENT } = KLOQO_ROLES;
+    const isAdmin = RBACUtils.hasAnyRole(currentUser, [CLINIC_ADMIN, SUPER_ADMIN] as Role[]);
     
-    if (!isAdmin) {
-      console.warn("Unauthorized access to Clinic Admin app. Redirecting to appropriate operational portal.");
-      
-      // Intelligent Redirection to avoid infinite loops
-      // If a Nurse/Pharmacists hits the Admin URL, teleport them to the Nurse App
-      if (RBACUtils.hasAnyRole(currentUser, ['nurse', 'doctor', 'pharmacist', 'receptionist'] as Role[])) {
-        const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
-        window.location.href = `${nurseUrl}/dashboard`; 
-        return;
-      }
-
-      // If a Patient hits the Admin URL, teleport them to the Patient App
-      if (RBACUtils.hasAnyRole(currentUser, ['patient'] as Role[])) {
-        const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
-        window.location.href = `${patientUrl}/dashboard`;
-        return;
-      }
-
-      // If we don't know who they are, send to logout to clear the session and break the loop
-      console.error("Unknown role detected. Clearing session.");
-      logout();
+    if (isAdmin) {
+      // SUCCEED FAST: If they have admin privileges, we stop here and allow access.
+      // This prevents multi-role users (e.g. Admin + Nurse) from being "teleported" away.
       return;
     }
+
+    console.warn("Unauthorized access to Clinic Admin app. Evaluating redirect portal...");
+    
+    // REDIRECT LOGIC: Only runs if the user FAILED the admin check above.
+    
+    // If a Nurse/Pharmacists/Receptionist hits the Admin URL, teleport them to the Nurse App
+    if (RBACUtils.hasAnyRole(currentUser, [NURSE, DOCTOR, PHARMACIST, RECEPTIONIST] as Role[])) {
+      const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
+      window.location.href = `${nurseUrl}/dashboard`; 
+      return;
+    }
+
+    // If a Patient hits the Admin URL, teleport them to the Patient App
+    if (RBACUtils.hasAnyRole(currentUser, [PATIENT] as Role[])) {
+      const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
+      window.location.href = `${patientUrl}/dashboard`;
+      return;
+    }
+
+    // If we don't know who they are, send to logout to clear the session and break the loop
+    console.error("Unknown role detected. Clearing session.");
+    logout();
+    return;
 
     if (!currentUser.clinicId) {
       console.error("No clinicId found for user. Logging out.");

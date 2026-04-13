@@ -3,7 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { RBACUtils, Role } from "@kloqo/shared";
+import { RBACUtils, Role, KLOQO_ROLES } from "@kloqo/shared";
 import { useActiveIdentity } from "@/hooks/useActiveIdentity";
 
 export function AppGuard({ children }: { children: React.ReactNode }) {
@@ -21,15 +21,21 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     // 1. GLOBAL ACCESS CHECK: Ensure user has ANY operational staff privilege
-    const isStaff = RBACUtils.hasAnyRole(user, ['nurse', 'doctor', 'pharmacist', 'receptionist', 'clinicAdmin', 'superAdmin'] as Role[]);
+    const { NURSE, DOCTOR, PHARMACIST, RECEPTIONIST, CLINIC_ADMIN, SUPER_ADMIN, PATIENT } = KLOQO_ROLES;
+    const isStaff = RBACUtils.hasAnyRole(user, [NURSE, DOCTOR, PHARMACIST, RECEPTIONIST, CLINIC_ADMIN, SUPER_ADMIN] as Role[]);
     
-    if (!isStaff) {
-      console.warn("Unauthorized access to Nurse App. Redirecting to patient portal.");
-      if (RBACUtils.hasAnyRole(user, ['patient'] as Role[])) {
-        const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
-        window.location.href = `${patientUrl}/dashboard`;
-        return;
-      }
+    if (isStaff) {
+      // SUCCEED FAST: If they are staff, we stop jumping through redirect hoops.
+      return;
+    }
+
+    console.warn("Unauthorized access to Nurse App. Evaluating redirect portal.");
+    
+    // REDIRECT LOGIC: Only runs if the user FAILED the staff check.
+    if (RBACUtils.hasAnyRole(user, [PATIENT] as Role[])) {
+      const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
+      window.location.href = `${patientUrl}/dashboard`;
+      return;
     }
 
     // 2. ACTIVE CONTEXT ENFORCEMENT: Reactive Whitelist & Defense in Depth

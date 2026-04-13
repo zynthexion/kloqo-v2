@@ -1013,4 +1013,7 @@ export type FormValues = {
 // Exporting a basic version, apps can override it
 export const createFormSchema = (t: any) => ({}); 
 
+export type Role = KloqoRole; // Alias for backward compatibility
+
 export * from './utils/rbac';
+export * from './constants/roles';

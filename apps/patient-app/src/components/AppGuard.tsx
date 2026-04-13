@@ -3,7 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { RBACUtils, Role } from "@kloqo/shared";
+import { RBACUtils, Role, KLOQO_ROLES } from "@kloqo/shared";
 
 export function AppGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -18,31 +18,38 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
     if (!user) return;
 
     // RBAC Guard: Ensure user has patient status for THIS app
-    const isPatient = RBACUtils.hasAnyRole(user, ['patient'] as Role[]);
+    const { PATIENT, NURSE, DOCTOR, PHARMACIST, RECEPTIONIST, CLINIC_ADMIN, SUPER_ADMIN } = KLOQO_ROLES;
+    const isPatient = RBACUtils.hasAnyRole(user, [PATIENT] as Role[]);
     
-    if (!isPatient) {
-      console.warn("Unauthorized access to Patient App. Redirecting to staff portal.");
-      
-      // If a Nurse/Pharmacists hits the Patient App, teleport them to the Nurse App
-      if (RBACUtils.hasAnyRole(user, ['nurse', 'doctor', 'pharmacist', 'receptionist'] as Role[])) {
-        const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
-        window.location.href = `${nurseUrl}/dashboard`;
-        return;
-      }
+    if (isPatient) {
+      // SUCCEED FAST: If they are a patient, we allow access immediately.
+      return;
+    }
 
-      // If a Clinic Admin hits the Patient App, teleport them to the Admin App
-      if (RBACUtils.hasAnyRole(user, ['clinicAdmin', 'admin'] as Role[])) {
-        const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3006';
-        window.location.href = `${adminUrl}/dashboard`;
-        return;
-      }
+    console.warn("Unauthorized access to Patient App. Evaluating redirect portal.");
+    
+    // REDIRECT LOGIC: Only runs if the user FAILED the patient check.
+    
+    // If a Nurse/Pharmacist/Receptionist hits the Patient App, teleport them to the Nurse App
+    if (RBACUtils.hasAnyRole(user, [NURSE, DOCTOR, PHARMACIST, RECEPTIONIST] as Role[])) {
+      const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
+      window.location.href = `${nurseUrl}/dashboard`;
+      return;
+    }
 
-      // If a Super Admin hits the Patient App, teleport them to the Super Admin App
-      if (RBACUtils.hasAnyRole(user, ['superAdmin', 'super-admin'] as Role[])) {
-        const superAdminUrl = process.env.NEXT_PUBLIC_SUPERADMIN_URL || 'http://localhost:3004';
-        window.location.href = `${superAdminUrl}/dashboard`;
-        return;
-      }
+    // If a Clinic Admin hits the Patient App, teleport them to the Admin App
+    if (RBACUtils.hasAnyRole(user, [CLINIC_ADMIN] as Role[])) {
+      const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3006';
+      window.location.href = `${adminUrl}/dashboard`;
+      return;
+    }
+
+    // If a Super Admin hits the Patient App, teleport them to the Super Admin App
+    if (RBACUtils.hasAnyRole(user, [SUPER_ADMIN] as Role[])) {
+      const superAdminUrl = process.env.NEXT_PUBLIC_SUPERADMIN_URL || 'http://localhost:3004';
+      window.location.href = `${superAdminUrl}/dashboard`;
+      return;
+    }
     }
   }, [user, loading, pathname]);
 

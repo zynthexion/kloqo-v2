@@ -1,48 +1,53 @@
-import { User, Role } from '../index';
+import { User, Role, KloqoRole, KLOQO_ROLES } from '../index';
 
 export const RBACUtils = {
   /**
-   * Checks if a user has a specific role using Dual-Read logic.
+   * Normalizes old 'role' string and new 'roles' array into a single standardized KloqoRole array.
+   * Handles legacy mapping (e.g., admin -> clinicAdmin).
    */
-  hasRole(user: User | null | undefined, targetRole: Role): boolean {
-    if (!user) return false;
-    
-    if (user.roles && Array.isArray(user.roles)) {
-      return user.roles.includes(targetRole);
-    }
-    
-    return user.role === targetRole;
+  getNormalizedRoles(user: User | null | undefined): KloqoRole[] {
+    if (!user) return [];
+
+    const rawRoles = Array.isArray(user.roles) 
+      ? user.roles 
+      : (user.role ? [user.role] : []);
+
+    const normalized = rawRoles.map(r => {
+      // Legacy Mappings
+      if (r === 'admin' as any) return KLOQO_ROLES.CLINIC_ADMIN;
+      if (r === 'super-admin' as any) return KLOQO_ROLES.SUPER_ADMIN;
+      if (r === 'superadmin' as any) return KLOQO_ROLES.SUPER_ADMIN;
+      return r as KloqoRole;
+    });
+
+    // Remove duplicates
+    return Array.from(new Set(normalized));
   },
 
   /**
-   * Checks if a user has at least one of the allowed roles using Dual-Read logic.
+   * Checks if a user has a specific role using Normalized logic.
    */
-  hasAnyRole(user: User | null | undefined, allowedRoles: Role[]): boolean {
+  hasRole(user: User | null | undefined, targetRole: KloqoRole): boolean {
+    const roles = this.getNormalizedRoles(user);
+    return roles.includes(targetRole);
+  },
+
+  /**
+   * Checks if a user has at least one of the allowed roles using Normalized logic.
+   */
+  hasAnyRole(user: User | null | undefined, allowedRoles: KloqoRole[]): boolean {
     if (!user || !allowedRoles || allowedRoles.length === 0) return false;
-    
-    if (user.roles && Array.isArray(user.roles)) {
-      return user.roles.some(r => allowedRoles.includes(r));
-    }
-    
-    return allowedRoles.includes(user.role);
+    const userRoles = this.getNormalizedRoles(user);
+    return allowedRoles.some(role => userRoles.includes(role));
   },
 
   /**
-   * Checks if a user possesses every role in the required list using Dual-Read logic.
+   * Checks if a user possesses every role in the required list using Normalized logic.
    */
-  hasAllRoles(user: User | null | undefined, requiredRoles: Role[]): boolean {
+  hasAllRoles(user: User | null | undefined, requiredRoles: KloqoRole[]): boolean {
     if (!user || !requiredRoles || requiredRoles.length === 0) return false;
-    
-    if (user.roles && Array.isArray(user.roles)) {
-      return requiredRoles.every(r => user.roles!.includes(r));
-    }
-    
-    // If the required roles requires more than 1 role but they only have 1 deprecated role string, it's false
-    if (requiredRoles.length > 1) {
-        return false;
-    }
-    
-    return requiredRoles.includes(user.role);
+    const userRoles = this.getNormalizedRoles(user);
+    return requiredRoles.every(role => userRoles.includes(role));
   },
 
   /**
