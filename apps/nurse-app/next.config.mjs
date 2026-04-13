@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@kloqo/shared'],
+  transpilePackages: ['@kloqo/shared', '@kloqo/shared-core', '@kloqo/shared-firebase'],
   images: {
     remotePatterns: [
       {

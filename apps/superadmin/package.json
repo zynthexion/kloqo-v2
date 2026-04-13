@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@kloqo/shared": "*",
+    "@kloqo/shared-core": "*",
+    "@kloqo/shared-firebase": "*",
     "@radix-ui/react-alert-dialog": "^1.1.6",
     "@radix-ui/react-avatar": "^1.1.3",
     "@radix-ui/react-checkbox": "^1.3.3",
