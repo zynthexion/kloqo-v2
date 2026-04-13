@@ -13,7 +13,7 @@ import { UpdateDoctorAccessUseCase } from '../application/UpdateDoctorAccessUseC
 import { RevokeDoctorAccessUseCase } from '../application/RevokeDoctorAccessUseCase';
 import { GetDoctorActivitiesUseCase } from '../application/GetDoctorActivitiesUseCase';
 import { EditBreakUseCase } from '../application/EditBreakUseCase';
-import { KLOQO_ROLES } from '@kloqo/shared';
+import { KLOQO_ROLES, Role } from '@kloqo/shared';
 
 import { GetAvailableSlotsUseCase } from '../application/GetAvailableSlotsUseCase';
 

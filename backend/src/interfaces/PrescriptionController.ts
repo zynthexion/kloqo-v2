@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { CompleteAppointmentWithPrescriptionUseCase } from '../application/CompleteAppointmentWithPrescriptionUseCase';
 import { IAppointmentRepository } from '../domain/repositories';
 import { FirebaseSubscriptionRepository } from '../infrastructure/firebase/FirebaseSubscriptionRepository';
-import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
+import { RBACUtils, KLOQO_ROLES, Role } from '@kloqo/shared';
 
 export class PrescriptionController {
   constructor(
