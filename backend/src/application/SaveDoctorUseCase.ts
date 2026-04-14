@@ -1,5 +1,5 @@
 import { IDoctorRepository, IUserRepository, IAuthService, IEmailService, IClinicRepository } from '../domain/repositories';
-import { Doctor, User, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { Doctor, User, KLOQO_ROLES, RBACUtils, KloqoRole } from '../../../packages/shared/src/index';
 
 export class SaveDoctorUseCase {
   constructor(
@@ -43,9 +43,22 @@ export class SaveDoctorUseCase {
         // ✅ LINK IDENTITY: Ensure the Doctor doc has the user's ID
         await this.doctorRepo.update(doctor.id, { userId: associatedUser.id });
         
+        // 🛡️ ADDITIVE RBAC: Merge roles instead of overwriting
+        const existingRoles = RBACUtils.getNormalizedRoles(associatedUser);
+        const newRoles = Array.from(new Set([
+          ...existingRoles,
+          ...(roles || []),
+          KLOQO_ROLES.DOCTOR
+        ])).filter(Boolean) as KloqoRole[];
+
+        // AUTHORITATIVE ROLE: Prioritize Administrative identity for the primary 'role' string
+        const primaryRole = newRoles.includes(KLOQO_ROLES.CLINIC_ADMIN) 
+          ? KLOQO_ROLES.CLINIC_ADMIN 
+          : (newRoles.includes(KLOQO_ROLES.SUPER_ADMIN) ? KLOQO_ROLES.SUPER_ADMIN : KLOQO_ROLES.DOCTOR);
+
         await this.userRepo.update(associatedUser.id!, {
-          roles: roles || associatedUser.roles || [KLOQO_ROLES.DOCTOR],
-          role: role || (roles?.[0]) || associatedUser.role || KLOQO_ROLES.DOCTOR
+          roles: newRoles,
+          role: primaryRole
         });
       }
     }

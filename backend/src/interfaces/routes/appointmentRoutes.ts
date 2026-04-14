@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { container } from '../../infrastructure/webserver/express/Container';
 import { createMiddleware } from '../../infrastructure/webserver/express/middleware';
-import { Role, KLOQO_ROLES } from '@kloqo/shared';
+import { KloqoRole, KLOQO_ROLES } from '@kloqo/shared';
 
 const router = Router();
 const { auth, checkRole } = createMiddleware(container.verifySessionUseCase);
@@ -32,7 +32,7 @@ router.get('/discovery/clinics/:id/doctors/:doctorId/queue', async (req: any, re
 
 // ── Authenticated appointment operations ───────────────────────────────────
 const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;
-const clinicStaffRoles: Role[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN];
+const clinicStaffRoles: KloqoRole[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN];
 const staffGuard = [auth, checkRole(...clinicStaffRoles)];
 
 router.get('/dashboard', staffGuard, (req: any, res: any) => appointmentController.getNurseDashboard(req, res));

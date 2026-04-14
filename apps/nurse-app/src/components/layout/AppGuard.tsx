@@ -33,7 +33,11 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
     
     // REDIRECT LOGIC: Only runs if the user FAILED the staff check.
     if (RBACUtils.hasAnyRole(user, [PATIENT] as Role[])) {
-      const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL || 'http://localhost:3003';
+      const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL;
+      if (!patientUrl) {
+        console.error('[AppGuard] NEXT_PUBLIC_PATIENT_URL is not configured. Cannot redirect patient.');
+        return;
+      }
       window.location.href = `${patientUrl}/dashboard`;
       return;
     }

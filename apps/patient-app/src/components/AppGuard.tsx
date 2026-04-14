@@ -32,21 +32,33 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
     
     // If a Nurse/Pharmacist/Receptionist hits the Patient App, teleport them to the Nurse App
     if (RBACUtils.hasAnyRole(user, [NURSE, DOCTOR, PHARMACIST, RECEPTIONIST] as Role[])) {
-      const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL || 'http://localhost:3005';
+      const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL;
+      if (!nurseUrl) {
+        console.error('[AppGuard] NEXT_PUBLIC_NURSE_URL is not configured. Cannot redirect staff.');
+        return;
+      }
       window.location.href = `${nurseUrl}/dashboard`;
       return;
     }
 
     // If a Clinic Admin hits the Patient App, teleport them to the Admin App
     if (RBACUtils.hasAnyRole(user, [CLINIC_ADMIN] as Role[])) {
-      const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:3006';
+      const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
+      if (!adminUrl) {
+        console.error('[AppGuard] NEXT_PUBLIC_ADMIN_URL is not configured. Cannot redirect admin.');
+        return;
+      }
       window.location.href = `${adminUrl}/dashboard`;
       return;
     }
 
     // If a Super Admin hits the Patient App, teleport them to the Super Admin App
     if (RBACUtils.hasAnyRole(user, [SUPER_ADMIN] as Role[])) {
-      const superAdminUrl = process.env.NEXT_PUBLIC_SUPERADMIN_URL || 'http://localhost:3004';
+      const superAdminUrl = process.env.NEXT_PUBLIC_SUPERADMIN_URL;
+      if (!superAdminUrl) {
+        console.error('[AppGuard] NEXT_PUBLIC_SUPERADMIN_URL is not configured. Cannot redirect super admin.');
+        return;
+      }
       window.location.href = `${superAdminUrl}/dashboard`;
       return;
     }

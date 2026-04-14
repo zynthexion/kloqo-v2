@@ -1,7 +1,6 @@
 import { IAuthService, AuthResponse, IClinicRepository, IPatientRepository } from '../../domain/repositories';
 import { IUserRepository } from '../../domain/repositories';
-import { User } from '@kloqo/shared';
-import { KLOQO_ROLES } from '@kloqo/shared';
+import { User, KLOQO_ROLES, RBACUtils, KloqoRole } from '@kloqo/shared';
 import * as admin from 'firebase-admin';
 
 export class FirebaseAuthService implements IAuthService {
@@ -40,15 +39,20 @@ export class FirebaseAuthService implements IAuthService {
       throw new Error('User record not found in database.');
     }
 
-    // Role-based app restriction
+    // Role-based app restriction (Rule 17: always use RBACUtils with roles array)
     if (appSource === 'clinic-admin') {
-      if (!([KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.CLINIC_ADMIN] as string[]).includes(user.role)) {
+      const hasAdminAccess = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.CLINIC_ADMIN]);
+      if (!hasAdminAccess) {
         throw new Error('Unauthorized: This account cannot access the Clinic Admin portal.');
       }
     } else if (appSource === 'nurse-app') {
       // Allowed clinical roles for the nurse/tablet app
-      const allowedRoles = [KLOQO_ROLES.NURSE, KLOQO_ROLES.DOCTOR, KLOQO_ROLES.RECEPTIONIST, KLOQO_ROLES.CLINIC_ADMIN] as string[];
-      if (!allowedRoles.includes(user.role)) {
+      // NOTE: Patients are allowed through here — AppGuard will teleport them to the correct app.
+      const hasClinicalAccess = RBACUtils.hasAnyRole(user, [
+        KLOQO_ROLES.NURSE, KLOQO_ROLES.DOCTOR, KLOQO_ROLES.RECEPTIONIST,
+        KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.PHARMACIST, KLOQO_ROLES.PATIENT
+      ]);
+      if (!hasClinicalAccess) {
         throw new Error('Unauthorized: This account cannot access the clinical application.');
       }
     }
@@ -150,6 +154,22 @@ export class FirebaseAuthService implements IAuthService {
       }
 
       await this.userRepo.save(userData);
+
+      // CRITICAL: Mint Custom Claims immediately so the user's first JWT
+      // contains the correct role. Without this, the user hits a 403 on
+      // their very first API call and must re-login (the "First-Login 403" bug).
+      try {
+        await admin.auth().setCustomUserClaims(userRecord.uid, {
+          role,
+          roles: [role],
+          clinicId,
+        });
+        console.log(`[AUTH] Custom Claims minted for new user ${userRecord.uid} (${role})`);
+      } catch (claimsErr: any) {
+        // Non-fatal: user is created, they just need to re-login once for claims to propagate.
+        console.warn(`[AUTH] Failed to set custom claims for ${userRecord.uid}:`, claimsErr.message);
+      }
+
       return userData;
     } catch (error: any) {
       console.error('Firebase user creation failed:', error);
@@ -244,6 +264,16 @@ export class FirebaseAuthService implements IAuthService {
           updatedAt: new Date(),
         };
         await this.userRepo.save(newUser);
+        // Mint Custom Claims for new phone-auth patients immediately
+        try {
+          await admin.auth().setCustomUserClaims(userRecord.uid, {
+            role: KLOQO_ROLES.PATIENT,
+            roles: [KLOQO_ROLES.PATIENT],
+          });
+          console.log(`[AUTH] Custom Claims minted for new patient ${userRecord.uid}`);
+        } catch (claimsErr: any) {
+          console.warn(`[AUTH] Failed to set patient custom claims for ${userRecord.uid}:`, claimsErr.message);
+        }
         user = newUser;
       } else if (!user.patientId && existingPatientId) {
         // Link existing patientId to existing user if not already linked

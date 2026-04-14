@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { container } from '../../infrastructure/webserver/express/Container';
 import { createMiddleware } from '../../infrastructure/webserver/express/middleware';
 
-import { Role, KLOQO_ROLES } from '@kloqo/shared';
+import { KloqoRole, KLOQO_ROLES } from '@kloqo/shared';
 
 const router = Router();
 const { auth, checkRole, checkPermission } = createMiddleware(container.verifySessionUseCase);

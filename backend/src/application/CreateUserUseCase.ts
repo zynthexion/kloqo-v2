@@ -1,5 +1,5 @@
 import * as admin from 'firebase-admin';
-import { User, RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
+import { User, RBACUtils, KLOQO_ROLES, KloqoRole } from '@kloqo/shared';
 import { IUserRepository, IEmailService, IClinicRepository } from '../domain/repositories';
 
 export class CreateUserUseCase {
@@ -71,16 +71,30 @@ export class CreateUserUseCase {
       }
     }
 
-    const newUser: User = {
+    // 🛡️ ADDITIVE RBAC: Check for existing user and merge roles
+    const userRef = admin.firestore().collection('users').doc(uid);
+    const existingUserDoc = await userRef.get();
+    const existingRoles = existingUserDoc.exists ? (existingUserDoc.data()?.roles || [existingUserDoc.data()?.role]) : [];
+
+    const mergedRoles = Array.from(new Set([
+      ...existingRoles,
+      role
+    ])).filter(Boolean) as KloqoRole[];
+
+    const newUser: Partial<User> = {
       id: uid,
       email,
       name,
-      role,
-      roles: [role],
+      role, // The newly assigned role is treated as primary for this context
+      roles: mergedRoles,
       clinicId,
-      createdAt: new Date(),
+      updatedAt: new Date(),
       isDeleted: false
     };
+
+    if (!existingUserDoc.exists) {
+      newUser.createdAt = new Date();
+    }
 
     if (phone) {
       newUser.phone = phone;
@@ -98,7 +112,7 @@ export class CreateUserUseCase {
       newUser.assignedDoctorIds = assignedDoctorIds;
     }
 
-    await admin.firestore().collection('users').doc(newUser.id!).set(newUser);
+    await userRef.set(newUser, { merge: true });
 
     // 2. Send Credentials Email if new user and email service is available
     if (isNewAuthUser && this.emailService && password) {
@@ -121,6 +135,6 @@ export class CreateUserUseCase {
       }
     }
 
-    return newUser;
+    return newUser as User;
   }
 }

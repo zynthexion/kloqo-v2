@@ -1,5 +1,5 @@
 import { IUserRepository } from '../domain/repositories';
-import { User, Role } from '@kloqo/shared';
+import { User, KloqoRole } from '@kloqo/shared';
 import { ForbiddenError, NotFoundError } from '../domain/errors';
 
 export class UpdateUserUseCase {
@@ -21,10 +21,10 @@ export class UpdateUserUseCase {
     // 🧱 DATA HYGIENE: Dual-Write Role Logic
     // If we are updating roles (array), ensure the primary 'role' (string) is synchronized.
     if (data.roles && data.roles.length > 0) {
-      data.role = data.roles[0] as Role;
+      data.role = data.roles[0] as KloqoRole;
     } else if (data.role && !data.roles) {
       // If updating legacy role only, wrap it into the roles array
-      data.roles = [data.role as Role];
+      data.roles = [data.role as KloqoRole];
     }
 
     await this.userRepo.update(id, data);

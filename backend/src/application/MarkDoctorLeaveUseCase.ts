@@ -2,7 +2,7 @@ import { IDoctorRepository, IAppointmentRepository, IActivityRepository } from '
 import { NotificationService } from '../domain/services/NotificationService';
 import { db } from '../infrastructure/firebase/config';
 import { addDays, format, parseISO } from 'date-fns';
-import { Role, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
 
 export class MarkDoctorLeaveUseCase {
   constructor(
@@ -12,13 +12,13 @@ export class MarkDoctorLeaveUseCase {
     private activityRepo: IActivityRepository
   ) {}
 
-  async execute(doctorId: string, startDate: string, endDate: string | undefined, performedBy: { id: string; name: string; role: Role }, forceCancelConflicts: boolean = false): Promise<void> {
+  async execute(doctorId: string, startDate: string, endDate: string | undefined, performedBy: { id: string; name: string; role: KloqoRole }, forceCancelConflicts: boolean = false): Promise<void> {
     const doctor = await this.doctorRepo.findById(doctorId);
     if (!doctor) throw new Error('Doctor not found');
 
     // 1. RBAC Softening (Self-Management Check)
     const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
-    const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(performedBy.role);
+    const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(performedBy.role);
 
     if (!isAdmin && !isSelfInitiated) {
         throw new Error('Unauthorized: You can only manage your own schedule or requires Admin privileges.');

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { VerifySessionUseCase } from '../../../application/VerifySessionUseCase';
-import { RBACUtils, Role, KLOQO_ROLES } from '@kloqo/shared';
+import { RBACUtils, KloqoRole, KLOQO_ROLES } from '@kloqo/shared';
 
 /**
  * Middleware factory — requires VerifySessionUseCase to be passed in.
@@ -33,7 +33,7 @@ export function createMiddleware(verifySessionUseCase: VerifySessionUseCase) {
   /**
    * checkRole(...roles) — role-based access control (RBAC).
    */
-  const checkRole = (...roles: Role[]) => (req: any, res: Response, next: NextFunction) => {
+  const checkRole = (...roles: KloqoRole[]) => (req: any, res: Response, next: NextFunction) => {
     if (!req.user || !RBACUtils.hasAnyRole(req.user, roles)) {
       return res.status(403).json({ error: 'Access Denied: Insufficient Permissions' });
     }

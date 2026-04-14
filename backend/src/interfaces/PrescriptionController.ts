@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { CompleteAppointmentWithPrescriptionUseCase } from '../application/CompleteAppointmentWithPrescriptionUseCase';
 import { IAppointmentRepository } from '../domain/repositories';
 import { FirebaseSubscriptionRepository } from '../infrastructure/firebase/FirebaseSubscriptionRepository';
-import { RBACUtils, KLOQO_ROLES, Role } from '@kloqo/shared';
+import { RBACUtils, KLOQO_ROLES, KloqoRole } from '@kloqo/shared';
 
 export class PrescriptionController {
   constructor(
@@ -57,7 +57,7 @@ export class PrescriptionController {
       const appointments = await this.appointmentRepo.findCompletedByClinic(clinicId as string, filters);
 
       // Security: strip financial fields if the caller is a nurse or doctor
-      const isClinicalRole = RBACUtils.hasAnyRole((req as any).user, [KLOQO_ROLES.NURSE, KLOQO_ROLES.DOCTOR] as Role[]);
+      const isClinicalRole = RBACUtils.hasAnyRole((req as any).user, [KLOQO_ROLES.NURSE, KLOQO_ROLES.DOCTOR] as KloqoRole[]);
       const data = isClinicalRole
         ? appointments.map(({ dispensedValue, abandonedReason, ...rest }) => rest)
         : appointments;

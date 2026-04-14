@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import { Clinic, User, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { Clinic, User, KLOQO_ROLES, KloqoRole, RBACUtils } from '../../../packages/shared/src/index';
 import { IEmailService, IClinicRepository } from '../domain/repositories';
 
 export interface RegisterClinicParams {
@@ -137,26 +137,36 @@ export class RegisterClinicUseCase {
         ...(params.paymentDetails ? { paymentDetails: params.paymentDetails } : {})
     };
 
-    // 4. Prepare User Record
-    const newUser: User = {
+    // 4. Prepare User Record & Execute Batch
+    const userSnapshot = await userRef.get();
+    const existingUserData = userSnapshot.exists ? userSnapshot.data() : null;
+
+    const mergedRoles = Array.from(new Set([
+      ...(existingUserData?.roles || (existingUserData?.role ? [existingUserData.role] : [])),
+      KLOQO_ROLES.CLINIC_ADMIN
+    ])).filter(Boolean) as KloqoRole[];
+
+    const newUser: Partial<User> = {
         id: adminUid,
         uid: adminUid,
         email: adminData.email,
         name: adminData.name,
         phone: adminData.phone,
-        role: KLOQO_ROLES.CLINIC_ADMIN,
-        roles: [KLOQO_ROLES.CLINIC_ADMIN],
+        role: KLOQO_ROLES.CLINIC_ADMIN, // Primary role for this app context
+        roles: mergedRoles,
         clinicId: clinicId,
-        onboarded: false,
-        createdAt: new Date(),
         updatedAt: new Date(),
         isDeleted: false
-    } as any;
+    };
 
-    // 5. Execute Batch
+    // Only set createdAt if it's a fresh user record
+    if (!existingUserData) {
+      newUser.createdAt = new Date();
+    }
+
     const batch = admin.firestore().batch();
     batch.set(clinicRef, newClinic);
-    batch.set(userRef, newUser);
+    batch.set(userRef, newUser, { merge: true });
 
     await batch.commit();
 

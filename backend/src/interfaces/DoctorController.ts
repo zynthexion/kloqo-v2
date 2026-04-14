@@ -13,7 +13,7 @@ import { UpdateDoctorAccessUseCase } from '../application/UpdateDoctorAccessUseC
 import { RevokeDoctorAccessUseCase } from '../application/RevokeDoctorAccessUseCase';
 import { GetDoctorActivitiesUseCase } from '../application/GetDoctorActivitiesUseCase';
 import { EditBreakUseCase } from '../application/EditBreakUseCase';
-import { KLOQO_ROLES, Role } from '@kloqo/shared';
+import { KLOQO_ROLES, KloqoRole } from '@kloqo/shared';
 
 import { GetAvailableSlotsUseCase } from '../application/GetAvailableSlotsUseCase';
 
@@ -67,7 +67,7 @@ export class DoctorController {
       const docData = req.body;
 
       // 🛡️ RBAC Guard: Only Admin or Self can update doctor meta-data (fees, avg time, etc)
-      const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(user.role);
+      const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(user.role);
       const isSelf = user.id === docData.userId || user.id === docData.id;
 
       if (!isAdmin && !isSelf) {
@@ -126,7 +126,7 @@ export class DoctorController {
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff'
+          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
         }
       });
       res.status(204).send();
@@ -154,7 +154,7 @@ export class DoctorController {
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff'
+          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
         }
       });
       res.status(204).send();
@@ -179,7 +179,7 @@ export class DoctorController {
         performedBy: {
           id:   user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff'
+          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
         }
       });
       res.status(200).json({
@@ -210,7 +210,7 @@ export class DoctorController {
         performedBy: {
           id:   user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff'
+          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
         }
       });
       res.status(200).json({
@@ -236,7 +236,7 @@ export class DoctorController {
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff'
+          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
         }
       });
       res.status(204).send();
@@ -262,7 +262,7 @@ export class DoctorController {
         {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff'
+          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
         },
         forceCancelConflicts
       );

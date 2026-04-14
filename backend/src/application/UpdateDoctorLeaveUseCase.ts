@@ -3,7 +3,7 @@ import {
     parseClinicTime, 
     getClinicISODateString
 } from '../domain/services/DateUtils';
-import { Role } from '../../../packages/shared/src/index';
+import { KloqoRole } from '../../../packages/shared/src/index';
 
 export interface UpdateDoctorLeaveRequest {
     clinicId: string;
@@ -11,7 +11,7 @@ export interface UpdateDoctorLeaveRequest {
     date: string; // "19 March 2026"
     sessions: Array<{ from: string; to: string; sessionIndex: number }>;
     action: 'MARK_LEAVE' | 'CANCEL_LEAVE';
-    performedBy: { id: string; name: string; role: Role };
+    performedBy: { id: string; name: string; role: KloqoRole };
 }
 
 export class UpdateDoctorLeaveUseCase {

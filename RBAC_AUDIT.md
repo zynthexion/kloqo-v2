@@ -36,14 +36,20 @@ The JWT payload contains a Dual-Write structure for backward compatibility:
 ### 3. Hybrid User Context (The Switcher)
 For users with multiple operational identities (e.g., **Nurse + Pharmacist**):
 - **Authorization:** Permissions are controlled via the `roles` array (and `accessibleMenus`).
-- **Routing:** The `nurse-app` utilizes the `useActiveIdentity` hook to evaluate the `roles: Role[]` array. If the array length > 1, the "Active Identity Switcher" is enabled in the sidebar/settings.
+- **Routing:** The `nurse-app` utilizes the `useActiveIdentity` hook to evaluate the `roles: KloqoRole[]` array. If the array length > 1, the "Active Identity Switcher" is enabled in the sidebar/settings.
 - **Persistence:** Because all V2 apps share a centralized backend, a user can navigate from `nurse.kloqo.com` to `admin.kloqo.com`. The Admin layout will verify the `roles` array contains `clinicAdmin` or `superAdmin` via `RBACUtils.hasAnyRole`.
 
-### 4. Direct Entry Protection
-Each Next.js application uses a `Layout` component that executes a `verifyStatus` check on load utilizing `RBACUtils` (Phase 4):
+### 4. Direct Entry Protection & The "Silent Teleportation" Portal (Hardened)
+Each Next.js application uses a `Layout` component containing a `verifyStatus` or `AppGuard` check on load utilizing `RBACUtils`. To provide a premium, invisible UX, users authenticated to the wrong portal are automatically and silently routed to their correct dashboard via strictly enforced environment variables (localhost fallbacks are removed for security):
+
 - **Doctor App** → Only allows `RBACUtils.hasAnyRole(user, ['doctor'])`.
-- **Clinic Admin App** → Only allows `RBACUtils.hasAnyRole(user, ['clinicAdmin', 'superAdmin'])`.
-- **Nurse App** → Allows `RBACUtils.hasAnyRole(user, ['nurse', 'pharmacist', 'receptionist', 'doctor'])`.
+- **Clinic Admin App** → Only allows `RBACUtils.hasAnyRole(user, ['clinicAdmin', 'superAdmin'])`. Unauthorized roles hitting this portal are **silently teleported** (e.g., Doctors to the Nurse App, Patients to the Patient App).
+- **Nurse App** → Allows clinical staff: `RBACUtils.hasAnyRole(user, ['nurse', 'pharmacist', 'receptionist', 'doctor'])`.
+- **Break-the-Loop Safeguards**: If a role is completely unrecognized, the session invokes `logout()` immediately. This actively "Breaks the Loop" if a user gets caught in an infinite redirect cycle between apps.
+
+### 5. Backend SRE Standard: The Custom Claims TTL Risk
+Our Node.js middleware `verifyToken` strictly relies on Firebase Custom Claims. 
+> To avoid the "Middleware Database Trap," the backend **does not perform live Firestore account queries on every REST request**. It inherits the industry-standard 1-hour JWT TTL. If a Super Admin is fired, they maintain access for the remainder of their session until their token expires, unless a backend script explicitly triggers `admin.auth().revokeRefreshTokens(uid)`. This architecture ensures the platform remains ultra-performant and strictly respects FinOps / Free-tier database read limits.
 
 ---
 

@@ -252,7 +252,15 @@ To maintain readability, testability, and prevent React render loops, we enforce
 
 Kloqo utilizes a monorepo structure to share domain knowledge across 4 frontends and 1 backend.
 
-* **Single Source of Truth:** Core domain entities (`Appointment`, `Patient`, `User`, `Doctor`), Zod Schemas, and API Request/Response payloads MUST be defined in the `@kloqo/shared` package.
-* **No Local Redundancy:** Individual applications (`clinic-admin`, `nurse-app`, `backend`) are strictly forbidden from defining their own local versions of core types. If a type needs a new property, update it globally in the shared package.
-* **Deprecation of `user.role`:** The use of the singular `user.role` string for any new routing or authorization logic is strictly forbidden. Developers MUST use the `roles` array and the shared `Role` union type via `RBACUtils`.
+*   **Single Source of Truth:** Core domain entities (`Appointment`, `Patient`, `User`, `Doctor`), Zod Schemas, and API Request/Response payloads MUST be defined in the `@kloqo/shared` package.
+*   **No Local Redundancy:** Individual applications (`clinic-admin`, `nurse-app`, `backend`) are strictly forbidden from defining their own local versions of core types. If a type needs a new property, update it globally in the shared package.
+*   **Deprecation of `user.role`:** The use of the singular `user.role` string for any new routing or authorization logic is strictly forbidden. Developers MUST use the `roles` array and the shared `Role` union type via `RBACUtils`.
 
+---
+
+## 18. Resource Consumption & OOM Prevention (SRE Protocol)
+
+Kloqo is designed to run efficiently on scaled cloud infrastructure (e.g., Render free-tier). 
+
+* **The OOM Fix (`ts-node --transpile-only`):** The backend MUST run using `ts-node --transpile-only` in production/staging to bypass heavy TypeScript compiler memory allocations that cause Out-of-Memory (OOM) crashes.
+* **The Shared-Core Mandate:** To protect database read quotas and reduce API surface area, any business logic that could result in multiple simultaneous reads/writes (e.g., Walk-in scheduling, appointment booking) MUST be centralized in `@kloqo/shared-core` and executed as atomic transactions. Fragments of business logic isolated in the Next.js apps or standard route controllers lead to "Database Hammering" and are strictly prohibited.

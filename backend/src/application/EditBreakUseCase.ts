@@ -6,7 +6,7 @@ import {
     addMinutes,
     getClinicTimeString
 } from '../domain/services/DateUtils';
-import { BreakPeriod, Role, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { BreakPeriod, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { format, subMinutes } from 'date-fns';
 
 export interface EditBreakRequest {
@@ -16,7 +16,7 @@ export interface EditBreakRequest {
     date: string;
     startTime: string;
     endTime: string;
-    performedBy: { id: string; name: string; role: Role };
+    performedBy: { id: string; name: string; role: KloqoRole };
 }
 
 export class EditBreakUseCase {
@@ -35,7 +35,7 @@ export class EditBreakUseCase {
 
         // RBAC Softening (Self-Management Check)
         const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
-        const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as Role[]).includes(performedBy.role);
+        const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(performedBy.role);
         if (!isAdmin && !isSelfInitiated) {
             throw new Error('Unauthorized: You can only manage your own schedule.');
         }

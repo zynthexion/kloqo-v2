@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { container } from '../../infrastructure/webserver/express/Container';
 import { createMiddleware } from '../../infrastructure/webserver/express/middleware';
-import { Role, KLOQO_ROLES } from '@kloqo/shared';
+import { KloqoRole, KLOQO_ROLES } from '@kloqo/shared';
 
 const router = Router();
 const { auth, checkRole } = createMiddleware(container.verifySessionUseCase);
@@ -10,8 +10,8 @@ const { clinicController, analyticsController, doctorController, userController,
         prescriptionController } = container;
 
 const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;
-const clinicStaffRoles: Role[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN];
-const adminOnlyRoles: Role[] = [CLINIC_ADMIN, SUPER_ADMIN];
+const clinicStaffRoles: KloqoRole[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN];
+const adminOnlyRoles: KloqoRole[] = [CLINIC_ADMIN, SUPER_ADMIN];
 
 const staffGuard = [auth, checkRole(...clinicStaffRoles)];
 const adminGuard = [auth, checkRole(...adminOnlyRoles)];
