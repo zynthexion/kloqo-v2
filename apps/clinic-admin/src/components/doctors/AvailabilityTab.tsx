@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,7 @@ type WeeklyAvailabilityFormValues = z.infer<typeof weeklyAvailabilityFormSchema>
 
 interface AvailabilityTabProps {
   doctor: Doctor;
-  onUpdate: (field: keyof Doctor, value: any) => Promise<void>;
+  onUpdate: (updates: Partial<Doctor>) => Promise<void>;
   isPending: boolean;
 }
 
@@ -42,6 +42,23 @@ const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Sat
 export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTabProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    averageConsultingTime: doctor.averageConsultingTime || 10,
+    consultationFee: doctor.consultationFee || 0,
+    freeFollowUpDays: doctor.freeFollowUpDays || 0,
+    advanceBookingDays: doctor.advanceBookingDays || 0
+  });
+
+  useEffect(() => {
+    if (!isEditingSettings) {
+      setSettingsForm({
+        averageConsultingTime: doctor.averageConsultingTime || 10,
+        consultationFee: doctor.consultationFee || 0,
+        freeFollowUpDays: doctor.freeFollowUpDays || 0,
+        advanceBookingDays: doctor.advanceBookingDays || 0
+      });
+    }
+  }, [doctor, isEditingSettings]);
 
   const form = useForm<WeeklyAvailabilityFormValues>({
     resolver: zodResolver(weeklyAvailabilityFormSchema),
@@ -56,8 +73,28 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
   });
 
   const handleSave = async (values: WeeklyAvailabilityFormValues) => {
-    await onUpdate('availabilitySlots', values.availabilitySlots);
+    await onUpdate({ availabilitySlots: values.availabilitySlots });
     setIsEditing(false);
+  };
+
+  const handleSettingsSave = async () => {
+    await onUpdate({
+      averageConsultingTime: Number(settingsForm.averageConsultingTime),
+      consultationFee: Number(settingsForm.consultationFee),
+      freeFollowUpDays: Number(settingsForm.freeFollowUpDays),
+      advanceBookingDays: Number(settingsForm.advanceBookingDays)
+    });
+    setIsEditingSettings(false);
+  };
+
+  const handleSettingsCancel = () => {
+    setSettingsForm({
+      averageConsultingTime: doctor.averageConsultingTime || 10,
+      consultationFee: doctor.consultationFee || 0,
+      freeFollowUpDays: doctor.freeFollowUpDays || 0,
+      advanceBookingDays: doctor.advanceBookingDays || 0
+    });
+    setIsEditingSettings(false);
   };
 
   return (
@@ -79,8 +116,10 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
             </Button>
           ) : (
             <div className="flex gap-2">
-              <Button onClick={() => setIsEditingSettings(false)} variant="ghost" className="rounded-xl text-red-500 font-black uppercase text-[10px] tracking-widest">Cancel</Button>
-              <Button onClick={() => setIsEditingSettings(false)} className="rounded-xl bg-theme-blue font-black uppercase text-[10px] tracking-widest text-white px-6">Apply</Button>
+              <Button onClick={handleSettingsCancel} variant="ghost" className="rounded-xl text-red-500 font-black uppercase text-[10px] tracking-widest">Cancel</Button>
+              <Button onClick={handleSettingsSave} disabled={isPending} className="rounded-xl bg-theme-blue font-black uppercase text-[10px] tracking-widest text-white px-6">
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Apply"}
+              </Button>
             </div>
           )}
         </CardHeader>
@@ -90,8 +129,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none block mb-1">Avg Patient Time</Label>
                {isEditingSettings ? (
                   <Input 
-                   type="number" value={doctor.averageConsultingTime} 
-                   onChange={e => onUpdate('averageConsultingTime', Number(e.target.value))}
+                   type="number" value={settingsForm.averageConsultingTime} 
+                   onChange={e => setSettingsForm({ ...settingsForm, averageConsultingTime: Number(e.target.value) })}
                    className="rounded-xl border-2 border-slate-100 bg-white font-black text-sm text-slate-800 h-11" 
                   />
                ) : (
@@ -103,8 +142,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none block mb-1">Consultation Fee</Label>
                {isEditingSettings ? (
                   <Input 
-                   type="number" value={doctor.consultationFee} 
-                   onChange={e => onUpdate('consultationFee', Number(e.target.value))}
+                   type="number" value={settingsForm.consultationFee} 
+                   onChange={e => setSettingsForm({ ...settingsForm, consultationFee: Number(e.target.value) })}
                    className="rounded-xl border-2 border-slate-100 bg-white font-black text-sm text-slate-800 h-11" 
                   />
                ) : (
@@ -116,8 +155,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none block mb-1">Follow-up Days</Label>
                {isEditingSettings ? (
                   <Input 
-                   type="number" value={doctor.freeFollowUpDays} 
-                   onChange={e => onUpdate('freeFollowUpDays', Number(e.target.value))}
+                   type="number" value={settingsForm.freeFollowUpDays} 
+                   onChange={e => setSettingsForm({ ...settingsForm, freeFollowUpDays: Number(e.target.value) })}
                    className="rounded-xl border-2 border-slate-100 bg-white font-black text-sm text-slate-800 h-11" 
                   />
                ) : (
@@ -129,8 +168,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
                <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none block mb-1">Advance Booking</Label>
                {isEditingSettings ? (
                   <Input 
-                   type="number" value={doctor.advanceBookingDays} 
-                   onChange={e => onUpdate('advanceBookingDays', Number(e.target.value))}
+                   type="number" value={settingsForm.advanceBookingDays} 
+                   onChange={e => setSettingsForm({ ...settingsForm, advanceBookingDays: Number(e.target.value) })}
                    className="rounded-xl border-2 border-slate-100 bg-white font-black text-sm text-slate-800 h-11" 
                   />
                ) : (
@@ -220,7 +259,7 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
         </CardContent>
       </Card>
 
-      <DateOverrideManager doctor={doctor} onUpdate={() => onUpdate('updatedAt', new Date())} />
+      <DateOverrideManager doctor={doctor} onUpdate={() => onUpdate({ updatedAt: new Date() })} />
     </div>
   );
 }

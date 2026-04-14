@@ -13,11 +13,12 @@ import { cn } from "@/lib/utils";
 import type { Doctor, Department, Role } from '@kloqo/shared';
 import imageCompression from 'browser-image-compression';
 import { Checkbox } from "@/components/ui/checkbox";
+import { apiRequest } from '@/lib/api-client';
 
 interface ProfileTabProps {
   doctor: Doctor;
   departments: Department[];
-  onUpdate: (field: keyof Doctor, value: any) => Promise<void>;
+  onUpdate: (updates: Partial<Doctor>) => Promise<void>;
   isPending: boolean;
 }
 
@@ -51,26 +52,34 @@ export function ProfileTab({ doctor, departments, onUpdate, isPending }: Profile
     if (newPhoto) {
       const options = { maxSizeMB: 0.5, maxWidthOrHeight: 800, useWebWorker: true };
       const compressedFile = await imageCompression(newPhoto, options);
+      
       const formData = new FormData();
       formData.append('file', compressedFile);
       formData.append('clinicId', doctor.clinicId);
       formData.append('userId', doctor.id);
-      const res = await fetch('/api/upload-avatar', { method: 'POST', body: formData });
-      const data = await res.json();
-      photoUrl = data.url;
+      formData.append('documentType', 'profile_photo');
+
+      const res = await apiRequest<{url: string}>('/storage/upload', { 
+        method: 'POST', 
+        body: formData 
+      });
+      photoUrl = res.url;
     }
-    await onUpdate('name', form.name);
-    await onUpdate('specialty', form.specialty);
-    await onUpdate('department', form.department);
-    await onUpdate('experience', Number(form.experience));
-    await onUpdate('registrationNumber', form.registrationNumber);
-    await onUpdate('avatar', photoUrl);
-    await onUpdate('avatar', photoUrl);
+    
+    await onUpdate({
+      name: form.name,
+      specialty: form.specialty,
+      department: form.department,
+      experience: Number(form.experience),
+      registrationNumber: form.registrationNumber,
+      avatar: photoUrl
+    });
+    
     setIsEditing(false);
   };
 
   const handleBioSave = async () => {
-    await onUpdate('bio', form.bio);
+    await onUpdate({ bio: form.bio });
     setIsEditingBio(false);
   };
 

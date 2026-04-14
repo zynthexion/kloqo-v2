@@ -168,10 +168,10 @@ export default function DoctorsPage() {
                  <div className="max-w-6xl mx-auto pb-20">
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsContent value="details" className="m-0 mt-0">
-                      <ProfileTab doctor={selectedDoctor} departments={clinicDepartments} onUpdate={updateDoctorField} isPending={isPending} />
+                      <ProfileTab doctor={selectedDoctor} departments={clinicDepartments} onUpdate={updateDoctorFields} isPending={isPending} />
                     </TabsContent>
                     <TabsContent value="availability" className="m-0 mt-0">
-                      <AvailabilityTab doctor={selectedDoctor} onUpdate={updateDoctorField} isPending={isPending} />
+                      <AvailabilityTab doctor={selectedDoctor} onUpdate={updateDoctorFields} isPending={isPending} />
                     </TabsContent>
                     <TabsContent value="roles" className="m-0 mt-0">
                       <RoleTab 

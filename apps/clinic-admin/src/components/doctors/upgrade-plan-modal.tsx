@@ -44,15 +44,6 @@ export function UpgradePlanModal({ open, onClose, clinicDetails }: UpgradePlanMo
   const isTrialByFlag = clinicDetails?.subscriptionDetails?.isTrialPeriod === true;
   const isCurrentlyInTrial = isTrialByDate || isTrialByFlag;
 
-  console.log("=== PRICING DEBUG ===");
-  console.log("Full Clinic Details (keys):", Object.keys(clinicDetails || {}));
-  console.log("Raw trialEndDate:", clinicDetails?.trialEndDate);
-  console.log("isTrialPeriod flag:", clinicDetails?.subscriptionDetails?.isTrialPeriod);
-  console.log("isTrialByDate:", isTrialByDate);
-  console.log("isTrialByFlag:", isTrialByFlag);
-  console.log("isCurrentlyInTrial (FINAL):", isCurrentlyInTrial);
-  console.log("=====================");
-
   const calculations = usePricingCalculator({
     clinicType: clinicDetails?.type || 'Clinic',
     plan: clinicDetails?.plan || 'The Complete Suite',

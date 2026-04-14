@@ -120,7 +120,7 @@ export default function ProfilePage() {
     if (v.type === 'Single Doctor' && currentDoctorCount > 1) return toast({ variant: "destructive", title: "Limit Error", description: "Multiple doctors exist." });
     startTransition(async () => {
       try {
-        await apiRequest('/clinic/me', { method: 'PATCH', body: JSON.stringify({ ...v, addressDetails: { line1: v.addressLine1, line2: v.addressLine2, city: v.city, district: v.district, state: v.state, pincode: v.pincode } }) });
+        await apiRequest('/clinic', { method: 'PATCH', body: JSON.stringify({ ...v, addressDetails: { line1: v.addressLine1, line2: v.addressLine2, city: v.city, district: v.district, state: v.state, pincode: v.pincode } }) });
         setClinicDetails((p: any) => p ? { ...p, ...v } : null);
         toast({ title: "Clinic Updated" });
         setIsEditingClinic(false);
@@ -131,7 +131,7 @@ export default function ProfilePage() {
   const onHoursSubmit = async (v: OperatingHoursFormValues) => {
     startTransition(async () => {
       try {
-        await apiRequest('/clinic/me', { method: 'PATCH', body: JSON.stringify({ operatingHours: v.hours }) });
+        await apiRequest('/clinic', { method: 'PATCH', body: JSON.stringify({ operatingHours: v.hours }) });
         setClinicDetails((p: any) => p ? { ...p, operatingHours: v.hours } : null);
         toast({ title: "Hours Updated" });
         setIsEditingHours(false);
@@ -142,7 +142,7 @@ export default function ProfilePage() {
   const onSettingsSubmit = async (v: SettingsFormValues) => {
     startTransition(async () => {
       try {
-        await apiRequest('/clinic/me', { method: 'PATCH', body: JSON.stringify(v) });
+        await apiRequest('/clinic', { method: 'PATCH', body: JSON.stringify(v) });
         setClinicDetails((p: any) => p ? { ...p, ...v } : null);
         toast({ title: "Settings Updated" });
         setIsEditingSettings(false);

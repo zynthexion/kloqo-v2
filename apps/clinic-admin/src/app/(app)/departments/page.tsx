@@ -292,7 +292,7 @@ export default function DepartmentsPage() {
       const currentIds = clinicDetails?.departments || [];
       const updatedIds = [...new Set([...currentIds, ...departmentIdsToAdd])];
 
-      await apiRequest("/clinic/me", {
+      await apiRequest("/clinic", {
         method: "PATCH",
         body: JSON.stringify({ departments: updatedIds })
       });
@@ -319,7 +319,7 @@ export default function DepartmentsPage() {
       const currentIds = clinicDetails?.departments || [];
       const updatedIds = currentIds.filter((id: string) => id !== deletingDepartment.id);
 
-      await apiRequest("/clinic/me", {
+      await apiRequest("/clinic", {
         method: "PATCH",
         body: JSON.stringify({ departments: updatedIds })
       });
