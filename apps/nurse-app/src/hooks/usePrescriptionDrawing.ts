@@ -42,12 +42,13 @@ export function usePrescriptionDrawing({
   // CPU COACHING: Path2D cache to avoid re-reduction of coordinate arrays
   const pathCacheRef = useRef(new WeakMap<number[][], Path2D>());
 
-  // STROKE OPTIONS (Physically accurate ink)
+  // STROKE OPTIONS (Hardware-tuned for Apple Pencil)
   const strokeOptions = useMemo(() => ({
-    size: 1.8, // Reduced for professional fine-tip feel
-    thinning: 0.5,
+    size: 2.0,
+    thinning: 0.6,
     smoothing: 0.5,
-    streamline: 0.6, // Increased slightly for smoother curves on rapid movement
+    streamline: 0.85, // High streamline eliminates Apple Pencil micro-jitter at 120Hz
+    simulatePressure: false, // Use real hardware pressure from the Pencil
   }), []);
 
   const getSvgPathFromStroke = useCallback((stroke: number[][]) => {
@@ -227,12 +228,17 @@ export function usePrescriptionDrawing({
     canvas.addEventListener('pointermove', handleMove, { passive: false });
     canvas.addEventListener('pointerup', handleUp, { passive: false });
     canvas.addEventListener('pointerleave', handleUp, { passive: false });
+    // PALM REJECTION GUARD: Treat OS-level cancel events as a normal pen lift
+    canvas.addEventListener('pointercancel', handleUp);
+    canvas.addEventListener('pointerout', handleUp);
 
     return () => {
       canvas.removeEventListener('pointerdown', handleDown);
       canvas.removeEventListener('pointermove', handleMove);
       canvas.removeEventListener('pointerup', handleUp);
       canvas.removeEventListener('pointerleave', handleUp);
+      canvas.removeEventListener('pointercancel', handleUp); // Prevent memory leak
+      canvas.removeEventListener('pointerout', handleUp);    // Prevent memory leak
     };
   }, [getSvgPathFromStroke, currentPageIndex, runInIdle]);
 
