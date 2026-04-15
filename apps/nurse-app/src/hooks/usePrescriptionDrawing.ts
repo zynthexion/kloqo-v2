@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { getStroke } from 'perfect-freehand';
 import { Doctor, Clinic, Patient, Appointment } from '@kloqo/shared';
 
@@ -21,128 +21,116 @@ interface UsePrescriptionDrawingOptions {
   appointment: Appointment;
 }
 
-export function usePrescriptionDrawing({ 
-  doctor, 
-  clinic, 
-  patient, 
-  appointment 
+export function usePrescriptionDrawing({
+  doctor,
+  clinic,
+  patient,
+  appointment,
 }: UsePrescriptionDrawingOptions) {
-  // TWO-CANVAS ARCHITECTURE
-  const baseCanvasRef = useRef<HTMLCanvasElement>(null);
-  const activeCanvasRef = useRef<HTMLCanvasElement>(null);
+  // SINGLE CANVAS — No race conditions possible
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // SILENT STATE (Bypassing React for active drawing)
+  // Silent drawing state — never touches React
   const currentStrokeRef = useRef<number[][]>([]);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  // REACT STATE (For committed strokes and page management)
+  // Refs that mirror React state — lets event handlers read current values
+  // without being stale closures or triggering effect re-runs
+  const pagesRef = useRef<PageData[]>([{ strokes: [] }]);
+  const currentPageIndexRef = useRef(0);
+
+  // React state — only used for UI sync and export
   const [pages, setPages] = useState<PageData[]>([{ strokes: [] }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
-  // perfect-freehand is kept ONLY for high-quality PDF export (offline, not live)
-  const exportStrokeOptions = useMemo(() => ({
-    size: 2.0,
-    thinning: 0.6,
-    smoothing: 0.5,
-    streamline: 0.85,
-    simulatePressure: false,
-  }), []);
+  // Keep refs in sync with state
+  useEffect(() => { pagesRef.current = pages; }, [pages]);
+  useEffect(() => { currentPageIndexRef.current = currentPageIndex; }, [currentPageIndex]);
 
-  const getSvgPathFromStroke = useCallback((stroke: number[][]) => {
-    if (!stroke.length) return "";
-    const outlinePoints = getStroke(stroke, exportStrokeOptions);
-    const d = outlinePoints.reduce(
-      (acc, [x, y], i) => {
-        if (i === 0) acc.push("M", x, y, "Q");
-        else acc.push(x, y);
-        return acc;
-      },
-      [] as any[]
-    );
-    d.push("Z");
-    return d.join(" ");
-  }, [exportStrokeOptions]);
+  // Pressure to line width — Apple Pencil range
+  const pressureToWidth = (pressure: number) =>
+    1.0 + (pressure || 0.5) * 2.5;
 
-  // Pressure to line width mapping for Apple Pencil
-  const pressureToWidth = (pressure: number) => {
-    const min = 1.0;
-    const max = 3.5;
-    return min + (pressure || 0.5) * (max - min);
-  };
-
-  // REDRAW BASE LAYER — uses perfect-freehand for a high-quality re-render
-  const redrawBase = useCallback(() => {
-    const canvas = baseCanvasRef.current;
+  // REDRAW PAGE — reads from refs, has zero React dependencies
+  // Safe to call anytime without triggering re-render chains
+  const redrawPage = useCallback((pageIndex?: number) => {
+    const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    ctx.fillStyle = '#1e1b4b';
 
-    const currentStrokes = pages[currentPageIndex]?.strokes || [];
-    currentStrokes.forEach((stroke) => {
-      const pathData = getSvgPathFromStroke(stroke.points);
-      if (pathData) {
-        const path = new Path2D(pathData);
-        ctx.fill(path);
+    const idx = pageIndex ?? currentPageIndexRef.current;
+    const strokes = pagesRef.current[idx]?.strokes ?? [];
+
+    ctx.strokeStyle = '#1e1b4b';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    strokes.forEach(stroke => {
+      const pts = stroke.points;
+      if (pts.length < 2) return;
+
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+
+      for (let i = 1; i < pts.length; i++) {
+        const prev = pts[i - 1];
+        const curr = pts[i];
+        const midX = (prev[0] + curr[0]) / 2;
+        const midY = (prev[1] + curr[1]) / 2;
+        ctx.lineWidth = pressureToWidth(curr[2]);
+        ctx.quadraticCurveTo(prev[0], prev[1], midX, midY);
       }
+      ctx.stroke();
     });
-  }, [pages, currentPageIndex, getSvgPathFromStroke]);
+  }, []); // Stable forever — reads from refs, not state
 
-  // HARDWARE INITIALIZER (DPR & Scaling)
-  const setupCanvases = useCallback(() => {
+  // SETUP CANVAS — Configure DPR scaling
+  const setupCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const dpr = window.devicePixelRatio || 1;
-    [baseCanvasRef.current, activeCanvasRef.current].forEach(canvas => {
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const targetWidth = Math.floor(rect.width * dpr);
-      const targetHeight = Math.floor(rect.height * dpr);
+    const rect = canvas.getBoundingClientRect();
+    const targetWidth = Math.floor(rect.width * dpr);
+    const targetHeight = Math.floor(rect.height * dpr);
 
-      // Render Guard: Only reset if dimensions actually changed
-      if (canvas.width === targetWidth && canvas.height === targetHeight) return;
+    // Only reset if dimensions actually changed
+    if (canvas.width === targetWidth && canvas.height === targetHeight) return;
 
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
 
-      const ctx = canvas.getContext('2d', {
-        desynchronized: canvas === activeCanvasRef.current,
-        alpha: true
-      });
-      if (ctx) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(dpr, dpr);
-        if (canvas === activeCanvasRef.current) {
-          // Pre-configure active canvas pen style
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.strokeStyle = '#1e1b4b';
-        }
-      }
-    });
+    const ctx = canvas.getContext('2d', { desynchronized: true, alpha: true });
+    if (ctx) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+    }
 
-    redrawBase();
-  }, [redrawBase]);
+    redrawPage(); // Restore current page after resize
+  }, [redrawPage]); // redrawPage is stable, so setupCanvas is stable too
 
   // SAFARI-SAFE IDLE SCHEDULER
   const runInIdle = useCallback((callback: () => void) => {
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       (window as any).requestIdleCallback(callback);
     } else {
-      setTimeout(callback, 0); // Safari / Old iOS fallback
+      setTimeout(callback, 0);
     }
   }, []);
 
-  // EFFECT: INCREMENTAL DRAWING ENGINE
-  // Hardware-direct. O(1) per frame. No wipe-and-redraw.
+  // EFFECT: DRAWING ENGINE
+  // Stable deps — this effect only fires on mount and cleanup
   useEffect(() => {
-    const canvas = activeCanvasRef.current;
+    const canvas = canvasRef.current;
     if (!canvas) return;
 
     const handleDown = (e: PointerEvent) => {
-      // Ignore finger touches — only Apple Pencil (stylus). This is app-level palm rejection.
+      // Apple Pencil = "pen". Ignore finger touches for palm rejection.
       if (e.pointerType === 'touch') return;
 
       e.preventDefault();
@@ -152,7 +140,7 @@ export function usePrescriptionDrawing({
         (e.currentTarget as Element).setPointerCapture(e.pointerId);
       } catch (_) { /* ignore */ }
 
-      const ctx = canvas.getContext('2d', { alpha: true });
+      const ctx = canvas.getContext('2d', { desynchronized: true });
       if (!ctx) return;
 
       const rect = canvas.getBoundingClientRect();
@@ -163,7 +151,7 @@ export function usePrescriptionDrawing({
       currentStrokeRef.current = [[x, y, e.pressure]];
       lastPointRef.current = { x, y };
 
-      // Open the canvas path at the touchdown point
+      // Configure pen style on every stroke
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.strokeStyle = '#1e1b4b';
@@ -175,14 +163,14 @@ export function usePrescriptionDrawing({
       if (!isDrawingRef.current) return;
       e.preventDefault();
 
-      const ctx = canvas.getContext('2d', { alpha: true });
+      const ctx = canvas.getContext('2d', { desynchronized: true });
       if (!ctx) return;
 
       const rect = canvas.getBoundingClientRect();
-      // 120Hz point extraction from Apple Pencil hardware
-      const coalescedEvents = (e as any).getCoalescedEvents?.() || [e];
+      // Extract high-frequency points from Apple Pencil hardware
+      const coalesced = (e as any).getCoalescedEvents?.() || [e];
 
-      for (const event of coalescedEvents) {
+      for (const event of coalesced) {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
         const pressure = event.pressure || 0.5;
@@ -195,7 +183,7 @@ export function usePrescriptionDrawing({
           continue;
         }
 
-        // Midpoint Quadratic Curve — eliminates angular corners during fast movements
+        // Midpoint Quadratic — smooth curves even at 240Hz point density
         const midX = (last.x + x) / 2;
         const midY = (last.y + y) / 2;
 
@@ -224,36 +212,19 @@ export function usePrescriptionDrawing({
       currentStrokeRef.current = [];
 
       if (points.length > 1) {
-        // 1. GPU Blit: Copy active canvas → base canvas in a single drawImage call.
-        //    This is O(1) — zero CPU math. The fastest possible handover.
-        const baseCanvas = baseCanvasRef.current;
-        if (baseCanvas) {
-          const bCtx = baseCanvas.getContext('2d');
-          if (bCtx) {
-            // Operate in pixel space to avoid DPR double-scaling
-            bCtx.save();
-            bCtx.setTransform(1, 0, 0, 1, 0, 0);
-            bCtx.drawImage(canvas, 0, 0);
-            bCtx.restore();
-          }
-        }
-
-        // 2. Clear active layer — now safe since stroke is on base layer
-        const ctx = canvas.getContext('2d', { alpha: true });
-        if (ctx) {
-          const dpr = window.devicePixelRatio || 1;
-          ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-        }
-
-        // 3. Background Persistence — non-blocking React state update
+        // Stroke is ALREADY visible on canvas — we drew it incrementally.
+        // Just persist to state in the background. Zero canvas operations.
+        const pageIdx = currentPageIndexRef.current;
         runInIdle(() => {
           setPages(prev => {
             const next = [...prev];
-            next[currentPageIndex].strokes.push({
-              points,
-              color: '#1e1b4b',
-              width: 2.0
-            });
+            next[pageIdx] = {
+              ...next[pageIdx],
+              strokes: [
+                ...next[pageIdx].strokes,
+                { points, color: '#1e1b4b', width: 2.0 },
+              ],
+            };
             return next;
           });
         });
@@ -273,30 +244,33 @@ export function usePrescriptionDrawing({
       canvas.removeEventListener('pointerleave', handleUp);
       canvas.removeEventListener('pointercancel', handleUp);
     };
-  }, [currentPageIndex, runInIdle]);
+  }, [runInIdle]); // Near-zero dependency footprint
 
   // EFFECT: Handle Resize & Orientation
   useEffect(() => {
-    setupCanvases();
-    const observer = new ResizeObserver(() => setupCanvases());
-    if (activeCanvasRef.current?.parentElement) {
-      observer.observe(activeCanvasRef.current.parentElement);
+    setupCanvas();
+    const observer = new ResizeObserver(setupCanvas);
+    if (canvasRef.current?.parentElement) {
+      observer.observe(canvasRef.current.parentElement);
     }
     return () => observer.disconnect();
-  }, [setupCanvases]);
+  }, [setupCanvas]);
 
-  // EFFECT: Sync base layer when pages state updates
+  // EFFECT: Redraw when switching pages
   useEffect(() => {
-    redrawBase();
-  }, [pages, currentPageIndex, redrawBase]);
+    redrawPage(currentPageIndex);
+  }, [currentPageIndex, redrawPage]);
+
+  // ACTIONS
 
   const clearCanvas = () => {
     if (confirm('Clear this page?')) {
       const newPages = [...pages];
-      newPages[currentPageIndex].strokes = [];
+      newPages[currentPageIndex] = { strokes: [] };
       setPages(newPages);
-      // Also clear active layer in case there is a stroke in progress
-      const canvas = activeCanvasRef.current;
+      pagesRef.current = newPages;
+
+      const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d', { alpha: true });
         const dpr = window.devicePixelRatio || 1;
@@ -306,12 +280,12 @@ export function usePrescriptionDrawing({
   };
 
   const addPage = () => {
-    setPages([...pages, { strokes: [] }]);
+    setPages(prev => [...prev, { strokes: [] }]);
     setCurrentPageIndex(pages.length);
   };
 
+  // getBlob — uses perfect-freehand for high-quality PDF export (offline only)
   const getBlob = async (): Promise<Blob | null> => {
-    // Standard A4 at 150 DPI for export — uses perfect-freehand for quality
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
 
@@ -321,43 +295,59 @@ export function usePrescriptionDrawing({
     const fctx = finalCanvas.getContext('2d');
     if (!fctx) return null;
 
+    const exportOptions = {
+      size: 2.0,
+      thinning: 0.6,
+      smoothing: 0.5,
+      streamline: 0.85,
+      simulatePressure: false,
+    };
+
     pages.forEach((page, i) => {
       fctx.save();
       fctx.translate(0, i * A4_HEIGHT);
 
-      const canvas = baseCanvasRef.current;
+      const canvas = canvasRef.current;
       if (canvas) {
         const rect = canvas.getBoundingClientRect();
-        const scaleX = A4_WIDTH / rect.width;
-        const scaleY = A4_HEIGHT / rect.height;
-        fctx.scale(scaleX, scaleY);
+        fctx.scale(A4_WIDTH / rect.width, A4_HEIGHT / rect.height);
       }
 
       page.strokes.forEach(s => {
-        const pathData = getSvgPathFromStroke(s.points);
-        if (pathData) {
-          const path = new Path2D(pathData);
-          fctx!.fillStyle = '#1e1b4b';
-          fctx!.fill(path);
-        }
+        const outlinePoints = getStroke(s.points, exportOptions);
+        if (!outlinePoints.length) return;
+
+        const d = outlinePoints.reduce(
+          (acc, [x, y], idx) => {
+            if (idx === 0) acc.push('M', x, y, 'Q');
+            else acc.push(x, y);
+            return acc;
+          },
+          [] as any[]
+        );
+        d.push('Z');
+
+        const path = new Path2D(d.join(' '));
+        fctx!.fillStyle = '#1e1b4b';
+        fctx!.fill(path);
       });
+
       fctx.restore();
     });
 
-    return new Promise((resolve) => {
-      finalCanvas.toBlob((blob) => resolve(blob), 'image/png');
+    return new Promise(resolve => {
+      finalCanvas.toBlob(blob => resolve(blob), 'image/png');
     });
   };
 
   return {
-    baseCanvasRef,
-    activeCanvasRef,
+    canvasRef,
     clearCanvas,
     getBlob,
     addPage,
     currentPageIndex,
     totalPages: pages.length,
     setCurrentPageIndex,
-    hasDrawing: pages.some(p => p.strokes.length > 0)
+    hasDrawing: pages.some(p => p.strokes.length > 0),
   };
 }

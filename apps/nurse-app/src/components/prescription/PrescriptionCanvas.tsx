@@ -27,8 +27,7 @@ export function PrescriptionCanvas({
 }: PrescriptionCanvasProps) {
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
   const {
-    baseCanvasRef,
-    activeCanvasRef,
+    canvasRef,
     clearCanvas,
     getBlob,
     hasDrawing,
@@ -122,16 +121,10 @@ export function PrescriptionCanvas({
             
           </div>
 
-          {/* TWO-CANVAS HARDWARE STACK */}
-          {/* Base Layer for committed ink */}
+          {/* SINGLE CANVAS — Incremental drawing, zero race conditions */}
           <canvas
-            ref={baseCanvasRef}
-            className="touch-none select-none block w-full h-full absolute inset-0 z-10 bg-transparent pointer-events-none"
-          />
-          {/* Active Layer for current pen movement */}
-          <canvas
-            ref={activeCanvasRef}
-            className="touch-none select-none cursor-crosshair block w-full h-full absolute inset-0 z-20 bg-transparent"
+            ref={canvasRef}
+            className="touch-none select-none cursor-crosshair block w-full h-full absolute inset-0 z-10 bg-transparent"
           />
           
           {/* PAGE INDICATOR OVERLAY */}
