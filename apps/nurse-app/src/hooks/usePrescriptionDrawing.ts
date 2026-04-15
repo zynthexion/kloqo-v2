@@ -132,19 +132,7 @@ export function usePrescriptionDrawing({
     return () => observer.disconnect();
   }, [setupCanvases]);
 
-  // EFFECT: SEAMLESS HANDOVER SYNC
-  // Clear the active canvas ONLY when the base layer has rendered the new strokes
-  useEffect(() => {
-    redrawBase();
-    
-    // Immediately clear active layer to complete the handover
-    const canvas = activeCanvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d', { alpha: true });
-      const dpr = window.devicePixelRatio || 1;
-      ctx?.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    }
-  }, [pages, currentPageIndex, redrawBase]);
+
 
   // POINTER HANDLERS (Bypassing React state)
   const onPointerDown = (e: React.PointerEvent) => {
@@ -187,23 +175,51 @@ export function usePrescriptionDrawing({
     const path = new Path2D(pathData);
     ctx.fill(path);
   };
-
   const onPointerUp = () => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
 
     if (currentStrokeRef.current.length > 1) {
+      const points = currentStrokeRef.current;
+      
+      // 1. ATOMIC HANDOVER (Imperative)
+      // Draw to base layer immediately so there is ZERO visual gap
+      const baseCanvas = baseCanvasRef.current;
+      const activeCanvas = activeCanvasRef.current;
+      
+      if (baseCanvas && activeCanvas) {
+        const bCtx = baseCanvas.getContext('2d', { alpha: true });
+        const aCtx = activeCanvas.getContext('2d', { alpha: true });
+        const dpr = window.devicePixelRatio || 1;
+
+        if (bCtx && aCtx) {
+          // Use cache or compile
+          let path = pathCacheRef.current.get(points);
+          if (!path) {
+            const pathData = getSvgPathFromStroke(points);
+            path = new Path2D(pathData);
+            pathCacheRef.current.set(points, path);
+          }
+
+          bCtx.fillStyle = '#1e1b4b';
+          bCtx.fill(path);
+
+          // Immediately clear the active layer
+          aCtx.clearRect(0, 0, activeCanvas.width / dpr, activeCanvas.height / dpr);
+        }
+      }
+
+      // 2. COMMIT TO STATE (for persistence & page turns)
       const newPages = [...pages];
       newPages[currentPageIndex].strokes.push({ 
-        points: currentStrokeRef.current, 
+        points: points, 
         color: '#1e1b4b', 
         width: 1.8 
       });
-      setPages(newPages); // React render triggers the Sycn effect
+      setPages(newPages);
     }
     
-    // NOTE: Active Canvas clearing and currentStrokeRef reset 
-    // is now handled by the SEAMLESS HANDOVER effect to avoid race conditions.
+    currentStrokeRef.current = [];
   };
 
   const clearCanvas = () => {
