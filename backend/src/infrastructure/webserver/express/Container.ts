@@ -44,6 +44,7 @@ import { NotificationService } from '../../../domain/services/NotificationServic
 import { BatchNotificationService } from '../../../domain/services/BatchNotificationService';
 import { TokenGeneratorService } from '../../../domain/services/token/TokenGeneratorService';
 import { SSEService } from '../../../domain/services/SSEService';
+import { PrescriptionPDFService } from '../../pdf/PrescriptionPDFService';
 
 // ── Application: Use Cases ─────────────────────────────────────────────────
 import { ManagePatientUseCase } from '../../../application/ManagePatientUseCase';
@@ -171,6 +172,7 @@ const authService = new FirebaseAuthService(userRepo, clinicRepo, patientRepo);
 const emailService = new ResendEmailService(process.env.RESEND_API_KEY || '');
 const fcmService = new FirebaseFCMService(userRepo);
 const whatsappService = new WhatsAppNotificationService();
+const pdfService = new PrescriptionPDFService();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 2: Domain Services
@@ -274,7 +276,14 @@ const confirmAppointmentPaymentUseCase = new ConfirmAppointmentPaymentUseCase(ap
 // Prescriptions
 const createPrescriptionUseCase = new CreatePrescriptionUseCase(prescriptionRepo);
 const getPrescriptionsUseCase = new GetPrescriptionsUseCase(prescriptionRepo);
-const completeAppointmentWithPrescriptionUseCase = new CompleteAppointmentWithPrescriptionUseCase(appointmentRepo, clinicRepo, counterRepo, notificationService);
+const completeAppointmentWithPrescriptionUseCase = new CompleteAppointmentWithPrescriptionUseCase(
+  appointmentRepo, 
+  clinicRepo, 
+  doctorRepo,
+  counterRepo, 
+  notificationService,
+  pdfService
+);
 
 // Analytics & Notifications
 const getSuperadminDashboardUseCase = new GetSuperadminDashboardUseCase(clinicRepo, userRepo, patientRepo, appointmentRepo);
