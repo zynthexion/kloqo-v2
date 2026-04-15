@@ -58,9 +58,9 @@ export function useAppointmentQueue({
     computeAllQueues();
   }, [appointments, todayDateStr, clinicId, doctors]);
 
-  return {
+  return useMemo(() => ({
     filteredAppointments,
     queuesByDoctor,
     todayDateStr,
-  };
+  }), [filteredAppointments, queuesByDoctor, todayDateStr]);
 }

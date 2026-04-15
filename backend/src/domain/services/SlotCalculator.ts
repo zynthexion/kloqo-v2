@@ -37,12 +37,20 @@ export class SlotCalculator {
       }
     }
 
-    const dayOfWeek = date.getDay();
+    // 2. Weekly Recurring Availability lookup
+    // Principal SRE Catch: Day names must match case-insensitively.
+    // Also: Day of week must be calculated relative to IST offset if server is in UTC.
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayName = daysOfWeek[dayOfWeek];
+    
+    // Convert current Date to IST and extract the day correctly (Rule 8: IST Enforced)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'long',
+    });
+    const dayName = formatter.format(date); // e.g., "Monday"
 
     const availability = doctor.availabilitySlots.find(s => 
-      s.day === dayName
+      s.day.toLowerCase() === dayName.toLowerCase()
     );
     if (!availability || availability.timeSlots.length === 0) return [];
 

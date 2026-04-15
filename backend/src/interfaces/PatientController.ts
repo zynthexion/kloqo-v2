@@ -271,7 +271,7 @@ export class PatientController {
       const primary = patients.find(p => p.isPrimary) || (patients.length > 0 ? patients[0] : null);
       const relatives = patients.filter(p => !p.isPrimary && p.id !== primary?.id);
       
-      res.json({ primary, relatives });
+      res.json({ patient: primary, relatedProfiles: relatives });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

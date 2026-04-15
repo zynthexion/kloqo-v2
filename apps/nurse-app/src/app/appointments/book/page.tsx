@@ -153,7 +153,7 @@ function BookAppointmentPageContent() {
     setBooking(true);
     try {
     try {
-      await apiRequest('/appointments/book-advanced', {
+      await apiRequest('/appointments/book', {
         method: 'POST',
         body: JSON.stringify({
           doctorId,

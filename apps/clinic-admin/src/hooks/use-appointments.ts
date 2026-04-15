@@ -78,6 +78,17 @@ export function useAppointments() {
     }
   }, [currentUser?.clinicId]);
 
+  const getPatientProfile = useCallback(async (phone: string) => {
+    if (!currentUser?.clinicId) return { patient: null, relatedProfiles: [] };
+    try {
+      // ✅ CONTRACT: Backend returns { patient, relatedProfiles }
+      return await apiRequest<{ patient: any, relatedProfiles: any[] }>(`/patients/profile?phone=${phone}`);
+    } catch (err: any) {
+      console.error('Error getting patient profile:', err);
+      return { patient: null, relatedProfiles: [] };
+    }
+  }, [currentUser?.clinicId]);
+
   const getPatientById = useCallback(async (id: string) => {
     if (!currentUser?.clinicId) return null;
     try {
@@ -224,6 +235,7 @@ export function useAppointments() {
     deleteAppointment,
     sendBookingLink,
     searchPatients,
+    getPatientProfile,
     getPatientById,
     getWalkInEstimate,
     getWalkInPreview,
@@ -240,9 +252,11 @@ export function useAppointments() {
     deleteAppointment,
     sendBookingLink,
     searchPatients,
+    getPatientProfile,
     getPatientById,
     getWalkInEstimate,
     getWalkInPreview,
     createWalkIn
   ]);
+
 }

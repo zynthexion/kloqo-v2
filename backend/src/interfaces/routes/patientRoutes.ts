@@ -14,7 +14,7 @@ const staffGuard = [auth, checkRole(...clinicStaffRoles)];
 const anyRoleGuard = [auth, checkRole(...clinicStaffRoles, PATIENT)];
 
 // ── Public patient profile & discovery ────────────────────────────────────
-router.get('/profile', (req: any, res: any) => patientController.getPatientProfile(req, res));
+router.get('/profile', staffGuard, (req: any, res: any) => patientController.getPatientProfile(req, res));
 router.get('/public', (req: any, res: any) => patientController.getPublicDiscovery(req, res));
 
 // ── Authenticated patient routes ───────────────────────────────────────────

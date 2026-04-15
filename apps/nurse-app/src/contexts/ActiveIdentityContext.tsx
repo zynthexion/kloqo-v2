@@ -41,7 +41,7 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
   // 1.5 Clinical Identity Hydration (Read-Repair triggered via backend)
   useEffect(() => {
     async function hydrateClinicalProfile() {
-      if (activeRole === 'doctor' && user?.id) {
+      if (user?.id && RBACUtils.hasRole(user, 'doctor')) {
         try {
           // 🚀 This call triggers the "Read-Repair" on the backend if userId mapping is missing
           const res = await fetch(`${API_URL}/api/doctors/${user.id}`);
@@ -57,7 +57,7 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
       }
     }
     hydrateClinicalProfile();
-  }, [activeRole, user?.id, API_URL]);
+  }, [user?.id, user?.roles, API_URL]);
 
   // 2. Initialize and Sync from localStorage
   useEffect(() => {

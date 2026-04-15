@@ -272,13 +272,29 @@ export class DoctorController {
     }
   }
 
-  async getAvailableSlots(req: Request, res: Response) {
+  async getAvailableSlots(req: any, res: Response) {
     try {
       const { id } = req.params;
-      const { date, clinicId } = req.query;
-      await this.getAvailableSlotsUseCase.execute({ doctorId: id, clinicId: clinicId as string, date: date as string });
-      res.status(204).send(); // Note: This usually returns slots, but I'll check response logic
+      const { date } = req.query;
+      
+      // 🛡️ Robust Context Extraction: Ignore "undefined"/"null" strings passed from frontend templates
+      const rawClinicId = req.query.clinicId as string;
+      const clinicId = (rawClinicId && rawClinicId !== 'undefined' && rawClinicId !== 'null') 
+        ? rawClinicId 
+        : req.user?.clinicId;
+
+      if (!clinicId) {
+        return res.status(400).json({ error: 'Clinic context is required (missing clinicId)' });
+      }
+
+      const slots = await this.getAvailableSlotsUseCase.execute({ 
+        doctorId: id, 
+        clinicId, 
+        date: date as string 
+      });
+      res.json(slots);
     } catch (error: any) {
+      console.error(`[DoctorController] getAvailableSlots Error:`, error.message);
       res.status(400).json({ error: error.message });
     }
   }

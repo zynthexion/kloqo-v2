@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useAppointments } from '@/hooks/use-appointments';
 
 export function useAppointmentSSE() {
@@ -12,6 +13,7 @@ export function useAppointmentSSE() {
     getWalkInEstimate,
     getWalkInPreview,
     searchPatients,
+    getPatientProfile,
     getPatientById,
     bookAppointment,
     updateStatus,
@@ -19,7 +21,7 @@ export function useAppointmentSSE() {
     sendBookingLink,
   } = useAppointments();
 
-  return {
+  return useMemo(() => ({
     appointments,
     doctors,
     clinicDetails,
@@ -28,10 +30,26 @@ export function useAppointmentSSE() {
     getWalkInEstimate,
     getWalkInPreview,
     searchPatients,
+    getPatientProfile,
     getPatientById,
     bookAppointment,
     updateStatus,
     deleteAppointment,
     sendBookingLink,
-  };
+  }), [
+    appointments,
+    doctors,
+    clinicDetails,
+    loading,
+    refresh,
+    getWalkInEstimate,
+    getWalkInPreview,
+    searchPatients,
+    getPatientProfile,
+    getPatientById,
+    bookAppointment,
+    updateStatus,
+    deleteAppointment,
+    sendBookingLink,
+  ]);
 }

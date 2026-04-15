@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useTransition, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import type { Appointment } from '@kloqo/shared';
 
@@ -67,7 +67,7 @@ export function useAppointmentMutations({
     });
   };
 
-  return {
+  return useMemo(() => ({
     isPending,
     startTransition,
     handleCancel,
@@ -75,5 +75,12 @@ export function useAppointmentMutations({
     handleAddToQueue,
     onMutationSubmit,
     handleSkip,
-  };
+  }), [
+    isPending,
+    handleCancel,
+    handleComplete,
+    handleAddToQueue,
+    onMutationSubmit,
+    handleSkip
+  ]);
 }

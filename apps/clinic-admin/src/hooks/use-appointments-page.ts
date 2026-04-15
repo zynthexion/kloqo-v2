@@ -112,15 +112,34 @@ export function useAppointmentsPage() {
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { patientName: "", phone: "", doctorId: "", department: "", bookedVia: "Advanced Booking" },
+    defaultValues: { 
+      patientName: "", 
+      phone: "", 
+      doctorId: "", // Initial empty, will be populated by effect
+      department: "", 
+      bookedVia: "Advanced Booking" 
+    },
   });
+
+  // 🏥 DOCTOR SYNC FIX: Auto-initialize form when doctors load
+  useEffect(() => {
+    if (sse.doctors.length > 0 && !form.getValues('doctorId')) {
+      const firstDoc = sse.doctors[0];
+      form.setValue('doctorId', firstDoc.id);
+      form.setValue('department', firstDoc.department || "");
+    }
+  }, [sse.doctors, form]);
 
   const watchedPatientName = useWatch({ control: form.control, name: 'patientName' });
   const watchedDoctorId = useWatch({ control: form.control, name: 'doctorId' });
   const selectedDate = useWatch({ control: form.control, name: 'date' });
   const appointmentType = useWatch({ control: form.control, name: 'bookedVia' });
-
-  const selectedDoctor = useMemo(() => sse.doctors.find(d => d.id === watchedDoctorId) || (sse.doctors.length > 0 ? sse.doctors[0] : null), [sse.doctors, watchedDoctorId]);
+  
+  // 🏥 DOCTOR SYNC FIX: Ensure selectedDoctor always follows the form, but falls back to doctors[0] for safety
+  const selectedDoctor = useMemo(() => {
+    if (!watchedDoctorId && sse.doctors.length > 0) return sse.doctors[0];
+    return sse.doctors.find(d => d.id === watchedDoctorId) || null;
+  }, [sse.doctors, watchedDoctorId]);
 
   const availableDaysOfWeek = useMemo(() => {
     if (!selectedDoctor?.availabilitySlots) return [];
@@ -167,7 +186,11 @@ export function useAppointmentsPage() {
         setIsSlotsLoading(true);
         try {
           const dateStr = getClinicISOString(selectedDate);
-          const response = await apiRequest<any[]>(`/api/doctors/${watchedDoctorId}/slots?date=${dateStr}`);
+          const clinicId = sse.clinicDetails?.id;
+          let url = `/api/doctors/${watchedDoctorId}/slots?date=${dateStr}`;
+          if (clinicId) url += `&clinicId=${clinicId}`;
+          
+          const response = await apiRequest<any[]>(url);
           
           // Group by session for the existing UI structure
           const sessions = Array.from(new Set(response.map(s => s.sessionIndex))).sort((a, b) => a - b);
@@ -184,6 +207,11 @@ export function useAppointmentsPage() {
           setSessionSlots(grouped);
         } catch (error) {
           console.error('[Slots] Fetch failed:', error);
+          toast({
+            title: "Slot Fetch Error",
+            description: error instanceof Error ? error.message : "Possible doctor availability issue",
+            variant: "destructive"
+          });
           setSessionSlots([]);
         } finally {
           setIsSlotsLoading(false);
@@ -233,6 +261,51 @@ export function useAppointmentsPage() {
     setIsPatientPopoverOpen(false);
   }, [form]);
 
+  const [isSearchingPatients, setIsSearchingPatients] = useState(false);
+
+  // ─────────────────────────────────────────────────────────────
+  // 1. Patient Search Effect (Debounced)
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (patientSearchTerm.length < 3) {
+      setPatientSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingPatients(true);
+      try {
+        // Special Case: 10-digit exact lookup for profile & relatives
+        // ✅ CONTRACT FIX: Backend returns { patient, relatedProfiles }, not { primary, relatives }
+        if (patientSearchTerm.length === 10) {
+          const profile = await sse.getPatientProfile(patientSearchTerm);
+          const primaryPatientData = (profile as any).patient || (profile as any).primary;
+          const relativesData = (profile as any).relatedProfiles || (profile as any).relatives || [];
+          if (primaryPatientData) {
+            handlePatientSelect(primaryPatientData);
+            setRelatives(relativesData);
+            toast({
+              title: "Patient & Relatives Loaded",
+              description: `Found ${primaryPatientData.name}${relativesData.length > 0 ? ` and ${relativesData.length} family member(s)` : ''}.`
+            });
+            setIsSearchingPatients(false);
+            return;
+          }
+        }
+
+        // Default Case: Generic search for popover
+        const results = await sse.searchPatients(patientSearchTerm);
+        setPatientSearchResults(results);
+      } catch (error) {
+        console.error('[Patient Search] Error:', error);
+      } finally {
+        setIsSearchingPatients(false);
+      }
+    }, 400); // 400ms debounce
+
+    return () => clearTimeout(timer);
+  }, [patientSearchTerm, sse.getPatientProfile, sse.searchPatients, handlePatientSelect, toast]);
+
   const state = {
     ...sse, ...queue, ...mutations,
     drawerSearchTerm, selectedDrawerDoctor, patientSearchTerm, patientSearchResults,
@@ -244,7 +317,8 @@ export function useAppointmentsPage() {
     isSendingLink, drawerDateRange, selectedDoctor, appointmentType, watchedPatientName,
     isDateDisabled, availableDaysOfWeek, leaveDates, isAdvanceCapacityReached,
     isBookingButtonDisabled, todayDateStr: queue.todayDateStr, swipeCooldownUntil,
-    sessionSlots, layoutMode, isSlotsLoading
+    sessionSlots, layoutMode, isSlotsLoading,
+    isPending: sse.loading || mutations.isPending || isSearchingPatients // Aggregated pending state
   };
 
   const actions = {
@@ -268,7 +342,12 @@ export function useAppointmentsPage() {
     },
     handlePatientSelect,
     handleRelativeSelect: (p: Patient) => { setBookingFor('relative'); setSelectedPatient(p); form.setValue('patientName', p.name); },
-    handlePatientSearchChange: (e: any) => setPatientSearchTerm(e.target.value.replace(/\D/g, '')),
+    handlePatientSearchChange: (e: any) => {
+      const val = e.target.value.replace(/\D/g, '');
+      setPatientSearchTerm(val);
+      // Auto-open popover when typing starts
+      if (val.length > 0 && !isPatientPopoverOpen) setIsPatientPopoverOpen(true);
+    },
     handleSendLink: async () => { setIsSendingLink(true); try { await sse.sendBookingLink(patientSearchTerm); toast({ title: "Link Sent" }); } catch (e) {} finally { setIsSendingLink(false); } },
     handlePatientSearch: sse.searchPatients,
     handleForceBookEstimate: async () => { setIsForceBookedState(true); },

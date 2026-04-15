@@ -49,11 +49,17 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
         "bg-white border-r border-slate-200 flex flex-col items-center py-8 z-40 transition-all duration-500",
         collapsed ? "w-24" : "w-32 lg:w-40"
       )}>
-        <div className={cn(
-            "rounded-2xl bg-primary shadow-lg shadow-primary/30 flex items-center justify-center text-white font-black transition-all duration-500 mb-12",
-            collapsed ? "w-12 h-12 text-lg" : "w-14 h-14 text-xl"
-        )}>
-          K
+        <div className="flex items-center justify-center p-4 shrink-0 mb-8 w-full">
+          <Link className="flex items-center gap-3 group" href="/">
+            <div className="w-10 h-10 shrink-0 lg:group-hover:hidden transition-opacity duration-200">
+              <img alt="Kloqo Icon" loading="lazy" width="40" height="40" decoding="async" src="/kloqo_Logo_twest.png" style={{ color: 'transparent' }} />
+            </div>
+            {!collapsed && (
+              <div className="w-28 h-auto shrink-0 hidden lg:group-hover:flex transition-opacity duration-200 delay-100 items-center justify-center">
+                <img alt="Kloqo Logo" loading="lazy" width="128" height="35" decoding="async" src="/kloqo_Logo_twest.png" style={{ color: 'transparent' }} />
+              </div>
+            )}
+          </Link>
         </div>
         
         <nav className="flex-1 flex flex-col gap-6">
@@ -82,8 +88,14 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
             
             <div className="w-full px-4 pb-8 flex flex-col items-center gap-4 group">
                 <Avatar className="h-16 w-16 rounded-2xl shadow-sm border-2 border-white group-hover:scale-105 transition-transform duration-500">
-                    <AvatarImage src={user?.avatar} />
-                    <AvatarFallback className="bg-primary/5 text-primary font-black text-xl">{user?.name?.[0]}</AvatarFallback>
+                    <AvatarImage src={clinicalProfile?.avatar || user?.avatar} />
+                    <AvatarFallback className="bg-primary/5 p-0 overflow-hidden">
+                      <img 
+                        src="https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e" 
+                        alt="Fallback" 
+                        className="w-full h-full object-cover"
+                      />
+                    </AvatarFallback>
                 </Avatar>
                 <div className="text-center overflow-hidden w-full">
                     <p className="text-sm font-black text-slate-900 leading-tight truncate px-1">
@@ -121,6 +133,7 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
               {rightPanel || (
                   <PatientContextPanel 
                     user={user} 
+                    clinicalProfile={clinicalProfile}
                     displayName={displayName}
                     specialty={clinicalProfile?.specialty || (activeRole === 'nurse' ? 'Clinical Nurse' : 'Practitioner')} 
                   />
@@ -139,7 +152,7 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
   );
 }
 
-function PatientContextPanel({ user, displayName, specialty }: { user: any, displayName: string, specialty: string }) {
+function PatientContextPanel({ user, clinicalProfile, displayName, specialty }: { user: any, clinicalProfile: any, displayName: string, specialty: string }) {
     return (
         <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
             {/* Identity Badge */}
@@ -148,8 +161,14 @@ function PatientContextPanel({ user, displayName, specialty }: { user: any, disp
                     <Zap className="h-6 w-6 text-primary/20" />
                 </div>
                 <Avatar className="h-32 w-32 border-8 border-white shadow-xl mb-8 group-hover:scale-105 transition-transform duration-500">
-                    <AvatarImage src={user?.avatar} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-black text-4xl">{displayName?.[0]}</AvatarFallback>
+                    <AvatarImage src={clinicalProfile?.avatar || user?.avatar} />
+                    <AvatarFallback className="bg-primary/10 p-0 overflow-hidden">
+                      <img 
+                        src="https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e" 
+                        alt="Fallback" 
+                        className="w-full h-full object-cover"
+                      />
+                    </AvatarFallback>
                 </Avatar>
                 <div className="text-center">
                     <h3 className="text-3xl font-black text-slate-900 tracking-tight leading-none uppercase">{displayName}</h3>

@@ -61,7 +61,7 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
     }
 
     // 🔒 SSE STABILITY FIX: Fetch fresh token on every connection attempt
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('kloqo_token') : null;
     const url = `${API_URL}/events/clinic/${clinicId}?token=${token}`;
     
     console.log(`[useSSE] Connecting to ${url}...`);
@@ -92,9 +92,19 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
       });
     });
 
-    es.onerror = (err) => {
+    es.onerror = (err: any) => {
+      // 🚨 SRE CATCH: Prevent "Reconnection Storm" on Auth Failure
+      // If the backend returns 401 (Unauthorized), the token has likely expired.
+      // EventSource natively retries forever. We must stop it.
+      if (err.status === 401 || (err.target as any)?.readyState === EventSource.CLOSED) {
+        console.warn('[useSSE] Authentication failed or connection closed permanently. Stopping retry.');
+        es.close();
+        esRef.current = null;
+        return;
+      }
+
       console.error(`[useSSE] Connection lost for clinic ${clinicId}.`, err);
-      es.close(); // Prevent native auto-retry to avoid auth loops
+      es.close(); 
       esRef.current = null;
 
       if (autoReconnect) {

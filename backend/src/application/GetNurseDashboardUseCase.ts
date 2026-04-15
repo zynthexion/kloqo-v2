@@ -42,6 +42,10 @@ export class GetNurseDashboardUseCase {
     const filteredAppointments = (appointments || []).filter(apt => {
       if (apt.isSystemBlocker) return false;
       const isUnpaidPending = apt.status === 'Pending' && (apt.paymentStatus === 'Unpaid' || !apt.paymentStatus);
+      
+      // Allow Advanced Bookings even if unpaid/pending so staff can see the full day's schedule
+      if (apt.bookedVia === 'Advanced Booking') return true;
+      
       return !isUnpaidPending;
     });
 

@@ -95,7 +95,7 @@ export function useBookingSummaryState() {
             const appointmentDateStr = format(selectedSlot, "d MMMM yyyy");
             const slotTimeStr = getClinicTimeString(selectedSlot);
 
-            const response = await apiRequest('/appointments/book-advanced', {
+            const response = await apiRequest('/appointments/advanced', {
                 method: 'POST',
                 body: JSON.stringify({
                     clinicId: (effectiveDoctor as any).clinicId,

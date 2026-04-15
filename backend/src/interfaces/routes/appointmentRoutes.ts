@@ -16,6 +16,7 @@ router.get('/public/check-slot', (req, res) => appointmentController.checkSlot(r
 router.get('/', auth, (req, res) => appointmentController.getAppointments(req, res));
 router.post('/walk-in', auth, (req, res) => appointmentController.createWalkIn(req, res));
 router.post('/advanced', auth, (req, res) => appointmentController.bookAdvanced(req, res));
+router.post('/book-advanced', auth, (req, res) => appointmentController.bookAdvanced(req, res));
 
 // ── Live Queue status (patient-app public) ─────────────────────────────────
 router.get('/discovery/clinics/:id/doctors/:doctorId/queue', async (req: any, res: any) => {

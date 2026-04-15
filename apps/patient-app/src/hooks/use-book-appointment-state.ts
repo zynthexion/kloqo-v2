@@ -113,7 +113,7 @@ export function useBookAppointmentState() {
     if (!selectedSlot || !patientId || !clinicId || !doctorId) return;
     setBooking(true);
     try {
-      await apiRequest('/appointments/book-advanced', {
+      await apiRequest('/appointments/advanced', {
         method: 'POST',
         body: JSON.stringify({
           doctorId,
