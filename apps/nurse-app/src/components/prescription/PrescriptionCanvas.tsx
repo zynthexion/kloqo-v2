@@ -29,6 +29,7 @@ export function PrescriptionCanvas({
   const {
     canvasRef,
     clearCanvas,
+    undo,
     getBlob,
     hasDrawing,
     addPage,
@@ -191,6 +192,16 @@ export function PrescriptionCanvas({
             {currentPageIndex === totalPages - 1 ? <PlusCircle className="h-5 w-5 text-blue-500" /> : <ChevronRight className="h-5 w-5 text-slate-600" />}
           </button>
         </div>
+
+        <button
+          onClick={undo}
+          disabled={!hasDrawing}
+          className="flex flex-col items-center justify-center w-16 h-14 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all disabled:opacity-20"
+          title="Undo Last Stroke"
+        >
+          <RotateCcw className="h-5 w-5 mb-1" />
+          <span className="text-[9px] font-black uppercase tracking-tighter">Undo</span>
+        </button>
 
         <button
           onClick={clearCanvas}

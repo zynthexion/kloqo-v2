@@ -8,6 +8,8 @@ interface Stroke {
   points: number[][];
   color: string;
   width: number;
+  canvasWidth: number;
+  canvasHeight: number;
 }
 
 interface PageData {
@@ -114,15 +116,6 @@ export function usePrescriptionDrawing({
     redrawPage(); // Restore current page after resize
   }, [redrawPage]); // redrawPage is stable, so setupCanvas is stable too
 
-  // SAFARI-SAFE IDLE SCHEDULER
-  const runInIdle = useCallback((callback: () => void) => {
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(callback);
-    } else {
-      setTimeout(callback, 0);
-    }
-  }, []);
-
   // EFFECT: DRAWING ENGINE
   // Stable deps — this effect only fires on mount and cleanup
   useEffect(() => {
@@ -130,15 +123,14 @@ export function usePrescriptionDrawing({
     if (!canvas) return;
 
     const handleDown = (e: PointerEvent) => {
-      // Apple Pencil = "pen". Ignore finger touches for palm rejection.
-      if (e.pointerType === 'touch') return;
-
+      if (e.pointerType === 'touch') return; // Palm rejection
       e.preventDefault();
       e.stopPropagation();
 
+      // Capture is optional — never block drawing on failure
       try {
         (e.currentTarget as Element).setPointerCapture(e.pointerId);
-      } catch (_) { /* ignore */ }
+      } catch (_) {}
 
       const ctx = canvas.getContext('2d', { desynchronized: true });
       if (!ctx) return;
@@ -147,11 +139,11 @@ export function usePrescriptionDrawing({
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
+      // Always reset — even if previous stroke was mid-cancel
       isDrawingRef.current = true;
-      currentStrokeRef.current = [[x, y, e.pressure]];
+      currentStrokeRef.current = [[x, y, e.pressure || 0.5]];
       lastPointRef.current = { x, y };
 
-      // Configure pen style on every stroke
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.strokeStyle = '#1e1b4b';
@@ -160,6 +152,7 @@ export function usePrescriptionDrawing({
     };
 
     const handleMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') return; // Palm rejection
       if (!isDrawingRef.current) return;
       e.preventDefault();
 
@@ -167,8 +160,15 @@ export function usePrescriptionDrawing({
       if (!ctx) return;
 
       const rect = canvas.getBoundingClientRect();
-      // Extract high-frequency points from Apple Pencil hardware
       const coalesced = (e as any).getCoalescedEvents?.() || [e];
+
+      // ONE path for ALL coalesced points this frame — no gaps
+      ctx.beginPath();
+
+      const startLast = lastPointRef.current;
+      if (startLast) ctx.moveTo(startLast.x, startLast.y);
+
+      let lastPressure = 0.5;
 
       for (const event of coalesced) {
         const x = event.clientX - rect.left;
@@ -178,23 +178,20 @@ export function usePrescriptionDrawing({
         currentStrokeRef.current.push([x, y, pressure]);
 
         const last = lastPointRef.current;
-        if (!last) {
-          lastPointRef.current = { x, y };
-          continue;
+        if (last) {
+          // Midpoint quadratic — guaranteed smooth curves
+          const midX = (last.x + x) / 2;
+          const midY = (last.y + y) / 2;
+          ctx.quadraticCurveTo(last.x, last.y, midX, midY);
         }
 
-        // Midpoint Quadratic — smooth curves even at 240Hz point density
-        const midX = (last.x + x) / 2;
-        const midY = (last.y + y) / 2;
-
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.quadraticCurveTo(last.x, last.y, midX, midY);
-        ctx.lineWidth = pressureToWidth(pressure);
-        ctx.stroke();
-
         lastPointRef.current = { x, y };
+        lastPressure = pressure;
       }
+
+      // ONE lineWidth and ONE stroke call per frame
+      ctx.lineWidth = pressureToWidth(lastPressure);
+      ctx.stroke();
     };
 
     const handleUp = (e: PointerEvent) => {
@@ -204,29 +201,61 @@ export function usePrescriptionDrawing({
 
       try {
         (e.currentTarget as Element).releasePointerCapture(e.pointerId);
-      } catch (_) {
-        // Already auto-released by pointercancel — safe to ignore
-      }
+      } catch (_) {}
 
       const points = currentStrokeRef.current;
       currentStrokeRef.current = [];
 
       if (points.length > 1) {
-        // Stroke is ALREADY visible on canvas — we drew it incrementally.
-        // Just persist to state in the background. Zero canvas operations.
+        const rect = canvas.getBoundingClientRect();
         const pageIdx = currentPageIndexRef.current;
-        runInIdle(() => {
-          setPages(prev => {
-            const next = [...prev];
-            next[pageIdx] = {
-              ...next[pageIdx],
-              strokes: [
-                ...next[pageIdx].strokes,
-                { points, color: '#1e1b4b', width: 2.0 },
-              ],
-            };
-            return next;
-          });
+        setPages(prev => {
+          const next = [...prev];
+          next[pageIdx] = {
+            ...next[pageIdx],
+            strokes: [
+              ...next[pageIdx].strokes,
+              { 
+                points, 
+                color: '#1e1b4b', 
+                width: 2.0,
+                canvasWidth: rect.width,
+                canvasHeight: rect.height
+              },
+            ],
+          };
+          return next;
+        });
+      }
+    };
+
+    const handleCancel = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      lastPointRef.current = null;
+
+      const points = currentStrokeRef.current;
+      currentStrokeRef.current = [];
+
+      if (points.length > 1) {
+        const rect = canvas.getBoundingClientRect();
+        const pageIdx = currentPageIndexRef.current;
+        setPages(prev => {
+          const next = [...prev];
+          next[pageIdx] = {
+            ...next[pageIdx],
+            strokes: [
+              ...next[pageIdx].strokes,
+              { 
+                points, 
+                color: '#1e1b4b', 
+                width: 2.0,
+                canvasWidth: rect.width,
+                canvasHeight: rect.height
+              },
+            ],
+          };
+          return next;
         });
       }
     };
@@ -235,16 +264,16 @@ export function usePrescriptionDrawing({
     canvas.addEventListener('pointermove', handleMove, { passive: false });
     canvas.addEventListener('pointerup', handleUp);
     canvas.addEventListener('pointerleave', handleUp);
-    canvas.addEventListener('pointercancel', handleUp); // Palm rejection guard
+    canvas.addEventListener('pointercancel', handleCancel);
 
     return () => {
       canvas.removeEventListener('pointerdown', handleDown);
       canvas.removeEventListener('pointermove', handleMove);
       canvas.removeEventListener('pointerup', handleUp);
       canvas.removeEventListener('pointerleave', handleUp);
-      canvas.removeEventListener('pointercancel', handleUp);
+      canvas.removeEventListener('pointercancel', handleCancel);
     };
-  }, [runInIdle]); // Near-zero dependency footprint
+  }, []); // Stable footprint
 
   // EFFECT: Handle Resize & Orientation
   useEffect(() => {
@@ -263,13 +292,30 @@ export function usePrescriptionDrawing({
 
   // ACTIONS
 
+  const undo = useCallback(() => {
+    setPages(prev => {
+      const pageIdx = currentPageIndexRef.current;
+      const next = [...prev];
+      const pageStrokes = [...next[pageIdx].strokes];
+      if (pageStrokes.length === 0) return prev;
+      pageStrokes.pop();
+      next[pageIdx] = { ...next[pageIdx], strokes: pageStrokes };
+      
+      // Manual ref sync before redraw to avoid one-frame lag
+      pagesRef.current = next;
+      redrawPage();
+      
+      return next;
+    });
+  }, [redrawPage]);
+
   const clearCanvas = () => {
     if (confirm('Clear this page?')) {
       const newPages = [...pages];
       newPages[currentPageIndex] = { strokes: [] };
       setPages(newPages);
-      pagesRef.current = newPages;
-
+      // Let useEffect sync ref and redrawPage pick it up
+      
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d', { alpha: true });
@@ -280,11 +326,13 @@ export function usePrescriptionDrawing({
   };
 
   const addPage = () => {
-    setPages(prev => [...prev, { strokes: [] }]);
-    setCurrentPageIndex(pages.length);
+    setPages(prev => {
+      const next = [...prev, { strokes: [] }];
+      setCurrentPageIndex(next.length - 1);
+      return next;
+    });
   };
 
-  // getBlob — uses perfect-freehand for high-quality PDF export (offline only)
   const getBlob = async (): Promise<Blob | null> => {
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
@@ -307,20 +355,21 @@ export function usePrescriptionDrawing({
       fctx.save();
       fctx.translate(0, i * A4_HEIGHT);
 
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const rect = canvas.getBoundingClientRect();
-        fctx.scale(A4_WIDTH / rect.width, A4_HEIGHT / rect.height);
-      }
-
       page.strokes.forEach(s => {
+        // Correct scaling using snapshot dimensions
+        const scaleX = A4_WIDTH / s.canvasWidth;
+        const scaleY = A4_HEIGHT / s.canvasHeight;
+        
         const outlinePoints = getStroke(s.points, exportOptions);
         if (!outlinePoints.length) return;
 
         const d = outlinePoints.reduce(
           (acc, [x, y], idx) => {
-            if (idx === 0) acc.push('M', x, y, 'Q');
-            else acc.push(x, y);
+            // Apply scale to points during export
+            const sx = x * scaleX;
+            const sy = y * scaleY;
+            if (idx === 0) acc.push('M', sx, sy, 'Q');
+            else acc.push(sx, sy);
             return acc;
           },
           [] as any[]
@@ -343,11 +392,12 @@ export function usePrescriptionDrawing({
   return {
     canvasRef,
     clearCanvas,
+    undo,
     getBlob,
     addPage,
     currentPageIndex,
     totalPages: pages.length,
     setCurrentPageIndex,
-    hasDrawing: pages.some(p => p.strokes.length > 0),
+    hasDrawing: pages[currentPageIndex]?.strokes.length > 0,
   };
 }
