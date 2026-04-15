@@ -75,7 +75,7 @@ export function PrescriptionCanvas({
               <div className="w-[65%] h-full bg-[#3ebfb2] [clip-path:polygon(0_0,100%_0,85%_100%,0_100%)] px-12 py-10 flex flex-col z-10 text-white">
                 <h1 className="text-4xl font-extrabold tracking-wide">Dr. {doctor.name}</h1>
                 <p className="text-white/90 tracking-widest text-sm mt-2 uppercase font-semibold">
-                  {doctor.departmentName || 'OB/GYN'}
+                  {doctor.department || 'OB/GYN'}
                 </p>
                 <p className="text-white/70 tracking-widest text-xs mt-1 uppercase font-semibold">
                   {doctor.specialty || 'SPECIALTY'}
