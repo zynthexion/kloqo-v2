@@ -201,13 +201,13 @@ export function usePrescriptionDrawing({
     };
 
     const handleUp = (e: PointerEvent) => {
-      if (!isDrawingRef.current) return;
-      isDrawingRef.current = false;
-      lastPointRef.current = null;
-
       try {
         (e.currentTarget as Element).releasePointerCapture(e.pointerId);
       } catch (_) {}
+
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      lastPointRef.current = null;
 
       const points = currentStrokeRef.current;
       currentStrokeRef.current = [];
@@ -241,6 +241,10 @@ export function usePrescriptionDrawing({
     };
 
     const handleCancel = (e: PointerEvent) => {
+      try {
+        (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+      } catch (_) {}
+
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
       lastPointRef.current = null;
@@ -277,14 +281,12 @@ export function usePrescriptionDrawing({
     canvas.addEventListener('pointerdown', handleDown, { passive: false });
     canvas.addEventListener('pointermove', handleMove, { passive: false });
     canvas.addEventListener('pointerup', handleUp);
-    canvas.addEventListener('pointerleave', handleUp);
     canvas.addEventListener('pointercancel', handleCancel);
 
     return () => {
       canvas.removeEventListener('pointerdown', handleDown);
       canvas.removeEventListener('pointermove', handleMove);
       canvas.removeEventListener('pointerup', handleUp);
-      canvas.removeEventListener('pointerleave', handleUp);
       canvas.removeEventListener('pointercancel', handleCancel);
     };
   }, []); // Stable footprint

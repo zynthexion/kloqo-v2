@@ -125,6 +125,7 @@ export function PrescriptionCanvas({
           {/* SINGLE CANVAS — Incremental drawing, zero race conditions */}
           <canvas
             ref={canvasRef}
+            style={{ touchAction: 'none', userSelect: 'none' }}
             className="touch-none select-none cursor-crosshair block w-full h-full absolute inset-0 z-10 bg-transparent"
           />
           
