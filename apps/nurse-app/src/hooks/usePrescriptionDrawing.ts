@@ -57,6 +57,9 @@ export function usePrescriptionDrawing({
   // REDRAW PAGE — reads from refs, has zero React dependencies
   // Safe to call anytime without triggering re-render chains
   const redrawPage = useCallback((pageIndex?: number) => {
+    // Never interrupt an active stroke
+    if (isDrawingRef.current) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -103,6 +106,9 @@ export function usePrescriptionDrawing({
 
     // Only reset if dimensions actually changed
     if (canvas.width === targetWidth && canvas.height === targetHeight) return;
+
+    // Never wipe canvas mid-stroke
+    if (isDrawingRef.current) return;
 
     canvas.width = targetWidth;
     canvas.height = targetHeight;
@@ -209,22 +215,27 @@ export function usePrescriptionDrawing({
       if (points.length > 1) {
         const rect = canvas.getBoundingClientRect();
         const pageIdx = currentPageIndexRef.current;
-        setPages(prev => {
-          const next = [...prev];
-          next[pageIdx] = {
-            ...next[pageIdx],
-            strokes: [
-              ...next[pageIdx].strokes,
-              { 
-                points, 
-                color: '#1e1b4b', 
-                width: 2.0,
-                canvasWidth: rect.width,
-                canvasHeight: rect.height
-              },
-            ],
-          };
-          return next;
+        
+        // queueMicrotask lets the current paint frame complete
+        // before React's setPages triggers a re-render + redrawPage
+        queueMicrotask(() => {
+          setPages(prev => {
+            const next = [...prev];
+            next[pageIdx] = {
+              ...next[pageIdx],
+              strokes: [
+                ...next[pageIdx].strokes,
+                { 
+                  points, 
+                  color: '#1e1b4b', 
+                  width: 2.0,
+                  canvasWidth: rect.width,
+                  canvasHeight: rect.height
+                },
+              ],
+            };
+            return next;
+          });
         });
       }
     };
@@ -240,22 +251,25 @@ export function usePrescriptionDrawing({
       if (points.length > 1) {
         const rect = canvas.getBoundingClientRect();
         const pageIdx = currentPageIndexRef.current;
-        setPages(prev => {
-          const next = [...prev];
-          next[pageIdx] = {
-            ...next[pageIdx],
-            strokes: [
-              ...next[pageIdx].strokes,
-              { 
-                points, 
-                color: '#1e1b4b', 
-                width: 2.0,
-                canvasWidth: rect.width,
-                canvasHeight: rect.height
-              },
-            ],
-          };
-          return next;
+        
+        queueMicrotask(() => {
+          setPages(prev => {
+            const next = [...prev];
+            next[pageIdx] = {
+              ...next[pageIdx],
+              strokes: [
+                ...next[pageIdx].strokes,
+                { 
+                  points, 
+                  color: '#1e1b4b', 
+                  width: 2.0,
+                  canvasWidth: rect.width,
+                  canvasHeight: rect.height
+                },
+              ],
+            };
+            return next;
+          });
         });
       }
     };
