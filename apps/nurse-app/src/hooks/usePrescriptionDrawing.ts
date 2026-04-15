@@ -34,26 +34,24 @@ export function usePrescriptionDrawing({
   // SILENT STATE (Bypassing React for active drawing)
   const currentStrokeRef = useRef<number[][]>([]);
   const isDrawingRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   // REACT STATE (For committed strokes and page management)
   const [pages, setPages] = useState<PageData[]>([{ strokes: [] }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
-  // CPU COACHING: Path2D cache to avoid re-reduction of coordinate arrays
-  const pathCacheRef = useRef(new WeakMap<number[][], Path2D>());
-
-  // STROKE OPTIONS (Hardware-tuned for Apple Pencil)
-  const strokeOptions = useMemo(() => ({
+  // perfect-freehand is kept ONLY for high-quality PDF export (offline, not live)
+  const exportStrokeOptions = useMemo(() => ({
     size: 2.0,
     thinning: 0.6,
     smoothing: 0.5,
-    streamline: 0.85, // High streamline eliminates Apple Pencil micro-jitter at 120Hz
-    simulatePressure: false, // Use real hardware pressure from the Pencil
+    streamline: 0.85,
+    simulatePressure: false,
   }), []);
 
   const getSvgPathFromStroke = useCallback((stroke: number[][]) => {
     if (!stroke.length) return "";
-    const outlinePoints = getStroke(stroke, strokeOptions);
+    const outlinePoints = getStroke(stroke, exportStrokeOptions);
     const d = outlinePoints.reduce(
       (acc, [x, y], i) => {
         if (i === 0) acc.push("M", x, y, "Q");
@@ -64,9 +62,16 @@ export function usePrescriptionDrawing({
     );
     d.push("Z");
     return d.join(" ");
-  }, [strokeOptions]);
+  }, [exportStrokeOptions]);
 
-  // REDRAW BASE LAYER (Committed Strokes)
+  // Pressure to line width mapping for Apple Pencil
+  const pressureToWidth = (pressure: number) => {
+    const min = 1.0;
+    const max = 3.5;
+    return min + (pressure || 0.5) * (max - min);
+  };
+
+  // REDRAW BASE LAYER — uses perfect-freehand for a high-quality re-render
   const redrawBase = useCallback(() => {
     const canvas = baseCanvasRef.current;
     if (!canvas) return;
@@ -75,18 +80,15 @@ export function usePrescriptionDrawing({
 
     const dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    ctx.fillStyle = '#1e1b4b'; // Deep Indigo Ink
+    ctx.fillStyle = '#1e1b4b';
 
     const currentStrokes = pages[currentPageIndex]?.strokes || [];
     currentStrokes.forEach((stroke) => {
-      // Use cache or re-compile
-      let path = pathCacheRef.current.get(stroke.points);
-      if (!path) {
-        const pathData = getSvgPathFromStroke(stroke.points);
-        path = new Path2D(pathData);
-        pathCacheRef.current.set(stroke.points, path);
+      const pathData = getSvgPathFromStroke(stroke.points);
+      if (pathData) {
+        const path = new Path2D(pathData);
+        ctx.fill(path);
       }
-      ctx.fill(path);
     });
   }, [pages, currentPageIndex, getSvgPathFromStroke]);
 
@@ -96,27 +98,28 @@ export function usePrescriptionDrawing({
     [baseCanvasRef.current, activeCanvasRef.current].forEach(canvas => {
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      
-      // Render Guard: Only reset if dimensions actually changed
       const targetWidth = Math.floor(rect.width * dpr);
       const targetHeight = Math.floor(rect.height * dpr);
-      
-      if (canvas.width === targetWidth && canvas.height === targetHeight) {
-        return; // Skip reset
-      }
 
-      // 1. Scale internal resolution for Retina
+      // Render Guard: Only reset if dimensions actually changed
+      if (canvas.width === targetWidth && canvas.height === targetHeight) return;
+
       canvas.width = targetWidth;
       canvas.height = targetHeight;
-      
-      // 2. Scale context so coordinates match logical pixels
-      const ctx = canvas.getContext('2d', { 
+
+      const ctx = canvas.getContext('2d', {
         desynchronized: canvas === activeCanvasRef.current,
-        alpha: true 
+        alpha: true
       });
       if (ctx) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
+        if (canvas === activeCanvasRef.current) {
+          // Pre-configure active canvas pen style
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = '#1e1b4b';
+        }
       }
     });
 
@@ -128,119 +131,149 @@ export function usePrescriptionDrawing({
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       (window as any).requestIdleCallback(callback);
     } else {
-      setTimeout(callback, 0); // Safari/Old iOS Fallback
+      setTimeout(callback, 0); // Safari / Old iOS fallback
     }
   }, []);
 
-  // EFFECT: INDUSTRIAL-GRADE HARDWARE ISOLATION
+  // EFFECT: INCREMENTAL DRAWING ENGINE
+  // Hardware-direct. O(1) per frame. No wipe-and-redraw.
   useEffect(() => {
     const canvas = activeCanvasRef.current;
     if (!canvas) return;
 
     const handleDown = (e: PointerEvent) => {
+      // Ignore finger touches — only Apple Pencil (stylus). This is app-level palm rejection.
+      if (e.pointerType === 'touch') return;
+
       e.preventDefault();
       e.stopPropagation();
-      (e.currentTarget as Element).setPointerCapture(e.pointerId);
 
-      isDrawingRef.current = true;
-      const rect = canvas.getBoundingClientRect();
-      currentStrokeRef.current = [[e.clientX - rect.left, e.clientY - rect.top, e.pressure]];
-    };
-
-    const handleMove = (e: PointerEvent) => {
-      if (!isDrawingRef.current) return;
-      e.preventDefault();
-      e.stopPropagation();
+      try {
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      } catch (_) { /* ignore */ }
 
       const ctx = canvas.getContext('2d', { alpha: true });
       if (!ctx) return;
 
       const rect = canvas.getBoundingClientRect();
-      const coalescedEvents = (e as any).getCoalescedEvents?.() || [e];
-      
-      for (const event of coalescedEvents) {
-        currentStrokeRef.current.push([
-          event.clientX - rect.left,
-          event.clientY - rect.top,
-          event.pressure
-        ]);
-      }
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-      // Wipe & Fill Active Layer (Hardware Fast Path)
-      const dpr = window.devicePixelRatio || 1;
-      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-      ctx.fillStyle = '#1e1b4b';
-      
-      const pathData = getSvgPathFromStroke(currentStrokeRef.current);
-      const path = new Path2D(pathData);
-      ctx.fill(path);
+      isDrawingRef.current = true;
+      currentStrokeRef.current = [[x, y, e.pressure]];
+      lastPointRef.current = { x, y };
+
+      // Open the canvas path at the touchdown point
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#1e1b4b';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    };
+
+    const handleMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      e.preventDefault();
+
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) return;
+
+      const rect = canvas.getBoundingClientRect();
+      // 120Hz point extraction from Apple Pencil hardware
+      const coalescedEvents = (e as any).getCoalescedEvents?.() || [e];
+
+      for (const event of coalescedEvents) {
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const pressure = event.pressure || 0.5;
+
+        currentStrokeRef.current.push([x, y, pressure]);
+
+        const last = lastPointRef.current;
+        if (!last) {
+          lastPointRef.current = { x, y };
+          continue;
+        }
+
+        // Midpoint Quadratic Curve — eliminates angular corners during fast movements
+        const midX = (last.x + x) / 2;
+        const midY = (last.y + y) / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(last.x, last.y);
+        ctx.quadraticCurveTo(last.x, last.y, midX, midY);
+        ctx.lineWidth = pressureToWidth(pressure);
+        ctx.stroke();
+
+        lastPointRef.current = { x, y };
+      }
     };
 
     const handleUp = (e: PointerEvent) => {
       if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
-      (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+      lastPointRef.current = null;
+
+      try {
+        (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // Already auto-released by pointercancel — safe to ignore
+      }
 
       const points = currentStrokeRef.current;
+      currentStrokeRef.current = [];
+
       if (points.length > 1) {
-        // 1. ATOMIC HANDOVER (Imperative & Immediate)
+        // 1. GPU Blit: Copy active canvas → base canvas in a single drawImage call.
+        //    This is O(1) — zero CPU math. The fastest possible handover.
         const baseCanvas = baseCanvasRef.current;
         if (baseCanvas) {
-          const bCtx = baseCanvas.getContext('2d', { alpha: true });
-          const dpr = window.devicePixelRatio || 1;
+          const bCtx = baseCanvas.getContext('2d');
           if (bCtx) {
-            let path = pathCacheRef.current.get(points);
-            if (!path) {
-              path = new Path2D(getSvgPathFromStroke(points));
-              pathCacheRef.current.set(points, path);
-            }
-            bCtx.fillStyle = '#1e1b4b';
-            bCtx.fill(path);
+            // Operate in pixel space to avoid DPR double-scaling
+            bCtx.save();
+            bCtx.setTransform(1, 0, 0, 1, 0, 0);
+            bCtx.drawImage(canvas, 0, 0);
+            bCtx.restore();
           }
         }
 
-        // Immediately clear the active layer
+        // 2. Clear active layer — now safe since stroke is on base layer
         const ctx = canvas.getContext('2d', { alpha: true });
         if (ctx) {
           const dpr = window.devicePixelRatio || 1;
           ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
         }
 
-        // 2. BACKGROUND PERSISTENCE (Non-blocking)
+        // 3. Background Persistence — non-blocking React state update
         runInIdle(() => {
           setPages(prev => {
             const next = [...prev];
             next[currentPageIndex].strokes.push({
               points,
               color: '#1e1b4b',
-              width: 1.8
+              width: 2.0
             });
             return next;
           });
         });
       }
-
-      currentStrokeRef.current = [];
     };
 
-    // Attach native DOM listeners with passive: false to hijack iPad gestures
     canvas.addEventListener('pointerdown', handleDown, { passive: false });
     canvas.addEventListener('pointermove', handleMove, { passive: false });
-    canvas.addEventListener('pointerup', handleUp, { passive: false });
-    canvas.addEventListener('pointerleave', handleUp, { passive: false });
-    // PALM REJECTION GUARD: Treat OS-level cancel events as a normal pen lift
-    canvas.addEventListener('pointercancel', handleUp);
-    canvas.addEventListener('pointerout', handleUp);
+    canvas.addEventListener('pointerup', handleUp);
+    canvas.addEventListener('pointerleave', handleUp);
+    canvas.addEventListener('pointercancel', handleUp); // Palm rejection guard
 
     return () => {
       canvas.removeEventListener('pointerdown', handleDown);
       canvas.removeEventListener('pointermove', handleMove);
       canvas.removeEventListener('pointerup', handleUp);
       canvas.removeEventListener('pointerleave', handleUp);
-      canvas.removeEventListener('pointercancel', handleUp); // Prevent memory leak
-      canvas.removeEventListener('pointerout', handleUp);    // Prevent memory leak
+      canvas.removeEventListener('pointercancel', handleUp);
     };
-  }, [getSvgPathFromStroke, currentPageIndex, runInIdle]);
+  }, [currentPageIndex, runInIdle]);
 
   // EFFECT: Handle Resize & Orientation
   useEffect(() => {
@@ -252,11 +285,23 @@ export function usePrescriptionDrawing({
     return () => observer.disconnect();
   }, [setupCanvases]);
 
+  // EFFECT: Sync base layer when pages state updates
+  useEffect(() => {
+    redrawBase();
+  }, [pages, currentPageIndex, redrawBase]);
+
   const clearCanvas = () => {
     if (confirm('Clear this page?')) {
       const newPages = [...pages];
       newPages[currentPageIndex].strokes = [];
       setPages(newPages);
+      // Also clear active layer in case there is a stroke in progress
+      const canvas = activeCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d', { alpha: true });
+        const dpr = window.devicePixelRatio || 1;
+        ctx?.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      }
     }
   };
 
@@ -266,7 +311,7 @@ export function usePrescriptionDrawing({
   };
 
   const getBlob = async (): Promise<Blob | null> => {
-    // Standard A4 Dimensions at 150 DPI for export
+    // Standard A4 at 150 DPI for export — uses perfect-freehand for quality
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
 
@@ -279,8 +324,7 @@ export function usePrescriptionDrawing({
     pages.forEach((page, i) => {
       fctx.save();
       fctx.translate(0, i * A4_HEIGHT);
-      
-      // Upscale logic: Map current screen Rect to 1240x1754
+
       const canvas = baseCanvasRef.current;
       if (canvas) {
         const rect = canvas.getBoundingClientRect();
@@ -291,9 +335,11 @@ export function usePrescriptionDrawing({
 
       page.strokes.forEach(s => {
         const pathData = getSvgPathFromStroke(s.points);
-        const path = new Path2D(pathData);
-        fctx!.fillStyle = '#1e1b4b';
-        fctx!.fill(path);
+        if (pathData) {
+          const path = new Path2D(pathData);
+          fctx!.fillStyle = '#1e1b4b';
+          fctx!.fill(path);
+        }
       });
       fctx.restore();
     });
