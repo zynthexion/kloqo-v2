@@ -107,7 +107,7 @@ export function usePrescriptionDrawing({
     // Only reset if dimensions actually changed
     if (canvas.width === targetWidth && canvas.height === targetHeight) return;
 
-    // Never wipe canvas mid-stroke
+    // Never wipe or resize canvas mid-stroke
     if (isDrawingRef.current) return;
 
     canvas.width = targetWidth;
@@ -129,14 +129,17 @@ export function usePrescriptionDrawing({
     if (!canvas) return;
 
     const handleDown = (e: PointerEvent) => {
+      // Capture IMMEDIATELY - highest priority
+      const canvasEl = e.currentTarget as HTMLCanvasElement;
+      let captured = false;
+      try {
+        canvasEl.setPointerCapture(e.pointerId);
+        captured = true;
+      } catch (_) {}
+
       if (e.pointerType === 'touch') return; // Palm rejection
       e.preventDefault();
       e.stopPropagation();
-
-      // Capture is optional — never block drawing on failure
-      try {
-        (e.currentTarget as Element).setPointerCapture(e.pointerId);
-      } catch (_) {}
 
       const ctx = canvas.getContext('2d', { desynchronized: true });
       if (!ctx) return;
@@ -278,16 +281,26 @@ export function usePrescriptionDrawing({
       }
     };
 
+    const preventDefault = (ev: TouchEvent) => {
+      if (ev.cancelable) ev.preventDefault();
+    };
+
     canvas.addEventListener('pointerdown', handleDown, { passive: false });
     canvas.addEventListener('pointermove', handleMove, { passive: false });
-    canvas.addEventListener('pointerup', handleUp);
-    canvas.addEventListener('pointercancel', handleCancel);
+    canvas.addEventListener('pointerup', handleUp, { passive: false });
+    canvas.addEventListener('pointercancel', handleCancel, { passive: false });
+
+    // Hijack touch events to stop Safari from ever thinking about scrolling
+    canvas.addEventListener('touchstart', preventDefault, { passive: false });
+    canvas.addEventListener('touchmove', preventDefault, { passive: false });
 
     return () => {
       canvas.removeEventListener('pointerdown', handleDown);
       canvas.removeEventListener('pointermove', handleMove);
       canvas.removeEventListener('pointerup', handleUp);
       canvas.removeEventListener('pointercancel', handleCancel);
+      canvas.removeEventListener('touchstart', preventDefault);
+      canvas.removeEventListener('touchmove', preventDefault);
     };
   }, []); // Stable footprint
 

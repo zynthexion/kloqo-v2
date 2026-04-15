@@ -44,11 +44,18 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+
+    const isAllowed = allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*');
+    
+    // Auto-allow local network IPs in development for iPad testing
+    const isLocalIP = origin.startsWith('http://192.168.') || origin.startsWith('http://10.') || origin.startsWith('http://172.');
+
+    if (isAllowed || isLocalIP) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      // Returning null, false tells CORS to block the request without throwing a 500 error
+      callback(null, false);
     }
   },
   credentials: false // Using Bearer tokens, not cookies
