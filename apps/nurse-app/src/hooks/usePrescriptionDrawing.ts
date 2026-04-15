@@ -39,12 +39,15 @@ export function usePrescriptionDrawing({
   const [pages, setPages] = useState<PageData[]>([{ strokes: [] }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
+  // CPU COACHING: Path2D cache to avoid re-reduction of coordinate arrays
+  const pathCacheRef = useRef(new WeakMap<number[][], Path2D>());
+
   // STROKE OPTIONS (Physically accurate ink)
   const strokeOptions = useMemo(() => ({
-    size: 2.5,
+    size: 1.8, // Reduced for professional fine-tip feel
     thinning: 0.5,
     smoothing: 0.5,
-    streamline: 0.5,
+    streamline: 0.6, // Increased slightly for smoother curves on rapid movement
   }), []);
 
   const getSvgPathFromStroke = useCallback((stroke: number[][]) => {
@@ -69,13 +72,19 @@ export function usePrescriptionDrawing({
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1));
+    const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     ctx.fillStyle = '#1e1b4b'; // Deep Indigo Ink
 
     const currentStrokes = pages[currentPageIndex]?.strokes || [];
     currentStrokes.forEach((stroke) => {
-      const pathData = getSvgPathFromStroke(stroke.points);
-      const path = new Path2D(pathData);
+      // Use cache or re-compile
+      let path = pathCacheRef.current.get(stroke.points);
+      if (!path) {
+        const pathData = getSvgPathFromStroke(stroke.points);
+        path = new Path2D(pathData);
+        pathCacheRef.current.set(stroke.points, path);
+      }
       ctx.fill(path);
     });
   }, [pages, currentPageIndex, getSvgPathFromStroke]);
@@ -87,13 +96,21 @@ export function usePrescriptionDrawing({
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       
+      // Render Guard: Only reset if dimensions actually changed
+      const targetWidth = Math.floor(rect.width * dpr);
+      const targetHeight = Math.floor(rect.height * dpr);
+      
+      if (canvas.width === targetWidth && canvas.height === targetHeight) {
+        return; // Skip reset
+      }
+
       // 1. Scale internal resolution for Retina
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       
       // 2. Scale context so coordinates match logical pixels
       const ctx = canvas.getContext('2d', { 
-        desynchronized: canvas === activeCanvasRef.current, // Active layer uses desynchronized buffer
+        desynchronized: canvas === activeCanvasRef.current,
         alpha: true 
       });
       if (ctx) {
@@ -108,18 +125,26 @@ export function usePrescriptionDrawing({
   // EFFECT: Handle Resize & Orientation
   useEffect(() => {
     setupCanvases();
-    
-    // ResizeObserver is more robust than window.resize for layout changes
-    const observer = new ResizeObserver(() => {
-      setupCanvases();
-    });
-
+    const observer = new ResizeObserver(() => setupCanvases());
     if (activeCanvasRef.current?.parentElement) {
       observer.observe(activeCanvasRef.current.parentElement);
     }
-
     return () => observer.disconnect();
   }, [setupCanvases]);
+
+  // EFFECT: SEAMLESS HANDOVER SYNC
+  // Clear the active canvas ONLY when the base layer has rendered the new strokes
+  useEffect(() => {
+    redrawBase();
+    
+    // Immediately clear active layer to complete the handover
+    const canvas = activeCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d', { alpha: true });
+      const dpr = window.devicePixelRatio || 1;
+      ctx?.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    }
+  }, [pages, currentPageIndex, redrawBase]);
 
   // POINTER HANDLERS (Bypassing React state)
   const onPointerDown = (e: React.PointerEvent) => {
@@ -154,7 +179,8 @@ export function usePrescriptionDrawing({
     }
 
     // Wipe & Fill Active Layer (Preventing Anti-alias bleed)
-    ctx.clearRect(0, 0, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1));
+    const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     ctx.fillStyle = '#1e1b4b';
     
     const pathData = getSvgPathFromStroke(currentStrokeRef.current);
@@ -171,19 +197,13 @@ export function usePrescriptionDrawing({
       newPages[currentPageIndex].strokes.push({ 
         points: currentStrokeRef.current, 
         color: '#1e1b4b', 
-        width: 2.5 
+        width: 1.8 
       });
-      setPages(newPages); // React render triggers redrawBase
-    }
-
-    // Clear Active Layer
-    const canvas = activeCanvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d', { alpha: true });
-      ctx?.clearRect(0, 0, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1));
+      setPages(newPages); // React render triggers the Sycn effect
     }
     
-    currentStrokeRef.current = [];
+    // NOTE: Active Canvas clearing and currentStrokeRef reset 
+    // is now handled by the SEAMLESS HANDOVER effect to avoid race conditions.
   };
 
   const clearCanvas = () => {
