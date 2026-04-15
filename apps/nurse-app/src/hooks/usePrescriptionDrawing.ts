@@ -50,9 +50,9 @@ export function usePrescriptionDrawing({
   useEffect(() => { pagesRef.current = pages; }, [pages]);
   useEffect(() => { currentPageIndexRef.current = currentPageIndex; }, [currentPageIndex]);
 
-  // Pressure to line width — Apple Pencil range
-  const pressureToWidth = (pressure: number) =>
-    1.0 + (pressure || 0.5) * 2.5;
+  // Pressure to dot radius — Apple Pencil range
+  const pressureToRadius = (pressure: number) =>
+    0.6 + (pressure || 0.5) * 1.8;
 
   // REDRAW PAGE — reads from refs, has zero React dependencies
   // Safe to call anytime without triggering re-render chains
@@ -71,28 +71,40 @@ export function usePrescriptionDrawing({
     const idx = pageIndex ?? currentPageIndexRef.current;
     const strokes = pagesRef.current[idx]?.strokes ?? [];
 
-    ctx.strokeStyle = '#1e1b4b';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
     strokes.forEach(stroke => {
       const pts = stroke.points;
-      if (pts.length < 2) return;
+      if (pts.length < 1) return;
 
-      ctx.beginPath();
-      ctx.moveTo(pts[0][0], pts[0][1]);
+      const scaleX = canvas.getBoundingClientRect().width > 0 ? 1 : 1;
+      const scaleY = 1;
 
-      for (let i = 1; i < pts.length; i++) {
-        const prev = pts[i - 1];
-        const curr = pts[i];
-        const midX = (prev[0] + curr[0]) / 2;
-        const midY = (prev[1] + curr[1]) / 2;
-        ctx.lineWidth = pressureToWidth(curr[2]);
-        ctx.quadraticCurveTo(prev[0], prev[1], midX, midY);
+      ctx.fillStyle = '#1e1b4b';
+      // Redraw every point as a filled circle (matches live engine)
+      for (let i = 0; i < pts.length; i++) {
+        const [x, y, p] = pts[i];
+        const r = pressureToRadius(p);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Connect to previous point to avoid gaps at low sample rates
+        if (i > 0) {
+          const prev = pts[i - 1];
+          const dist = Math.hypot(x - prev[0], y - prev[1]);
+          const steps = Math.ceil(dist / (r * 0.5));
+          for (let s = 1; s < steps; s++) {
+            const t = s / steps;
+            const ix = prev[0] + (x - prev[0]) * t;
+            const iy = prev[1] + (y - prev[1]) * t;
+            const ir = pressureToRadius(prev[2] + (p - prev[2]) * t);
+            ctx.beginPath();
+            ctx.arc(ix, iy, ir, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
       }
-      ctx.stroke();
     });
-  }, []); // Stable forever — reads from refs, not state
+  }, []);
 
   // SETUP CANVAS — Configure DPR scaling
   const setupCanvas = useCallback(() => {
@@ -153,11 +165,12 @@ export function usePrescriptionDrawing({
       currentStrokeRef.current = [[x, y, e.pressure || 0.5]];
       lastPointRef.current = { x, y };
 
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = '#1e1b4b';
+      ctx.fillStyle = '#1e1b4b';
+      // Stamp a dot at the starting point
+      const startR = pressureToRadius(e.pressure || 0.5);
       ctx.beginPath();
-      ctx.moveTo(x, y);
+      ctx.arc(x, y, startR, 0, Math.PI * 2);
+      ctx.fill();
     };
 
     const handleMove = (e: PointerEvent) => {
@@ -171,36 +184,42 @@ export function usePrescriptionDrawing({
       const rect = canvas.getBoundingClientRect();
       const coalesced = (e as any).getCoalescedEvents?.() || [e];
 
-      // ONE path for ALL coalesced points this frame — no gaps
-      ctx.beginPath();
-
-      const startLast = lastPointRef.current;
-      if (startLast) ctx.moveTo(startLast.x, startLast.y);
-
-      let lastPressure = 0.5;
+      let prevSmoothedPressure = (e as any)._lastSmoothedPressure ?? 0.5;
 
       for (const event of coalesced) {
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
-        const pressure = event.pressure || 0.5;
+        const rawPressure = event.pressure || 0.5;
 
-        currentStrokeRef.current.push([x, y, pressure]);
+        // Low-pass smoothing
+        const pressure = (prevSmoothedPressure * 0.6) + (rawPressure * 0.4);
+        prevSmoothedPressure = pressure;
 
         const last = lastPointRef.current;
+        const r = pressureToRadius(pressure);
+
+        // Stamp a dot at this point
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fill the gap between last point and this one
         if (last) {
-          // Midpoint quadratic — guaranteed smooth curves
-          const midX = (last.x + x) / 2;
-          const midY = (last.y + y) / 2;
-          ctx.quadraticCurveTo(last.x, last.y, midX, midY);
+          const dist = Math.hypot(x - last.x, y - last.y);
+          const steps = Math.ceil(dist / (r * 0.5));
+          for (let s = 1; s < steps; s++) {
+            const t = s / steps;
+            const ix = last.x + (x - last.x) * t;
+            const iy = last.y + (y - last.y) * t;
+            ctx.beginPath();
+            ctx.arc(ix, iy, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
 
+        currentStrokeRef.current.push([x, y, pressure]);
         lastPointRef.current = { x, y };
-        lastPressure = pressure;
       }
-
-      // ONE lineWidth and ONE stroke call per frame
-      ctx.lineWidth = pressureToWidth(lastPressure);
-      ctx.stroke();
     };
 
     const handleUp = (e: PointerEvent) => {
