@@ -65,7 +65,20 @@ export default function LiveRxQueue({ data, loading }: LiveRxQueueProps) {
                       </Badge>
                     )}
                     <p className="text-[10px] text-slate-400 mt-1 font-medium italic">
-                      {formatDistanceToNow(new Date(rx.createdAt?.toDate ? rx.createdAt.toDate() : rx.createdAt), { addSuffix: true })}
+                      {(() => {
+                        try {
+                          if (!rx.createdAt) return '';
+                          let d = rx.createdAt;
+                          if (typeof d?.toDate === 'function') d = d.toDate();
+                          else if (d?.seconds) d = new Date(d.seconds * 1000);
+                          else if (d?._seconds) d = new Date(d._seconds * 1000);
+                          else d = new Date(d);
+                          if (isNaN(d.getTime())) return '';
+                          return formatDistanceToNow(d, { addSuffix: true });
+                        } catch (e) {
+                          return '';
+                        }
+                      })()}
                     </p>
                   </div>
                 </div>

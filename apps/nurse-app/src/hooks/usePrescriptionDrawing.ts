@@ -11,6 +11,10 @@ interface Stroke {
   width: number;
 }
 
+interface PageData {
+  strokes: Stroke[];
+}
+
 interface UsePrescriptionDrawingOptions {
   doctor: Doctor;
   clinic: Clinic;
@@ -25,9 +29,17 @@ export function usePrescriptionDrawing({
   appointment 
 }: UsePrescriptionDrawingOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [pages, setPages] = useState<PageData[]>([{ strokes: [] }]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [currentStroke, setCurrentStroke] = useState<number[][] | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
+
+  // Constants for A4 at 150 DPI
+  const A4_WIDTH = 1240;
+  const A4_HEIGHT = 1754;
+
+  const currentStrokes = pages[currentPageIndex]?.strokes || [];
 
   const strokeOptions = useMemo(() => ({
     size: 2.5,
@@ -35,6 +47,13 @@ export function usePrescriptionDrawing({
     smoothing: 0.5,
     streamline: 0.5,
   }), []);
+
+  // Pre-load logo
+  useEffect(() => {
+    const img = new Image();
+    img.src = '/Kloqo_Logo_full (2) (1).webp';
+    img.onload = () => setLogoImage(img);
+  }, []);
 
   const getSvgPathFromStroke = useCallback((stroke: number[][]) => {
     if (!stroke.length) return "";
@@ -51,114 +70,6 @@ export function usePrescriptionDrawing({
     return d.join(" ");
   }, [strokeOptions]);
 
-  const drawMetadata = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    const margin = 60;
-    const headerHeight = 160;
-    
-    // Header Background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, headerHeight);
-    
-    // Doctor Details (Left)
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#0f172a';
-    ctx.font = '900 28px "Inter", "PT Sans", sans-serif';
-    ctx.fillText(doctor.name.toUpperCase(), margin, 50);
-    
-    ctx.font = '700 16px "Inter", "PT Sans", sans-serif';
-    ctx.fillStyle = '#334155';
-    ctx.fillText(doctor.qualifications || 'MBBS, MD', margin, 75);
-    
-    ctx.font = '600 14px "Inter", "PT Sans", sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText(`Reg No: ${doctor.registrationNumber || 'NMC/12345/ABC'}`, margin, 95);
-
-    // Clinic Details (Right)
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#0f172a';
-    ctx.font = '900 20px "Inter", "PT Sans", sans-serif';
-    ctx.fillText(clinic.name, width - margin, 50);
-    
-    ctx.font = '500 13px "Inter", "PT Sans", sans-serif';
-    ctx.fillStyle = '#64748b';
-    const addr = clinic.address || '123 Medical Square, Healthcare City';
-    const addrLines = addr.match(/.{1,45}/g) || [addr];
-    addrLines.forEach((line, i) => {
-      ctx.fillText(line, width - margin, 75 + (i * 18));
-    });
-    
-    ctx.font = '700 13px "Inter", "PT Sans", sans-serif';
-    ctx.fillStyle = '#0f172a';
-    ctx.fillText(`Contact: ${clinic.pharmacyPhone || (clinic as any).phone || ''}`, width - margin, 75 + (addrLines.length * 18) + 5);
-
-    // Separator Line
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(margin, headerHeight - 10);
-    ctx.lineTo(width - margin, headerHeight - 10);
-    ctx.stroke();
-
-    // Patient Block
-    const pbTop = headerHeight + 10;
-    ctx.textAlign = 'left';
-    
-    const patientFields = [
-      { label: 'PATIENT NAME', value: patient.name.toUpperCase() },
-      { label: 'AGE / SEX', value: `${patient.age || 'N/A'}Y / ${patient.sex || 'N/A'}` },
-      { label: 'DATE', value: format(new Date(), 'dd MMM yyyy') },
-      { label: 'WEIGHT / HEIGHT', value: `${patient.weight || '-'} kg / ${patient.height || '-'} cm` },
-      { label: 'TOKEN ID', value: `#${appointment.tokenNumber}` }
-    ];
-
-    const colWidth = (width - (margin * 2)) / 3;
-    
-    patientFields.forEach((field, i) => {
-      const col = i % 3;
-      const row = Math.floor(i / 3);
-      const x = margin + (col * colWidth);
-      const y = pbTop + (row * 60);
-
-      ctx.font = '800 11px "Inter", "PT Sans", sans-serif';
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(field.label, x, y + 20);
-
-      ctx.font = '800 16px "Inter", "PT Sans", sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText(field.value, x, y + 42);
-    });
-
-    // Rx Symbol
-    ctx.font = 'italic 700 64px "Georgia", "serif"';
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillText('Rx', margin, pbTop + 140);
-
-    // Footer / Signature
-    const footerTop = height - 150;
-    ctx.textAlign = 'center';
-    
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(width - 300, footerTop + 60);
-    ctx.lineTo(width - margin, footerTop + 60);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.font = '900 14px "Inter", sans-serif';
-    ctx.fillStyle = '#0f172a';
-    ctx.fillText(doctor.name.toUpperCase(), width - 175, footerTop + 85);
-    
-    ctx.font = '700 11px "Inter", sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(`Reg No: ${doctor.registrationNumber || ''}`, width - 175, footerTop + 105);
-    
-    ctx.font = '600 10px "Inter", sans-serif';
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillText('Digital Prescription Signature / Stamp', width - 175, footerTop + 125);
-    
-    ctx.textAlign = 'left';
-  }, [doctor, clinic, patient, appointment]);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -166,25 +77,11 @@ export function usePrescriptionDrawing({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Crucial: Transparent Glass Layer
 
-    drawMetadata(ctx, canvas.width, canvas.height);
+    ctx.fillStyle = '#1e1b4b'; // Deep Indigo Ink
 
-    // Grid Layout
-    const startGridAt = 220;
-    ctx.strokeStyle = '#f8fafc';
-    ctx.lineWidth = 1;
-    for (let i = startGridAt; i < canvas.height - 120; i += 35) {
-      ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(canvas.width, i);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = '#1e1b4b';
-
-    strokes.forEach((stroke) => {
+    currentStrokes.forEach((stroke) => {
       const pathData = getSvgPathFromStroke(stroke.points);
       const path = new Path2D(pathData);
       ctx.fill(path);
@@ -195,34 +92,19 @@ export function usePrescriptionDrawing({
       const path = new Path2D(pathData);
       ctx.fill(path);
     }
-  }, [strokes, currentStroke, drawMetadata, getSvgPathFromStroke]);
+  }, [currentStrokes, currentStroke, getSvgPathFromStroke]);
 
   useEffect(() => {
     redraw();
   }, [redraw]);
 
   useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      
-      const targetWidth = 1200;
-      const ratio = parent.clientHeight / parent.clientWidth;
-      
-      canvas.width = targetWidth;
-      canvas.height = targetWidth * ratio;
-      
-      canvas.style.width = `${parent.clientWidth}px`;
-      canvas.style.height = `${parent.clientHeight}px`;
-      
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = A4_WIDTH;
+      canvas.height = A4_HEIGHT;
       redraw();
-    };
-
-    window.addEventListener('resize', handleResize);
-    handleResize();
-    return () => window.removeEventListener('resize', handleResize);
+    }
   }, [redraw]);
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -245,26 +127,55 @@ export function usePrescriptionDrawing({
 
   const onPointerUp = () => {
     if (currentStroke) {
-      setStrokes([...strokes, { points: currentStroke, color: '#1e1b4b', width: 2.5 }]);
+      const newPages = [...pages];
+      newPages[currentPageIndex].strokes.push({ points: currentStroke, color: '#1e1b4b', width: 2.5 });
+      setPages(newPages);
     }
     setCurrentStroke(null);
     setIsDrawing(false);
   };
 
   const clearCanvas = () => {
-    if (confirm('Are you sure you want to clear this prescription?')) {
-      setStrokes([]);
+    if (confirm('Clear this page?')) {
+      const newPages = [...pages];
+      newPages[currentPageIndex].strokes = [];
+      setPages(newPages);
       setCurrentStroke(null);
     }
   };
 
-  const getBlob = async (quality: number = 0.85): Promise<Blob | null> => {
+  const addPage = () => {
+    setPages([...pages, { strokes: [] }]);
+    setCurrentPageIndex(pages.length);
+  };
+
+  const getBlob = async (): Promise<Blob | null> => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    if (strokes.length === 0) return null;
     
+    // To support multi-page in a single upload without merging template layout,
+    // we only capture the pure transparent ink.
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = A4_WIDTH;
+    finalCanvas.height = A4_HEIGHT * pages.length;
+    const fctx = finalCanvas.getContext('2d');
+    if (!fctx) return null;
+
+    for (let i = 0; i < pages.length; i++) {
+        fctx.save();
+        fctx.translate(0, i * A4_HEIGHT);
+        pages[i].strokes.forEach(s => {
+            const pathData = getSvgPathFromStroke(s.points);
+            const path = new Path2D(pathData);
+            fctx!.fillStyle = '#1e1b4b';
+            fctx!.fill(path);
+        });
+        fctx.restore();
+    }
+
     return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
+      // Must export as PNG to preserve transparent ink!
+      finalCanvas.toBlob((blob) => resolve(blob), 'image/png');
     });
   };
 
@@ -272,7 +183,11 @@ export function usePrescriptionDrawing({
     canvasRef,
     clearCanvas,
     getBlob,
-    hasDrawing: strokes.length > 0,
+    addPage,
+    currentPageIndex,
+    totalPages: pages.length,
+    setCurrentPageIndex,
+    hasDrawing: pages.some(p => p.strokes.length > 0),
     pointerHandlers: {
       onPointerDown,
       onPointerMove,

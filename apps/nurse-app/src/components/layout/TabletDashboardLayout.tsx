@@ -18,9 +18,10 @@ interface TabletDashboardLayoutProps {
   rightPanel?: React.ReactNode;
   headerActions?: React.ReactNode;
   collapsed?: boolean;
+  noPadding?: boolean;
 }
 
-export function TabletDashboardLayout({ children, rightPanel, headerActions, collapsed = false }: TabletDashboardLayoutProps) {
+export function TabletDashboardLayout({ children, rightPanel, headerActions, collapsed = false, noPadding = false }: TabletDashboardLayoutProps) {
   const pathname = usePathname();
   const { user } = useAuth();
   const { activeRole, availableRoles, displayName, clinicalProfile } = useActiveIdentity();
@@ -119,9 +120,10 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
                     className="pl-12 h-14 bg-white border-slate-200 shadow-sm rounded-2xl placeholder:font-medium placeholder:text-slate-400 focus-visible:ring-primary/20 transition-all font-bold text-slate-800 text-lg w-full"
                 />
             </div>
+            {headerActions}
         </header>
 
-        <div className="px-10 py-10 pb-24">
+        <div className={cn("flex-1 flex flex-col w-full h-full relative", !noPadding && "px-10 py-10 pb-24")}>
             {children}
         </div>
       </main>

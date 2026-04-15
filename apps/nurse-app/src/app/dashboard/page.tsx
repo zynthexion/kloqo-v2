@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const { data, loading: dashboardLoading, completeWithPrescription } = useNurseDashboardContext();
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
   const { toast } = useToast();
 
   const arrivedQueue = React.useMemo(() => {
@@ -91,8 +92,33 @@ export default function DashboardPage() {
       height: (selectedAppointment as any).height,
     } : null;
 
+    const headerActions = (
+      <div className="flex items-center gap-4">
+        {user?.clinicId && (
+          <div className="hover:scale-105 transition-transform duration-300">
+            <PatientHistoryOverlay
+              selectedAppointment={selectedAppointment || null}
+              clinicId={user.clinicId}
+            />
+          </div>
+        )}
+        <Button 
+          variant="outline" 
+          size="lg" 
+          onClick={() => setIsQueueOpen(true)}
+          className="rounded-[1.5rem] gap-3 border-slate-200 bg-white shadow-sm hover:bg-slate-50 hover:border-primary/30 transition-all text-slate-600 hover:text-primary font-black px-6 h-14"
+        >
+          <div className="relative">
+            <Users className="h-6 w-6" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
+          </div>
+          <span className="uppercase tracking-[0.2em] text-[10px] hidden lg:inline">Live Queue</span>
+        </Button>
+      </div>
+    );
+
     return (
-      <TabletDashboardLayout collapsed>
+      <TabletDashboardLayout collapsed noPadding headerActions={headerActions}>
         <TabletFocusLayout 
           queue={
             <TabletQueue 
@@ -102,6 +128,8 @@ export default function DashboardPage() {
           }
           selectedAppointment={selectedAppointment}
           clinicId={user?.clinicId}
+          isQueueOpen={isQueueOpen}
+          setIsQueueOpen={setIsQueueOpen}
         >
           {selectedAppointment && currentDoctor && currentPatient ? (
             <PrescriptionCanvas

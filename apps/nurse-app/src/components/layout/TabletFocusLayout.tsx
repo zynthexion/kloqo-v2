@@ -12,42 +12,18 @@ interface TabletFocusLayoutProps {
   queue: React.ReactNode;
   selectedAppointment?: Appointment | null;
   clinicId?: string;
+  isQueueOpen: boolean;
+  setIsQueueOpen: (v: boolean) => void;
 }
 
-export function TabletFocusLayout({ children, queue, selectedAppointment, clinicId }: TabletFocusLayoutProps) {
-  const [isQueueOpen, setIsQueueOpen] = useState(false);
+export function TabletFocusLayout({ children, queue, selectedAppointment, clinicId, isQueueOpen, setIsQueueOpen }: TabletFocusLayoutProps) {
 
   return (
     <div className="flex flex-col h-full w-full bg-[#F8FAFC] overflow-hidden font-sans">
-      {/* Sub-header for Action Buttons (Top Right - Restored) */}
-      <div className="absolute top-6 right-10 z-40 flex items-center gap-4">
-        {/* Patient History Button */}
-        {clinicId && (
-          <div className="hover:scale-105 transition-transform duration-300">
-            <PatientHistoryOverlay
-              selectedAppointment={selectedAppointment || null}
-              clinicId={clinicId}
-            />
-          </div>
-        )}
-        {/* Live Queue Button */}
-        <Button 
-          variant="outline" 
-          size="lg" 
-          onClick={() => setIsQueueOpen(true)}
-          className="rounded-[1.5rem] gap-3 border-slate-200 bg-white shadow-sm hover:bg-slate-50 hover:border-primary/30 transition-all text-slate-600 hover:text-primary font-black px-6 h-14"
-        >
-          <div className="relative">
-            <Users className="h-6 w-6" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
-          </div>
-          <span className="uppercase tracking-[0.2em] text-[10px] hidden lg:inline">Live Queue</span>
-        </Button>
-      </div>
 
-      {/* Main Rx Canvas Area (Zen Focused) */}
-      <main className="flex-1 relative overflow-hidden flex flex-col items-center justify-center p-10 lg:p-12">
-        <div className="w-full max-w-5xl h-full bg-white shadow-[0_15px_60px_-15px_rgba(0,0,0,0.05)] rounded-[3rem] border border-slate-100 overflow-hidden relative transition-all duration-700 group">
+      {/* Main Rx Canvas Area (Zen Focused & Edge-to-Edge) */}
+      <main className="flex-1 relative overflow-hidden flex flex-col items-center justify-center pb-[env(safe-area-inset-bottom,1rem)] bg-[#F8FAFC]">
+        <div className="w-full h-full relative transition-all duration-700 group">
           <div className="absolute inset-0 bg-gradient-to-br from-transparent to-slate-50 opacity-10 pointer-events-none" />
           <div className="h-full w-full relative z-10">
             {children}
