@@ -35,8 +35,7 @@ export function PrescriptionCanvas({
     addPage,
     currentPageIndex,
     totalPages,
-    setCurrentPageIndex,
-    pointerHandlers
+    setCurrentPageIndex
   } = usePrescriptionDrawing({
     doctor,
     clinic,
@@ -132,7 +131,6 @@ export function PrescriptionCanvas({
           {/* Active Layer for current pen movement */}
           <canvas
             ref={activeCanvasRef}
-            {...pointerHandlers}
             className="touch-none select-none cursor-crosshair block w-full h-full absolute inset-0 z-20 bg-transparent"
           />
           

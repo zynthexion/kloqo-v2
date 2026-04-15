@@ -122,6 +122,120 @@ export function usePrescriptionDrawing({
     redrawBase();
   }, [redrawBase]);
 
+  // SAFARI-SAFE IDLE SCHEDULER
+  const runInIdle = useCallback((callback: () => void) => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(callback);
+    } else {
+      setTimeout(callback, 0); // Safari/Old iOS Fallback
+    }
+  }, []);
+
+  // EFFECT: INDUSTRIAL-GRADE HARDWARE ISOLATION
+  useEffect(() => {
+    const canvas = activeCanvasRef.current;
+    if (!canvas) return;
+
+    const handleDown = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+
+      isDrawingRef.current = true;
+      const rect = canvas.getBoundingClientRect();
+      currentStrokeRef.current = [[e.clientX - rect.left, e.clientY - rect.top, e.pressure]];
+    };
+
+    const handleMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const ctx = canvas.getContext('2d', { alpha: true });
+      if (!ctx) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const coalescedEvents = (e as any).getCoalescedEvents?.() || [e];
+      
+      for (const event of coalescedEvents) {
+        currentStrokeRef.current.push([
+          event.clientX - rect.left,
+          event.clientY - rect.top,
+          event.pressure
+        ]);
+      }
+
+      // Wipe & Fill Active Layer (Hardware Fast Path)
+      const dpr = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      ctx.fillStyle = '#1e1b4b';
+      
+      const pathData = getSvgPathFromStroke(currentStrokeRef.current);
+      const path = new Path2D(pathData);
+      ctx.fill(path);
+    };
+
+    const handleUp = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+
+      const points = currentStrokeRef.current;
+      if (points.length > 1) {
+        // 1. ATOMIC HANDOVER (Imperative & Immediate)
+        const baseCanvas = baseCanvasRef.current;
+        if (baseCanvas) {
+          const bCtx = baseCanvas.getContext('2d', { alpha: true });
+          const dpr = window.devicePixelRatio || 1;
+          if (bCtx) {
+            let path = pathCacheRef.current.get(points);
+            if (!path) {
+              path = new Path2D(getSvgPathFromStroke(points));
+              pathCacheRef.current.set(points, path);
+            }
+            bCtx.fillStyle = '#1e1b4b';
+            bCtx.fill(path);
+          }
+        }
+
+        // Immediately clear the active layer
+        const ctx = canvas.getContext('2d', { alpha: true });
+        if (ctx) {
+          const dpr = window.devicePixelRatio || 1;
+          ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+        }
+
+        // 2. BACKGROUND PERSISTENCE (Non-blocking)
+        runInIdle(() => {
+          setPages(prev => {
+            const next = [...prev];
+            next[currentPageIndex].strokes.push({
+              points,
+              color: '#1e1b4b',
+              width: 1.8
+            });
+            return next;
+          });
+        });
+      }
+
+      currentStrokeRef.current = [];
+    };
+
+    // Attach native DOM listeners with passive: false to hijack iPad gestures
+    canvas.addEventListener('pointerdown', handleDown, { passive: false });
+    canvas.addEventListener('pointermove', handleMove, { passive: false });
+    canvas.addEventListener('pointerup', handleUp, { passive: false });
+    canvas.addEventListener('pointerleave', handleUp, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('pointerdown', handleDown);
+      canvas.removeEventListener('pointermove', handleMove);
+      canvas.removeEventListener('pointerup', handleUp);
+      canvas.removeEventListener('pointerleave', handleUp);
+    };
+  }, [getSvgPathFromStroke, currentPageIndex, runInIdle]);
+
   // EFFECT: Handle Resize & Orientation
   useEffect(() => {
     setupCanvases();
@@ -131,96 +245,6 @@ export function usePrescriptionDrawing({
     }
     return () => observer.disconnect();
   }, [setupCanvases]);
-
-
-
-  // POINTER HANDLERS (Bypassing React state)
-  const onPointerDown = (e: React.PointerEvent) => {
-    const canvas = activeCanvasRef.current;
-    if (!canvas) return;
-
-    isDrawingRef.current = true;
-    const rect = canvas.getBoundingClientRect();
-    
-    // Initial point
-    currentStrokeRef.current = [[e.clientX - rect.left, e.clientY - rect.top, e.pressure]];
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!isDrawingRef.current) return;
-    const canvas = activeCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: true });
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-
-    // Hardware Precision: Extract micro-movements (120Hz support)
-    const coalescedEvents = (e.nativeEvent as any).getCoalescedEvents?.() || [e.nativeEvent];
-    
-    for (const event of coalescedEvents) {
-      currentStrokeRef.current.push([
-        event.clientX - rect.left,
-        event.clientY - rect.top,
-        event.pressure
-      ]);
-    }
-
-    // Wipe & Fill Active Layer (Preventing Anti-alias bleed)
-    const dpr = window.devicePixelRatio || 1;
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-    ctx.fillStyle = '#1e1b4b';
-    
-    const pathData = getSvgPathFromStroke(currentStrokeRef.current);
-    const path = new Path2D(pathData);
-    ctx.fill(path);
-  };
-  const onPointerUp = () => {
-    if (!isDrawingRef.current) return;
-    isDrawingRef.current = false;
-
-    if (currentStrokeRef.current.length > 1) {
-      const points = currentStrokeRef.current;
-      
-      // 1. ATOMIC HANDOVER (Imperative)
-      // Draw to base layer immediately so there is ZERO visual gap
-      const baseCanvas = baseCanvasRef.current;
-      const activeCanvas = activeCanvasRef.current;
-      
-      if (baseCanvas && activeCanvas) {
-        const bCtx = baseCanvas.getContext('2d', { alpha: true });
-        const aCtx = activeCanvas.getContext('2d', { alpha: true });
-        const dpr = window.devicePixelRatio || 1;
-
-        if (bCtx && aCtx) {
-          // Use cache or compile
-          let path = pathCacheRef.current.get(points);
-          if (!path) {
-            const pathData = getSvgPathFromStroke(points);
-            path = new Path2D(pathData);
-            pathCacheRef.current.set(points, path);
-          }
-
-          bCtx.fillStyle = '#1e1b4b';
-          bCtx.fill(path);
-
-          // Immediately clear the active layer
-          aCtx.clearRect(0, 0, activeCanvas.width / dpr, activeCanvas.height / dpr);
-        }
-      }
-
-      // 2. COMMIT TO STATE (for persistence & page turns)
-      const newPages = [...pages];
-      newPages[currentPageIndex].strokes.push({ 
-        points: points, 
-        color: '#1e1b4b', 
-        width: 1.8 
-      });
-      setPages(newPages);
-    }
-    
-    currentStrokeRef.current = [];
-  };
 
   const clearCanvas = () => {
     if (confirm('Clear this page?')) {
@@ -249,11 +273,6 @@ export function usePrescriptionDrawing({
     pages.forEach((page, i) => {
       fctx.save();
       fctx.translate(0, i * A4_HEIGHT);
-      
-      // We need to scale the strokes because they were captured at screen resolution
-      // However, to keep it simple and consistent for now, we assume fixed ratio mapping 
-      // is handled during capture if we want native A4 export.
-      // For this Enterprise approach, we only export the relative coordinates or upscale.
       
       // Upscale logic: Map current screen Rect to 1240x1754
       const canvas = baseCanvasRef.current;
@@ -287,12 +306,6 @@ export function usePrescriptionDrawing({
     currentPageIndex,
     totalPages: pages.length,
     setCurrentPageIndex,
-    hasDrawing: pages.some(p => p.strokes.length > 0),
-    pointerHandlers: {
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerLeave: onPointerUp,
-    }
+    hasDrawing: pages.some(p => p.strokes.length > 0)
   };
 }
