@@ -12,6 +12,7 @@ import { FileText, Home, Radio, List, User, Settings, Bell, Search, ChevronRight
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { Switch } from '@/components/ui/switch';
 
 interface TabletDashboardLayoutProps {
   children: React.ReactNode;
@@ -25,6 +26,19 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
   const pathname = usePathname();
   const { user } = useAuth();
   const { activeRole, availableRoles, displayName, clinicalProfile } = useActiveIdentity();
+  
+  // Custom interactive collapse state
+  const isDashboard = pathname.startsWith('/dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isDashboard);
+
+  // Sync state if pathname changes to/from dashboard
+  useEffect(() => {
+    if (isDashboard) {
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(true);
+    }
+  }, [isDashboard]);
   
   const ALL_NAV_ITEMS = [
     { href: '/', icon: Home, label: 'Overview', menuKey: '/' },
@@ -47,9 +61,18 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
     <div className="flex h-screen w-full bg-[#F8FAFC] overflow-hidden font-sans text-lg">
       {/* 1. Left Sidebar (Navigation) */}
       <aside className={cn(
-        "bg-white border-r border-slate-200 flex flex-col items-center py-8 z-40 transition-all duration-500",
-        collapsed ? "w-24" : "w-32 lg:w-40"
+        "bg-white border-r border-slate-200 flex flex-col items-center py-8 z-40 transition-all duration-500 relative",
+        !isSidebarOpen ? "w-0 opacity-0 -translate-x-full overflow-hidden border-0" : (collapsed ? "w-24" : "w-32 lg:w-40")
       )}>
+        {/* Collapse Toggle inside Sidebar */}
+        {isSidebarOpen && isDashboard && (
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="absolute -right-3 top-24 w-6 h-12 bg-white border border-slate-200 border-l-0 shadow-sm rounded-r-xl flex items-center justify-center text-slate-400 hover:text-primary transition-colors z-50"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+          </button>
+        )}
         <div className="flex items-center justify-center p-4 shrink-0 mb-8 w-full">
           <Link className="flex items-center gap-3 group" href="/">
             <div className="w-10 h-10 shrink-0 lg:group-hover:hidden transition-opacity duration-200">
@@ -102,13 +125,28 @@ export function TabletDashboardLayout({ children, rightPanel, headerActions, col
                     <p className="text-sm font-black text-slate-900 leading-tight truncate px-1">
                       {displayName}
                     </p>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                      {clinicalProfile?.specialty || clinicalProfile?.departmentName || (activeRole === 'nurse' ? 'Clinical Nurse' : 'Practitioner')}
-                    </p>
+                    <div className="flex items-center justify-center gap-2 mt-2 bg-slate-50 py-1.5 px-3 rounded-full border border-slate-100">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Out</span>
+                      <Switch className="scale-75 data-[state=checked]:bg-emerald-500" />
+                      <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">In</span>
+                    </div>
                 </div>
             </div>
         </div>
       </aside>
+
+      {/* Floating Restore Button (Visible when sidebar is collapsed) */}
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed left-6 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center justify-center w-12 h-24 bg-slate-900 border border-slate-700 shadow-2xl rounded-full hover:bg-black transition-all duration-300 group hover:-translate-x-1 animate-in slide-in-from-left duration-500"
+        >
+          <div className="flex flex-col items-center gap-1">
+            <ChevronRight className="h-5 w-5 text-white group-hover:translate-x-0.5 transition-transform" />
+            <span className="text-[8px] font-black text-white/40 uppercase [writing-mode:vertical-lr] tracking-widest mt-1">Menu</span>
+          </div>
+        </button>
+      )}
 
       {/* 2. Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-transparent overflow-y-auto custom-scrollbar relative">

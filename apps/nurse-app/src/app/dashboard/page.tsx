@@ -118,7 +118,7 @@ export default function DashboardPage() {
     );
 
     return (
-      <TabletDashboardLayout collapsed noPadding headerActions={headerActions}>
+      <TabletDashboardLayout noPadding headerActions={headerActions}>
         <TabletFocusLayout 
           queue={
             <TabletQueue 
