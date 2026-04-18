@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/language-context';
 import { getPatientListFromCache, savePatientListToCache } from '@/lib/patient-cache';
 import type { Patient } from '@kloqo/shared';
-import { FormValues, createFormSchema } from '@kloqo/shared';
+import { FormValues, createFormSchema } from './types';
 
 export function usePatientForm() {
     const { user } = useAuth();

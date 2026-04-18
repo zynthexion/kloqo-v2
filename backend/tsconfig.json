@@ -9,6 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
       "@kloqo/shared": ["../packages/shared/src/index.ts"],

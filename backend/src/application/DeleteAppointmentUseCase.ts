@@ -18,5 +18,13 @@ export class DeleteAppointmentUseCase {
     }
 
     await this.appointmentRepo.delete(appointmentId);
+
+    // Release the atomic lock if the appointment had one (advanced bookings)
+    if (appointment.slotIndex !== undefined && appointment.sessionIndex !== undefined) {
+      const lockId = `${appointment.doctorId}_${appointment.date}_s${appointment.sessionIndex}_slot${appointment.slotIndex}`;
+      await this.appointmentRepo.releaseSlotLock(lockId).catch(err => {
+        console.warn(`[Delete] Failed to release lock ${lockId} for ${appointmentId}:`, err.message);
+      });
+    }
   }
 }

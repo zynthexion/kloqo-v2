@@ -62,7 +62,6 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
       window.location.href = `${superAdminUrl}/dashboard`;
       return;
     }
-    }
   }, [user, loading, pathname]);
 
   if (loading) {

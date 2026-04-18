@@ -33,7 +33,7 @@ export function DoctorHeader({ doctor, loading }: DoctorHeaderProps) {
       <Avatar className="h-16 w-16 shadow-lg shadow-black/5">
         {doctor.avatar && <AvatarImage src={doctor.avatar} alt={doctor.name} />}
         <AvatarFallback className="bg-slate-100 text-slate-400 font-bold">
-          {doctor.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+          {(doctor.name || '??').split(' ').map(n => n[0]).join('').slice(0, 2)}
         </AvatarFallback>
       </Avatar>
       <div className="flex-grow">

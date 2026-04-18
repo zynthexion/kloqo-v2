@@ -26,6 +26,7 @@ export * from './services/notification-config';
 // Import directly from './services/ai-service' if needed
 
 export * from './utils/date-utils';
+export * from './utils/appointment-utils';
 export { getClinicDateString, getClinicNow } from './utils/date-utils';
 export * from './utils/reservation-utils';
 export * from './utils/errors';

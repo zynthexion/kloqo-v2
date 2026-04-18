@@ -19,7 +19,7 @@ function BookAppointmentContent() {
         doctor, loading,
         selectedDate, dates, currentMonth, handleDateSelect,
         selectedSlot, handleSlotSelect, slotsLoading,
-        sessionSlots, isAdvanceCapacityReached,
+        backendSlots, isAdvanceCapacityReached,
         handleProceed,
         doctorId, isPhoneBooking, patientIdFromParams,
         setDateCarouselApi,
@@ -64,7 +64,7 @@ function BookAppointmentContent() {
 
                     {/* 3. Slot / Session Selection Section */}
                     <SessionSlotList
-                        sessionSlots={sessionSlots}
+                        backendSlots={backendSlots}
                         selectedSlot={selectedSlot}
                         onSlotSelect={handleSlotSelect}
                         slotsLoading={slotsLoading}

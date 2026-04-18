@@ -12,7 +12,7 @@ import { GetWalkInPreviewUseCase } from '../application/GetWalkInPreviewUseCase'
 import { ConfirmArrivalUseCase } from '../application/ConfirmArrivalUseCase';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
 import { IAppointmentRepository, IDoctorRepository } from '../domain/repositories';
-import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
+import { ClinicNotApprovedError, OnboardingIncompleteError, SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
 import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
 
 export class AppointmentController {
@@ -181,8 +181,14 @@ export class AppointmentController {
       const appointment = await this.bookAdvancedAppointmentUseCase.execute(req.body);
       res.status(201).json(appointment);
     } catch (error: any) {
+      if (error instanceof SlotAlreadyBookedError) {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error instanceof DuplicateBookingError) {
+        return res.status(400).json({ error: error.message });
+      }
+      
       // SECURITY FIX: Never expose stack traces or raw error messages to clients.
-      // Log the full stack server-side only for debugging.
       console.error('[bookAdvanced error]', error.stack || error.message);
       res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -201,10 +207,36 @@ export class AppointmentController {
       if (!doctorId || !date) {
         return res.status(400).json({ message: 'doctorId and date are required' });
       }
+      // Staff route: 15-minute booking buffer
       const slots = await this.getAvailableSlotsUseCase.execute({
         doctorId: doctorId as string,
         clinicId: clinicId as string,
-        date: date as string
+        date: date as string,
+        source: 'staff'
+      });
+      res.json(slots);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+
+  /**
+   * Public slot endpoint — used by the patient-app (unauthenticated).
+   * Applies a 30-minute buffer and hides break labels.
+   */
+  async getPublicAvailableSlots(req: any, res: Response) {
+    try {
+      const { doctorId, clinicId, date } = req.query;
+
+      if (!doctorId || !clinicId || !date) {
+        return res.status(400).json({ message: 'doctorId, clinicId and date are required' });
+      }
+      // Patient route: 30-minute booking buffer; breaks show as 'booked'
+      const slots = await this.getAvailableSlotsUseCase.execute({
+        doctorId: doctorId as string,
+        clinicId: clinicId as string,
+        date: date as string,
+        source: 'patient'
       });
       res.json(slots);
     } catch (error: any) {

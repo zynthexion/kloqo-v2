@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/AuthContext';
+import { KloqoIntegrationProvider } from '@/context/KloqoIntegrationProvider';
 
 export const metadata: Metadata = {
   title: 'Kloqo Clinic',
@@ -27,7 +28,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased h-full">
         <AuthProvider>
-          {children}
+          <KloqoIntegrationProvider>
+            {children}
+          </KloqoIntegrationProvider>
         </AuthProvider>
         <Toaster />
       </body>

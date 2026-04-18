@@ -10,6 +10,8 @@ const { appointmentController } = container;
 // ── Public discovery (patient-app, unauthenticated) ───────────────────────
 router.get('/public', (req, res) => appointmentController.getPublicAppointments(req, res));
 router.get('/public/check-slot', (req, res) => appointmentController.checkSlot(req, res));
+// Public slot availability for patient-app (30-min buffer, breaks hidden)
+router.get('/public/available-slots', (req: any, res: any) => appointmentController.getPublicAvailableSlots(req, res));
 
 // ── Authenticated history and booking (Authenticated) ─────────────────────
 // Restore root GET for filtered history (used by ReviewChecker)

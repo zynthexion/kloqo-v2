@@ -43,7 +43,7 @@ export function DoctorInfoCard({ doctor, loading, language, t }: DoctorInfoCardP
             <CardContent className="flex items-start gap-4 pt-6">
                 <Avatar className="h-20 w-20">
                     {doctor.avatar && <AvatarImage src={doctor.avatar} alt={doctor.name} />}
-                    <AvatarFallback>{doctor.name[0]}</AvatarFallback>
+                    <AvatarFallback>{doctor.name?.[0] ?? '?'}</AvatarFallback>
                 </Avatar>
                 <div className="space-y-1 flex-grow">
                     <h2 className="text-xl font-bold">{doctor.name}</h2>

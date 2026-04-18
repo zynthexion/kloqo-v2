@@ -7,6 +7,7 @@ export interface ManagePatientRequest {
   id?: string;
   name: string;
   phone: string;
+  communicationPhone?: string;
   age?: number;
   sex?: 'Male' | 'Female' | 'Other' | '';
   place?: string;
@@ -18,13 +19,17 @@ export class ManagePatientUseCase {
   constructor(private patientRepo: IPatientRepository) {}
 
   async execute(request: ManagePatientRequest, transaction?: IDBTransaction): Promise<string> {
-    const { id, name, phone, age, sex, place, clinicId, isLinkPending } = request;
+    const { id, name, phone, communicationPhone, age, sex, place, clinicId, isLinkPending } = request;
     const txn = transaction as admin.firestore.Transaction | undefined;
 
     // Normalize phone once, used throughout.
     const fullPhone = phone
       ? `+91${phone.replace(/\D/g, '').slice(-10)}`
       : '';
+    
+    const fullCommPhone = communicationPhone
+      ? `+91${communicationPhone.replace(/\D/g, '').slice(-10)}`
+      : fullPhone;
 
     const executeWork = async (t: admin.firestore.Transaction) => {
         if (id) {
@@ -39,6 +44,8 @@ export class ManagePatientUseCase {
     
             const updateData: any = {
               name: name || existing.name,
+              phone: fullPhone || existing.phone,
+              communicationPhone: fullCommPhone || existing.communicationPhone || fullPhone,
               age: age !== undefined ? age : existing.age,
               sex: sex as any,
               place,
@@ -46,8 +53,7 @@ export class ManagePatientUseCase {
               isLinkPending: isLinkPending ?? false,
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             };
-            if (fullPhone) updateData.communicationPhone = fullPhone;
-            Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+            Object.keys(updateData).forEach(key => (updateData[key] === undefined || updateData[key] === '') && delete updateData[key]);
     
             t.update(patientRef, updateData);
             return id;
@@ -68,6 +74,8 @@ export class ManagePatientUseCase {
     
             const updateData: any = {
                 name: name || existing.name,
+                phone: fullPhone || existing.phone,
+                communicationPhone: fullCommPhone || existing.communicationPhone || fullPhone,
                 age: age !== undefined ? age : existing.age,
                 sex: (sex as any) || existing.sex,
                 place: place || existing.place,
@@ -75,8 +83,7 @@ export class ManagePatientUseCase {
                 isLinkPending: isLinkPending ?? existing.isLinkPending ?? false,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             };
-            if (fullPhone) updateData.communicationPhone = fullPhone;
-            Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+            Object.keys(updateData).forEach(key => (updateData[key] === undefined || updateData[key] === '') && delete updateData[key]);
     
             t.update(matchedDoc.ref, updateData);
             return matchedDoc.id;
@@ -88,7 +95,7 @@ export class ManagePatientUseCase {
             id: newId,
             name,
             phone: fullPhone,
-            communicationPhone: fullPhone,
+            communicationPhone: fullCommPhone || fullPhone,
             age,
             sex: sex as any,
             place,
@@ -99,7 +106,7 @@ export class ManagePatientUseCase {
         };
     
         const sanitized: any = { ...newPatient };
-        Object.keys(sanitized).forEach(key => sanitized[key] === undefined && delete sanitized[key]);
+        Object.keys(sanitized).forEach(key => (sanitized[key] === undefined || sanitized[key] === '') && delete sanitized[key]);
     
         t.set(newRef, sanitized);
         return newId;

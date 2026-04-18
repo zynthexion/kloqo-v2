@@ -290,7 +290,8 @@ export class DoctorController {
       const slots = await this.getAvailableSlotsUseCase.execute({ 
         doctorId: id, 
         clinicId, 
-        date: date as string 
+        date: date as string,
+        source: 'staff'
       });
       res.json(slots);
     } catch (error: any) {

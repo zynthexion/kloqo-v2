@@ -13,10 +13,10 @@ import { TokenGeneratorService } from './TokenGeneratorService';
 export class AdvancedTokenStrategy implements ITokenStrategy {
   constructor(private tokenGenerator: TokenGeneratorService) {}
 
-  async generateBookingToken(params: BookingTokenParams): Promise<TokenResult> {
+  async generateBookingToken(params: BookingTokenParams, transaction?: any): Promise<TokenResult> {
     const { clinicId, doctorId, doctorName, date, sessionIndex } = params;
     return this.tokenGenerator.generateToken(
-      clinicId, doctorId, doctorName, date, 'A', sessionIndex, 'advanced'
+      clinicId, doctorId, doctorName, date, 'A', sessionIndex, 'advanced', transaction
     );
   }
 

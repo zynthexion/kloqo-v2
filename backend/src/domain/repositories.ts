@@ -30,6 +30,11 @@ export interface IAppointmentRepository {
   findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Appointment[]>;
   findCompletedByPatientInClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
   delete(id: string): Promise<void>;
+  
+  // Transaction & Locking
+  runTransaction<T>(action: (transaction: IDBTransaction) => Promise<T>): Promise<T>;
+  createSlotLock(lockId: string, data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number }, transaction: IDBTransaction): Promise<void>;
+  releaseSlotLock(lockId: string, transaction?: IDBTransaction): Promise<void>;
 }
 
 export interface IDoctorRepository {

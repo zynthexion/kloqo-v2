@@ -9,6 +9,7 @@ import { ManagePatientUseCase } from './ManagePatientUseCase';
 import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
 import { format } from 'date-fns';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
+import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { computeWalkInSchedule, SchedulerAdvance, SchedulerWalkInCandidate } from '../domain/services/SlotScheduler';
 import { sseService } from '../domain/services/SSEService';
 import { db } from '../infrastructure/firebase/config';
@@ -22,7 +23,9 @@ export interface CreateWalkInAppointmentDTO {
   place: string;
   sex: 'Male' | 'Female' | 'Other';
   phone?: string;
+  communicationPhone?: string;
   phoneDisabled?: boolean;
+  patientId?: string;
   date: string; // d MMMM yyyy
 }
 
@@ -50,9 +53,11 @@ export class CreateWalkInAppointmentUseCase {
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.date);
       const slots = SlotCalculator.generateSlots(doctor, now);
       
-      // Pass appointments to support Sticky Overtime Logic
-      const activeSessionIndex = SlotCalculator.findActiveSessionIndex(
-        doctor, slots, now, clinic.tokenDistribution || 'advanced', allAppointments
+      // ── Delegate session discovery to BookingSessionEngine (canonical) ─────
+      // findActiveSession encapsulates the full Sticky + Jumping logic
+      // mirroring the battle-tested legacy walk-in.service.ts logic.
+      const activeSessionIndex = BookingSessionEngine.findActiveSession(
+        doctor, slots, allAppointments, now, clinic.tokenDistribution || 'advanced'
       );
 
       if (activeSessionIndex === null) {
@@ -65,8 +70,10 @@ export class CreateWalkInAppointmentUseCase {
 
       // --- PATIENT MANAGEMENT: Participates in current transaction ---
       const patientId = await this.managePatientUseCase.execute({
+        id: dto.patientId,
         name: dto.patientName,
         phone: normalizedPhone,
+        communicationPhone: dto.communicationPhone,
         age: dto.age,
         sex: dto.sex,
         place: dto.place,

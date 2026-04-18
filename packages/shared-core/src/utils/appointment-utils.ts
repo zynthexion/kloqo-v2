@@ -1,5 +1,3 @@
-'use client';
-
 import { 
   format, 
   getDay, 
@@ -10,10 +8,12 @@ import {
   addDays 
 } from 'date-fns';
 import { 
-  getClinicNow, 
+  getClinicNow 
+} from './date-utils';
+import {
   isSlotBlockedByLeave,
-  parseTime 
-} from '@kloqo/shared-core';
+  parseTime
+} from './break-helpers';
 import type { Appointment, Doctor } from '@kloqo/shared';
 
 const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -25,7 +25,7 @@ export const isDoctorAdvanceCapacityReachedOnDate = (
   options: { isEditing?: boolean; editingAppointment?: Appointment | null } = {}
 ): boolean => {
   const dayOfWeekName = daysOfWeek[getDay(date)];
-  const availabilityForDay = doctor.availabilitySlots?.find(slot => slot.day === dayOfWeekName);
+  const availabilityForDay = doctor.availabilitySlots?.find((slot: any) => slot.day === dayOfWeekName);
   if (!availabilityForDay?.timeSlots?.length) return false;
 
   const slotDuration = doctor.averageConsultingTime || 15;
@@ -33,7 +33,7 @@ export const isDoctorAdvanceCapacityReachedOnDate = (
   const dateKey = format(date, 'd MMMM yyyy');
   let maximumAdvanceTokens = 0;
 
-  availabilityForDay.timeSlots.forEach((session, sessionIndex) => {
+  availabilityForDay.timeSlots.forEach((session: any, sessionIndex: number) => {
     let currentTime = parseTime(session.from, date);
     let sessionEnd = parseTime(session.to, date);
     const extensions = doctor.availabilityExtensions?.[dateKey];
@@ -84,7 +84,7 @@ export const getNextAvailableDate = (
   for (let offset = 0; offset < 60; offset++) {
     const candidate = addDays(startOfDay(startDate), offset);
     const dayName = format(candidate, 'EEEE');
-    const hasSlots = doctor.availabilitySlots.some(s => s.day.toLowerCase() === dayName.toLowerCase() && s.timeSlots?.length);
+    const hasSlots = doctor.availabilitySlots.some((s: any) => s.day.toLowerCase() === dayName.toLowerCase() && s.timeSlots?.length);
     if (hasSlots && !isDoctorAdvanceCapacityReachedOnDate(doctor, candidate, appointments, { isEditing, editingAppointment })) {
       return candidate;
     }

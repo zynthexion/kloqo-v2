@@ -15,6 +15,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import morgan from 'morgan';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -33,6 +34,7 @@ const app = express();
 const port = Number(process.env.PORT) || 3001;
 
 app.use(helmet());
+app.use(morgan('dev'));
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) 

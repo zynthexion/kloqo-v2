@@ -83,9 +83,12 @@ export function DetailsForm({ form, isEditingPrimary, disablePhoneEditing }: any
                     name="phone"
                     render={({ field }) => (
                         <FormItem className="col-span-2">
-                            <FormLabel className="text-slate-700 font-medium">
+                        <FormLabel className="text-slate-700 font-medium">
                                 {pt.mobileNumber || 'Mobile Number'}
-                                <span className="text-slate-400 text-xs font-normal ml-2">({pt.whatsAppSms || 'WhatsApp/SMS'})</span>
+                                {isEditingPrimary 
+                                    ? <span className="text-slate-400 text-xs font-normal ml-2">({pt.whatsAppSms || 'WhatsApp/SMS'})</span>
+                                    : <span className="text-slate-400 text-xs font-normal ml-2">(optional — assigns own login)</span>
+                                }
                             </FormLabel>
                             <div className="relative flex items-center">
                                 <span className="absolute left-4 text-slate-500 font-medium">+91</span>

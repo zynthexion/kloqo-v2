@@ -148,15 +148,22 @@ export function BookingCard({ form, state, actions, patientInputRef }: BookingCa
                 patientInputRef={patientInputRef} 
               />
               
-              {/* New Patient Details (Visible only when 'Add as new patient' is selected or during editing) */}
-              {(!selectedPatient && hasSelectedOption || isEditing) && (
+              {/* Patient Details (Always editable when a patient is selected or a new one is being added) */}
+              {(selectedPatient || hasSelectedOption || isEditing) && (
                 <div className="mt-6 pt-6 border-t border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-300">
-                  <Label className="text-[10px] font-black text-blue-500 uppercase tracking-widest block mb-2 px-1">Patient Identity</Label>
+                  <Label className="text-[10px] font-black text-blue-500 uppercase tracking-widest block mb-2 px-1">Patient Profile & Contact</Label>
                   <div className="grid grid-cols-12 gap-4">
                     <FormField control={form.control} name="phone" render={({ field }) => (
-                      <FormItem className="col-span-12">
-                        <FormLabel className="text-[10px] font-bold uppercase text-slate-400">Verified Phone Number</FormLabel>
-                        <FormControl><Input {...field} readOnly className="h-11 rounded-xl bg-slate-100/50 border-transparent text-slate-500 font-mono font-bold" /></FormControl>
+                      <FormItem className="col-span-6">
+                        <FormLabel className="text-[10px] font-bold uppercase text-slate-400">Primary Phone (Auth) <span className="text-slate-300 normal-case font-normal">— optional for relatives</span></FormLabel>
+                        <FormControl><Input {...field} placeholder="Leave blank for relatives" className="h-11 rounded-xl bg-slate-50/50 border-transparent focus:bg-white focus:border-blue-200 transition-all font-mono font-bold" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="communicationPhone" render={({ field }) => (
+                      <FormItem className="col-span-6">
+                        <FormLabel className="text-[10px] font-bold uppercase text-slate-400">Communication Phone</FormLabel>
+                        <FormControl><Input {...field} placeholder="WhatsApp/SMS" className="h-11 rounded-xl bg-slate-50/50 border-transparent focus:bg-white focus:border-blue-200 transition-all font-mono font-bold" /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
@@ -203,11 +210,18 @@ export function BookingCard({ form, state, actions, patientInputRef }: BookingCa
             {/* Step 4: Dynamic Details Layer */}
             {(selectedPatient || hasSelectedOption || isEditing) && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                {/* Advanced Booking Logic: Calendar + Slots */}
+                {/* Advanced Booking Logic: Calendar + Slots (Side-by-Side) */}
                 {appointmentType === 'Advanced Booking' ? (
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="bg-white p-5 rounded-[2rem] border-2 border-slate-50 shadow-sm">
-                      <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Select Schedule</Label>
+                  <div className="grid grid-cols-12 gap-8 bg-white p-8 rounded-[2.5rem] border-2 border-slate-50 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-theme-blue/5 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
+                    
+                    <div className="col-span-7 space-y-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="p-2 bg-slate-50 rounded-xl">
+                          <Clock className="h-4 w-4 text-slate-400" />
+                        </div>
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Select Schedule</Label>
+                      </div>
                       <FormField control={form.control} name="date" render={({ field }) => (
                         <FormItem className="flex flex-col">
                           <Calendar
@@ -216,36 +230,41 @@ export function BookingCard({ form, state, actions, patientInputRef }: BookingCa
                             onSelect={(date) => date && field.onChange(date)}
                             disabled={isDateDisabled}
                             modifiers={{ available: { dayOfWeek: availableDaysOfWeek }, leave: leaveDates }}
-                            className="p-0"
+                            className="p-0 scale-105 origin-top-left"
                           />
                           <FormMessage />
                         </FormItem>
                       )} />
                     </div>
 
-                    <div className="bg-white p-5 rounded-[2rem] border-2 border-slate-50 shadow-sm">
-                      <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Available Slots</Label>
+                    <div className="col-span-5 border-l border-slate-50 pl-8 space-y-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="p-2 bg-emerald-50 rounded-xl">
+                          <Info className="h-4 w-4 text-emerald-500" />
+                        </div>
+                        <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Next Available</Label>
+                      </div>
+
                       {isSlotsLoading ? (
-                        <div className="py-8 flex flex-col items-center justify-center">
-                          <Loader2 className="h-6 w-6 text-blue-500 animate-spin mb-2" />
-                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest text-center px-4">Synchronizing with Doctor's Schedule...</p>
+                        <div className="h-64 flex flex-col items-center justify-center">
+                          <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
+                          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest text-center px-4">Synchronizing...</p>
                         </div>
                       ) : sessionSlots.length > 0 ? (
-                        <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-6 animate-in fade-in duration-500">
                           {sessionSlots.map((session, sIdx) => (
-                            <div key={sIdx} className="space-y-2">
-                              <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">{session.title}</p>
-                              <div className={cn(
-                                "grid gap-2",
-                                layoutMode === 'registration' ? "grid-cols-3" : "grid-cols-2"
-                              )}>
+                            <div key={sIdx} className="space-y-3">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                                {session.title}
+                              </p>
+                              <div className="grid grid-cols-1">
                                 {session.slots.map((slot: any, tIdx: number) => {
                                   const isSelected = form.watch('time') === slot.time;
                                   return (
                                     <button
                                       key={tIdx}
                                       type="button"
-                                      disabled={slot.status !== 'available'}
                                       onClick={() => {
                                         form.setValue('time', slot.time);
                                         form.setValue('slotIndex', slot.slotIndex);
@@ -253,15 +272,20 @@ export function BookingCard({ form, state, actions, patientInputRef }: BookingCa
                                         form.clearErrors('time');
                                       }}
                                       className={cn(
-                                        "h-9 rounded-xl font-black text-[10px] uppercase transition-all flex items-center justify-center border-2",
-                                        isSelected 
-                                          ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200" 
-                                          : slot.status === 'available'
-                                            ? "bg-white border-slate-100 text-slate-600 hover:border-blue-200 hover:text-blue-600"
-                                            : "bg-slate-50 border-transparent text-slate-200 cursor-not-allowed"
+                                        "h-20 rounded-3xl font-black text-sm uppercase transition-all flex flex-col items-center justify-center border-2 gap-1 group/btn relative overflow-hidden",
+                                        form.watch('time') === slot.time
+                                          ? "bg-slate-900 border-slate-900 text-white shadow-xl scale-[1.02]" 
+                                          : "bg-slate-50/50 border-slate-100 text-slate-700 hover:border-slate-300 hover:bg-white"
                                       )}
                                     >
-                                      {slot.time}
+                                      <span className="text-lg">{slot.time}</span>
+                                      <span className={cn(
+                                        "text-[9px] font-bold uppercase tracking-[0.2em]",
+                                        form.watch('time') === slot.time ? "text-slate-400" : "text-slate-400"
+                                      )}>Reporting Time</span>
+                                      {form.watch('time') === slot.time && (
+                                        <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -270,10 +294,12 @@ export function BookingCard({ form, state, actions, patientInputRef }: BookingCa
                           ))}
                         </div>
                       ) : (
-                        <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
-                          <Clock className="h-6 w-6 text-slate-200 mx-auto mb-2" />
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            {isAdvanceCapacityReached ? "Capacity Reached" : "Select a valid date"}
+                        <div className="h-64 flex flex-col items-center justify-center bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-100">
+                          <AlertTriangle className="h-8 w-8 text-slate-200 mb-4" />
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center px-6 leading-relaxed">
+                            {isAdvanceCapacityReached 
+                              ? "Session Fully Booked\nSelect another date" 
+                              : "No active sessions\nfound for this date"}
                           </p>
                         </div>
                       )}

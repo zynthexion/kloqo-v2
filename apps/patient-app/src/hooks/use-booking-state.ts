@@ -1,21 +1,20 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { addDays, format, isSameDay, startOfDay, addMinutes, isBefore } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { apiRequest } from '@/lib/api-client';
 import { useLanguage } from '@/contexts/language-context';
 import { useToast } from '@/hooks/use-toast';
 import { getDoctorFromCache, saveDoctorToCache } from '@/lib/doctor-cache';
 import { useDebouncedTime } from '@/hooks/use-debounced-time';
-import { useBookingCapacity } from '@/hooks/use-booking-capacity';
 import { formatMonthYear } from '@/lib/date-utils';
-import { parseAppointmentDateTime } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Doctor, Appointment } from '@kloqo/shared';
+import type { Doctor } from '@kloqo/shared';
 import type { CarouselApi } from "@/components/ui/carousel";
 import { useSSE } from '@/hooks/use-sse';
 import { getClinicNow, parseClinicDate, getClinicISOString } from '@kloqo/shared-core';
+
 
 /**
  * useBookingState
@@ -57,9 +56,10 @@ export function useBookingState() {
     const isInitialFetch = useRef(true);
 
     // 4. Slots & Availability
-    const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
-    const [allBookedSlots, setAllBookedSlots] = useState<number[]>([]);
-    const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
+    // selectedSlot stores the full backend DecoratedSlot object so slotIndex
+    // and sessionIndex are available for the booking POST without extra lookups.
+    const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
+    const [backendSlots, setBackendSlots] = useState<any[]>([]);
     const [slotsLoading, setSlotsLoading] = useState(true);
     const currentTime = useDebouncedTime(120000);
 
@@ -80,20 +80,6 @@ export function useBookingState() {
         }
     }, [preselectedDate, preselectedSlot, language]);
 
-    const {
-        isAdvanceCapacityReached,
-
-        sessionSlots,
-        remainingCapacity
-    } = useBookingCapacity({
-        doctor,
-        selectedDate,
-        allAppointments,
-        allBookedSlots,
-        currentTime,
-        t,
-        language
-    });
 
     // 5. Fetch Doctor Details
     useEffect(() => {
@@ -160,7 +146,10 @@ export function useBookingState() {
         return () => controller.abort();
     }, [doctorId, language]); // Only depends on primitives that trigger meaningful state changes
 
-    // 6. Fetch Slot Availability
+    // 6. Fetch Slot Availability from Backend (canonical source of truth)
+    // The backend applies a 30-minute buffer and decorates slots for patient consumption.
+    // Breaks are hidden (shown as 'booked') and the 85/15 walk-in reserve is enforced.
+    // State is declared in section 4 above.
     const fetchSlots = useCallback(async () => {
         const effectiveClinicId = clinicId || clinicIdFromParams;
         const effectiveDoctorId = doctor?.id || doctorId;
@@ -168,13 +157,14 @@ export function useBookingState() {
 
         setSlotsLoading(true);
         try {
-            const dateStr = format(selectedDate, 'd MMMM yyyy');
-            const res = await apiRequest(`/appointments/public?clinicId=${effectiveClinicId}&doctorId=${effectiveDoctorId}&date=${encodeURIComponent(dateStr)}`);
-            const apps: Appointment[] = res?.appointments || [];
-            setAllAppointments(apps);
-            setAllBookedSlots(apps.filter(a => !a.tokenNumber?.startsWith('W') && ['Pending', 'Confirmed', 'Completed'].includes(a.status)).map(a => parseAppointmentDateTime(a.date, a.time).getTime()));
+            const dateStr = format(selectedDate, 'yyyy-MM-dd');
+            const data = await apiRequest<any[]>(
+              `/appointments/public/available-slots?doctorId=${effectiveDoctorId}&clinicId=${effectiveClinicId}&date=${encodeURIComponent(dateStr)}`
+            );
+            setBackendSlots(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Slot fetch error:', err);
+            setBackendSlots([]);
         } finally {
             setSlotsLoading(false);
         }
@@ -183,6 +173,10 @@ export function useBookingState() {
     useEffect(() => {
         fetchSlots();
     }, [fetchSlots]);
+
+    // Derived from backend slots — no client-side capacity math needed
+    const isAdvanceCapacityReached = backendSlots.length > 0 && !backendSlots.some((s: any) => s.status === 'available');
+
 
     // SSE: Real-time updates instead of 30s polling
     useSSE({
@@ -203,15 +197,12 @@ export function useBookingState() {
         setCurrentMonth(formatMonthYear(date, language));
     };
 
-    const handleSlotSelect = (slot: Date) => {
-        const now = currentTime;
-        if (isSameDay(selectedDate, now)) {
-            if (isBefore(slot, addMinutes(now, 30))) {
-                toast({ variant: "destructive", title: "Invalid Slot", description: "Slots must be at least 30 mins from now." });
-                return;
-            }
-        }
-        setSelectedSlot(prev => prev?.getTime() === slot.getTime() ? null : slot);
+    const handleSlotSelect = (slot: any) => {
+        // Buffer enforcement is already done by the backend (30-min patient buffer).
+        // Toggle by slotIndex so the full slot object (with slotIndex/sessionIndex) is persisted.
+        setSelectedSlot((prev: any) =>
+            prev?.slotIndex === slot.slotIndex ? null : slot
+        );
     };
 
     const handleProceed = () => {
@@ -220,7 +211,11 @@ export function useBookingState() {
 
         const params = new URLSearchParams();
         params.set('doctorId', doctor.id);
-        params.set('slot', selectedSlot.toISOString());
+        // Pass the ISO time for display on the details page
+        params.set('slot', new Date(selectedSlot.time).toISOString());
+        // Pass slot metadata so the booking POST has exact indices without a re-lookup
+        params.set('slotIndex', String(selectedSlot.slotIndex));
+        params.set('sessionIndex', String(selectedSlot.sessionIndex));
 
         if (isEditMode && appointmentId && patientIdFromParams && clinicIdFromParams) {
             params.set('edit', 'true');
@@ -253,7 +248,7 @@ export function useBookingState() {
         doctor, loading,
         selectedDate, dates, currentMonth, handleDateSelect,
         selectedSlot, handleSlotSelect, slotsLoading,
-        sessionSlots, isAdvanceCapacityReached,
+        backendSlots, isAdvanceCapacityReached,
         handleProceed,
         doctorId, isPhoneBooking, patientIdFromParams, clinicIdFromParams,
         dateCarouselApi, setDateCarouselApi,

@@ -41,7 +41,7 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
       setBreaks(breakPeriodsRecord[dateStr] || []);
 
       // Fetch slots for adding new breaks
-      const slotDateStr = format(selectedDate, 'd MMMM yyyy'); // API expects this format
+      const slotDateStr = format(selectedDate, 'yyyy-MM-dd'); // API prefers ISO format
       const slots = await apiRequest<any[]>(
         `/appointments/available-slots?doctorId=${doctor.id}&clinicId=${clinicId}&date=${encodeURIComponent(slotDateStr)}`
       );

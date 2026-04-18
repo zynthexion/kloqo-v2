@@ -120,8 +120,7 @@ function BookAppointmentPageContent() {
       setLoading(true);
       setSelectedSlot(null);
       try {
-      try {
-        const dateStr = format(selectedDate, 'd MMMM yyyy');
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const data = await apiRequest<any[]>(
           `/appointments/available-slots?doctorId=${doctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
         );
@@ -138,12 +137,6 @@ function BookAppointmentPageContent() {
       } finally {
         setLoading(false);
       }
-      } catch (error) {
-        console.error("Error fetching slots:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not load availability.' });
-      } finally {
-        setLoading(false);
-      }
     };
     fetchSlots();
   }, [doctorId, clinicId, selectedDate, toast]);
@@ -151,7 +144,6 @@ function BookAppointmentPageContent() {
   const handleBook = async () => {
     if (!selectedSlot || !patientId || !clinicId || !doctorId) return;
     setBooking(true);
-    try {
     try {
       await apiRequest('/appointments/book', {
         method: 'POST',
@@ -170,11 +162,6 @@ function BookAppointmentPageContent() {
 
       toast({ title: 'Success', description: 'Appointment booked successfully.' });
       router.push('/appointments');
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
-    } finally {
-      setBooking(false);
-    }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
@@ -272,140 +259,82 @@ function BookAppointmentPageContent() {
               ) : (
                 <div className="space-y-8 pb-32">
                   {(() => {
-                    const sessions: Record<number, typeof slots> = {};
-                    slots.forEach(slot => {
-                      if (!sessions[slot.sessionIndex]) sessions[slot.sessionIndex] = [];
-                      sessions[slot.sessionIndex].push(slot);
-                    });
+                    const firstAvailableSlot = slots.find(slot => slot.status === 'available' && slot.isAvailable);
+                    
+                    if (!firstAvailableSlot) return null;
 
-                    return Object.entries(sessions).map(([sessionIdx, sessionSlots]) => {
-                      const idx = parseInt(sessionIdx);
-                      
-                      // Calculate Reporting Time Range for Session Header
-                      // We use the first slot of the session as startBasis, and the last slot as endBasis
-                      const firstSlot = sessionSlots[0];
-                      const lastSlot = sessionSlots[sessionSlots.length - 1];
-                      const startBasis = new Date(firstSlot.time);
-                      const endBasis = new Date(lastSlot.time);
-                      
-                      const arriveByStart = subMinutes(startBasis, 15);
-                      const arriveByEnd = subMinutes(endBasis, 15);
+                    const activeSessionIndex = firstAvailableSlot.sessionIndex;
+                    const sessionSlots = slots.filter(s => s.sessionIndex === activeSessionIndex);
+                    
+                    // Calculate Reporting Time Range for Session Header
+                    const firstSlot = sessionSlots[0];
+                    const lastSlot = sessionSlots[sessionSlots.length - 1];
+                    const startBasis = new Date(firstSlot.time);
+                    const endBasis = new Date(lastSlot.time);
+                    
+                    const arriveByStart = subMinutes(startBasis, 15);
+                    const arriveByEnd = subMinutes(endBasis, 15);
 
-                      // Find breaks for this session
-                      const sessionDateStr = format(selectedDate, 'd MMMM yyyy');
-                      const doctorBreaks = doctor?.breakPeriods?.[sessionDateStr] || [];
-                      const sessionBreaks = doctorBreaks.filter((b: any) => b.sessionIndex === idx);
+                    // Find breaks for this session
+                    const sessionDateStr = format(selectedDate, 'd MMMM yyyy');
+                    const doctorBreaks = doctor?.breakPeriods?.[sessionDateStr] || [];
+                    const sessionBreaks = doctorBreaks.filter((b: any) => b.sessionIndex === activeSessionIndex);
 
-                      let foundFirstAvailable = false;
-                      const visibleSlots = sessionSlots.filter(slot => {
-                        if (slot.status === 'available') {
-                          if (!foundFirstAvailable) {
-                            foundFirstAvailable = true;
-                            return true;
-                          }
-                          return false;
-                        }
-                        return true;
-                      });
+                    const isSelected = selectedSlot?.time === firstAvailableSlot.time;
+                    const slotTime = new Date(firstAvailableSlot.time);
+                    const displayTime = subMinutes(slotTime, 15); // Show reporting time
 
-                      const isCapacityFull = !sessionSlots.some(s => s.status === 'available');
-
-                      if (visibleSlots.length === 0 && !isCapacityFull) return null;
-
-                      return (
-                        <div key={sessionIdx} className="space-y-4">
-                          <div className="flex flex-col gap-1 px-2">
-                            <div className="flex items-center gap-3">
-                              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                                Session {idx + 1} 
-                                <span className="ml-2 text-slate-300">
-                                  ({format(arriveByStart, 'hh:mm a')} - {format(arriveByEnd, 'hh:mm a')})
-                                </span>
-                              </h3>
-                              <div className="flex-1 h-[1px] bg-slate-100" />
-                              {isCapacityFull && (
-                                <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1">
-                                  <AlertCircle className="h-3 w-3" />
-                                  Capacity Full
-                                </span>
-                              )}
-                            </div>
-                            {sessionBreaks.length > 0 && (
-                              <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">
-                                [Break: {sessionBreaks.map((b: any) => `${b.startTimeFormatted} - ${b.endTimeFormatted}`).join(', ')}]
-                              </p>
-                            )}
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-1 px-2">
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                              Next Available <span className="text-blue-500">(Session {activeSessionIndex + 1})</span>
+                              <span className="ml-2 text-slate-300">
+                                ({format(arriveByStart, 'hh:mm a')} - {format(arriveByEnd, 'hh:mm a')})
+                              </span>
+                            </h3>
+                            <div className="flex-1 h-[1px] bg-slate-100" />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            {visibleSlots.map((slot, idx) => {
-                              const isBooked = slot.status !== 'available';
-                              const isSelected = selectedSlot?.time === slot.time;
-                              const slotTime = new Date(slot.time);
-                              const displayTime = slot.status === 'available' ? subMinutes(slotTime, 15) : slotTime;
-
-                              return (
-                                <button
-                                  key={idx}
-                                  disabled={isBooked}
-                                  onClick={() => setSelectedSlot(slot)}
-                                  className={cn(
-                                    "relative p-5 rounded-[2rem] border-2 transition-all text-left overflow-hidden group",
-                                    isBooked 
-                                      ? "bg-slate-50 border-slate-50 grayscale opacity-40 cursor-not-allowed" 
-                                      : isSelected
-                                        ? "bg-theme-blue border-theme-blue text-white shadow-2xl shadow-theme-blue/30 scale-105 z-10"
-                                        : "bg-white border-slate-50 hover:border-theme-blue/30 shadow-sm"
-                                  )}
-                                >
-                                  <div className="flex justify-between items-start mb-3">
-                                    <div className={cn(
-                                      "p-2 rounded-xl transition-colors",
-                                      isSelected ? "bg-white/20" : "bg-slate-50 group-hover:bg-theme-blue/5"
-                                    )}>
-                                      <Clock className={cn("h-4 w-4", isSelected ? "text-white" : "text-slate-400 group-hover:text-theme-blue")} />
-                                    </div>
-                                    {isSelected && <CheckCircle2 className="h-6 w-6 text-white animate-in zoom-in-50" />}
-                                  </div>
-                                  
-                                  <p className="text-2xl font-black leading-none tracking-tight mb-1">
-                                    {slot.status === 'booked' && slot.tokenNumber ? (
-                                      <span className="text-theme-blue">{slot.tokenNumber}</span>
-                                    ) : (
-                                      <>
-                                        {format(displayTime, 'hh:mm')}
-                                        <span className="text-xs ml-1 opacity-70 uppercase">{format(displayTime, 'a')}</span>
-                                      </>
-                                    )}
-                                  </p>
-                                  
-                                  <p className={cn(
-                                    "text-[10px] font-black uppercase tracking-widest",
-                                    isSelected ? "text-blue-100" : "text-slate-400"
-                                  )}>
-                                    {slot.status === 'booked' ? 'Booked' : 
-                                     slot.status === 'reserved' ? 'Reserved' :
-                                     slot.status === 'leave' ? 'On Leave' : 
-                                     slot.status === 'past' ? 'Past' : 'Available'}
-                                  </p>
-                                  
-                                  {slot.status === 'available' && (
-                                    <div className={cn(
-                                      "mt-4 pt-3 border-t",
-                                      isSelected ? "border-white/10" : "border-slate-50"
-                                    )}>
-                                      <p className={cn(
-                                        "text-[9px] font-black uppercase tracking-widest leading-none",
-                                        isSelected ? "text-white/50" : "text-slate-300"
-                                      )}>Reporting</p>
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          {sessionBreaks.length > 0 && (
+                            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">
+                              [Break: {sessionBreaks.map((b: any) => `${b.startTimeFormatted} - ${b.endTimeFormatted}`).join(', ')}]
+                            </p>
+                          )}
                         </div>
-                      );
-                    });
+                        <div className="grid grid-cols-2 gap-4">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSlot(firstAvailableSlot)}
+                            className={cn(
+                              "relative p-5 rounded-[2rem] border-2 transition-all text-left overflow-hidden group bg-theme-blue border-theme-blue text-white shadow-2xl shadow-theme-blue/30 scale-105 z-10"
+                            )}
+                          >
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="p-2 rounded-xl transition-colors bg-white/20">
+                                <Clock className="h-4 w-4 text-white" />
+                              </div>
+                              <CheckCircle2 className="h-6 w-6 text-white animate-in zoom-in-50" />
+                            </div>
+                            
+                            <p className="text-2xl font-black leading-none tracking-tight mb-1">
+                              {format(displayTime, 'hh:mm')}
+                              <span className="text-xs ml-1 opacity-70 uppercase">{format(displayTime, 'a')}</span>
+                            </p>
+                            
+                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">
+                              Available
+                            </p>
+                            
+                            <div className="mt-4 pt-3 border-t border-white/10">
+                              <p className="text-[9px] font-black uppercase tracking-widest leading-none text-white/50">
+                                Reporting
+                              </p>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    );
                   })()}
                 </div>
               )}

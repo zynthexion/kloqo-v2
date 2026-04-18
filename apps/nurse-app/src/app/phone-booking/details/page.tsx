@@ -30,15 +30,8 @@ const formSchema = z.object({
   age: z.coerce.number({ required_error: "Age is required.", invalid_type_error: "Age must be a number." })
     .min(0, { message: "Age must be a positive number." })
     .max(120, { message: "Age must be less than 120." }),
-  phone: z.string()
-    .optional()
-    .refine((val) => {
-      if (!val || val.length === 0) return true;
-      const cleaned = val.replace(/\D/g, '');
-      return cleaned.length === 10;
-    }, {
-      message: "Phone number must be exactly 10 digits."
-    }),
+  phone: z.string().optional().refine(val => !val || val.replace(/\D/g, '').length === 10, "Invalid 10-digit number"),
+  communicationPhone: z.string().optional().refine(val => !val || val.replace(/\D/g, '').length === 10, "Invalid communication phone"),
   place: z.string().min(2, { message: "Location is required." }),
   sex: z.enum(["Male", "Female", "Other"], { required_error: "Please select a gender." }),
 });
@@ -46,7 +39,8 @@ const formSchema = z.object({
 type FormValues = {
   patientName: string;
   age: number;
-  phone?: string;
+  phone: string;
+  communicationPhone?: string;
   place: string;
   sex: "Male" | "Female" | "Other";
 };
@@ -104,7 +98,7 @@ function Content() {
       try {
         const today = new Date();
         for (let i = 0; i < 7; i++) {
-          const dateStr = format(addDays(today, i), 'd MMMM yyyy');
+          const dateStr = format(addDays(today, i), 'yyyy-MM-dd');
           const slots = await apiRequest<any[]>(
             `/appointments/available-slots?doctorId=${doctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
           );
@@ -137,17 +131,18 @@ function Content() {
     setRelatives([]);
 
     try {
-      const patients = await apiRequest<any[]>(
-        `/patients/search?phone=${encodeURIComponent(phone)}&clinicId=${clinicId}`
+      const { patient, relatedProfiles } = await apiRequest<{ patient: any, relatedProfiles: any[] }>(
+        `/patients/profile?phone=${encodeURIComponent(phone)}&clinicId=${clinicId}`
       );
-      setSearchedPatients(patients);
-      if (patients.length === 0) {
+      
+      const allMatches = patient ? [patient, ...relatedProfiles] : relatedProfiles;
+      setSearchedPatients(allMatches);
+      setPrimaryPatient(patient);
+      setRelatives(relatedProfiles);
+
+      if (allMatches.length === 0) {
         setShowForm(true);
         form.setValue('phone', phone);
-      } else {
-        // If we found patients, the first one is likely the primary
-        // In a real scenario, we'd check who is the primary
-        setPrimaryPatient(patients[0]);
       }
     } catch (error) {
       console.error("Error searching patient:", error);
@@ -172,16 +167,11 @@ function Content() {
       patientName: patient.name || '',
       age: patient.age !== undefined ? Number(patient.age) : undefined,
       place: patient.place || '',
-      sex: (['Male', 'Female', 'Other'].includes(patient.sex) ? patient.sex : undefined) as any,
-      phone: patient.phone.replace('+91', ''),
+      sex: (['Male', 'Female', 'Other'].includes(patient.sex) ? patient.sex : "Male") as any,
+      phone: (patient.phone || "").replace('+91', ''),
+      communicationPhone: (patient.communicationPhone || "").replace('+91', ''),
     });
     setShowForm(true);
-    
-    // Fetch relatives if primary patient is selected
-    if (patient.relatedPatientIds && patient.relatedPatientIds.length > 0) {
-       // Re-use search with specific IDs or a dedicated relatives endpoint
-       // Adding placeholder for now
-    }
   };
 
   const handleRelativeAdded = (newRelative: any) => {
@@ -201,7 +191,8 @@ function Content() {
           place: values.place,
           id: selectedPatient?.id,
           clinicId,
-          phone: values.phone ? `+91${values.phone.replace(/\D/g, '')}` : ''
+          phone: values.phone ? `+91${values.phone.replace(/\D/g, '')}` : '',
+          communicationPhone: values.communicationPhone ? `+91${values.communicationPhone.replace(/\D/g, '')}` : ''
         })
       });
 
@@ -342,24 +333,29 @@ function Content() {
                         )}
                         style={{ animationDelay: `${idx * 50}ms` }}
                       >
-                        <Avatar className="h-12 w-12 border-2 border-white shadow-sm ring-1 ring-slate-100">
-                          <AvatarFallback className="bg-gradient-to-br from-theme-blue to-blue-600 text-white font-black text-lg">
+                        <Avatar className="h-14 w-14 border-2 border-white shadow-md ring-1 ring-slate-100">
+                          <AvatarFallback className="bg-gradient-to-br from-theme-blue to-blue-600 text-white font-black text-xl">
                             {p.name?.charAt(0) || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-base font-black text-slate-900">{p.name || 'Unknown Patient'}</p>
-                            {selectedPatient?.id === p.id && <div className="p-1 bg-theme-blue rounded-full"><Clock className="h-2 w-2 text-white" /></div>}
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-lg font-black text-slate-900 leading-none">{p.name || 'Unknown'}</p>
+                            <span className="text-[10px] font-black bg-theme-blue/10 text-theme-blue px-2 py-0.5 rounded-full uppercase">Account</span>
                           </div>
                           <p className="text-[11px] text-slate-500 font-bold tracking-tight uppercase flex items-center gap-2">
-                            <span className="px-1.5 py-0.5 bg-slate-100 rounded-md">{p.sex || 'N/A'}</span>
+                            <span className="px-1.5 py-0.5 bg-slate-100 rounded-md text-slate-700">{p.sex || 'N/A'}</span>
                             <span className="w-1 h-1 rounded-full bg-slate-300" />
                             <span>{p.age || '?'} Years</span>
                             <span className="w-1 h-1 rounded-full bg-slate-300" />
                             <span>{p.place || 'No location'}</span>
                           </p>
                         </div>
+                        {selectedPatient?.id === p.id && (
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-theme-blue p-1.5 rounded-full shadow-lg shadow-theme-blue/20">
+                            <Clock className="h-3 w-3 text-white" />
+                          </div>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -389,24 +385,27 @@ function Content() {
                         )}
                         style={{ animationDelay: `${idx * 50}ms` }}
                       >
-                        <Avatar className="h-12 w-12 border-2 border-white shadow-sm ring-1 ring-slate-100">
-                          <AvatarFallback className="bg-gradient-to-br from-theme-blue to-blue-600 text-white font-black text-lg">
+                        <Avatar className="h-12 w-12 border-2 border-white shadow-sm ring-1 ring-slate-100 opacity-80">
+                          <AvatarFallback className="bg-slate-100 text-slate-400 font-black text-lg">
                             {p.name?.charAt(0) || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <p className="text-base font-black text-slate-900">{p.name || 'Unknown Patient'}</p>
-                            {selectedPatient?.id === p.id && <div className="p-1 bg-theme-blue rounded-full"><Clock className="h-2 w-2 text-white" /></div>}
+                            <p className="text-base font-black text-slate-900">{p.name || 'Unknown'}</p>
+                            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-tighter">Family</span>
                           </div>
                           <p className="text-[11px] text-slate-500 font-bold tracking-tight uppercase flex items-center gap-2">
                             <span className="px-1.5 py-0.5 bg-slate-100 rounded-md">{p.sex || 'N/A'}</span>
                             <span className="w-1 h-1 rounded-full bg-slate-300" />
                             <span>{p.age || '?'} Years</span>
-                            <span className="w-1 h-1 rounded-full bg-slate-300" />
-                            <span>{p.place || 'No location'}</span>
                           </p>
                         </div>
+                        {selectedPatient?.id === p.id && (
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-theme-blue p-1 rounded-full">
+                            <Clock className="h-2 w-2 text-white" />
+                          </div>
+                        )}
                       </button>
                     ))}
                     
@@ -471,31 +470,71 @@ function Content() {
                 className="space-y-4 pb-10 animate-in fade-in slide-in-from-bottom-4"
               >
                 <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">
-                      {selectedPatient ? 'Patient Details' : 'Registration Info'}
-                    </h2>
-                    <span className="text-[10px] font-black bg-theme-blue/10 text-theme-blue px-2 py-1 rounded-full uppercase">
-                      Required
-                    </span>
-                  </div>
+                  {(!primaryPatient || selectedPatient) && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none">
+                          {selectedPatient ? 'Edit Selected Profile' : 'Register New Patient'}
+                        </h2>
+                        <span className="text-[10px] font-black bg-theme-blue/10 text-theme-blue px-2 py-1 rounded-full uppercase tracking-tight">
+                          Verify Details
+                        </span>
+                      </div>
 
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="patientName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                          <FormControl>
-                            <Input placeholder="Patient's full name" {...field} className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold" />
-                          </FormControl>
-                          <FormMessage className="text-[10px]" />
-                        </FormItem>
-                      )}
-                    />
+                      <div className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name="patientName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                              <FormControl>
+                                <Input placeholder="Patient's full name" {...field} className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold" />
+                              </FormControl>
+                              <FormMessage className="text-[10px]" />
+                            </FormItem>
+                          )}
+                        />
 
-                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4 border-y border-slate-50 py-4 my-2">
+                          <FormField
+                            control={form.control}
+                            name="phone"
+                            render={({ field }) => (
+                            <FormItem>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                                  Account Phone <span className="text-slate-300 normal-case font-normal">(optional for relatives)</span>
+                                </label>
+                                <FormControl>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">+91</span>
+                                    <Input placeholder="Blank ok for relatives" {...field} className="h-12 pl-10 rounded-xl bg-slate-50 border-slate-100 font-bold" />
+                                  </div>
+                                </FormControl>
+                                <FormMessage className="text-[10px]" />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="communicationPhone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp No.</label>
+                                <FormControl>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">+91</span>
+                                    <Input placeholder="Same as primary" {...field} className="h-12 pl-10 rounded-xl bg-slate-50 border-slate-100 font-bold" />
+                                  </div>
+                                </FormControl>
+                                <FormMessage className="text-[10px]" />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="age"
@@ -548,7 +587,9 @@ function Content() {
                       )}
                     />
                   </div>
-                </div>
+                </>
+              )}
+            </div>
 
                 <Button
                   type="submit"

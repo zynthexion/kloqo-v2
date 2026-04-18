@@ -102,7 +102,7 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
     setStage('SELECT');
     setPreviewResult(null);
     try {
-      const dateStr = format(leaveDate, 'd MMMM yyyy');
+      const dateStr = format(leaveDate, 'yyyy-MM-dd');
       const data = await apiRequest<any[]>(
         `/appointments/available-slots?doctorId=${doctor.id}&clinicId=${doctor.clinicId}&date=${encodeURIComponent(dateStr)}`
       );

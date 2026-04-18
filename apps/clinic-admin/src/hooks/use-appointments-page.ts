@@ -15,27 +15,29 @@ import {
   startOfDay, 
   addDays,
   addMinutes,
+  subMinutes,
   parse,
   isSameDay
 } from 'date-fns';
 import { 
   getClinicNow,
   getClinicISOString,
-  isSlotBlockedByLeave
+  isSlotBlockedByLeave,
+  isDoctorAdvanceCapacityReachedOnDate,
+  computeQueues
 } from '@kloqo/shared-core';
 import { apiRequest } from '@/lib/api-client';
 import type { Appointment, Patient } from '@kloqo/shared';
 import { DateRange } from "react-day-picker";
 import { useAppointmentSSE } from './appointments/useAppointmentSSE';
-import { useAppointmentMutations } from './appointments/useAppointmentMutations';
-import { useAppointmentQueue } from './appointments/useAppointmentQueue';
-import { isDoctorAdvanceCapacityReachedOnDate } from './appointments/appointments-utils';
+import { useAppointmentMutations, useAppointmentQueue } from '@kloqo/shared';
 
 const formSchema = z.object({
   id: z.string().optional(),
   patientName: z.string().min(3).regex(/^[a-zA-Z\s]+$/),
   sex: z.enum(["Male", "Female", "Other"]),
-  phone: z.string().refine(val => val.replace(/\D/g, '').length === 10),
+  phone: z.string().optional().refine(val => !val || val.replace(/\D/g, '').length === 10, "Invalid 10-digit number"),
+  communicationPhone: z.string().optional().refine(val => !val || val.replace(/\D/g, '').length === 10, "Invalid communication phone"),
   age: z.coerce.number().min(1).max(120),
   doctorId: z.string().min(1, "Doctor is required"),
   department: z.string().min(1),
@@ -99,16 +101,19 @@ export function useAppointmentsPage() {
     doctors: sse.doctors, 
     clinicId: currentUser?.clinicId || "", 
     drawerSearchTerm, 
-    selectedDrawerDoctor 
+    selectedDrawerDoctor,
+    // Add the injection for queue algorithms
+    computeQueues: (appointments, doctorName, doctorId, clinicId, dateStr, delay) => 
+      computeQueues(appointments, doctorName, doctorId, clinicId, dateStr, delay)
   });
 
   const mutations = useAppointmentMutations({ 
     updateStatus: sse.updateStatus, 
     bookAppointment: sse.bookAppointment, 
     deleteAppointment: sse.deleteAppointment, 
-    sendBookingLink: sse.sendBookingLink, 
-    toast 
+    sendBookingLink: sse.sendBookingLink,
   });
+
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(formSchema),
@@ -192,19 +197,25 @@ export function useAppointmentsPage() {
           
           const response = await apiRequest<any[]>(url);
           
-          // Group by session for the existing UI structure
-          const sessions = Array.from(new Set(response.map(s => s.sessionIndex))).sort((a, b) => a - b);
-          const grouped = sessions.map(idx => ({
-            title: `Session ${idx + 1}`,
-            slots: response.filter(s => s.sessionIndex === idx).map(s => ({
-              time: format(new Date(s.time), 'hh:mm a'),
-              status: s.status,
-              tokenNumber: s.tokenNumber,
-              slotIndex: s.slotIndex,
-              sessionIndex: s.sessionIndex
-            }))
-          }));
-          setSessionSlots(grouped);
+          // ENFORCE STRICT SINGLE SLOT POLICY:
+          // Find the absolute FIRST available slot for the entire day.
+          // Discard all other future sessions to maximize booking density.
+          const firstAvailable = response.find(s => s.status === 'available' && s.isAvailable);
+          
+          if (firstAvailable) {
+            setSessionSlots([{
+              title: `Session ${firstAvailable.sessionIndex + 1}`,
+              slots: [{
+                time: format(subMinutes(new Date(firstAvailable.time), 15), 'hh:mm a'),
+                status: firstAvailable.status,
+                tokenNumber: firstAvailable.tokenNumber,
+                slotIndex: firstAvailable.slotIndex,
+                sessionIndex: firstAvailable.sessionIndex
+              }]
+            }]);
+          } else {
+            setSessionSlots([]);
+          }
         } catch (error) {
           console.error('[Slots] Fetch failed:', error);
           toast({
@@ -229,7 +240,14 @@ export function useAppointmentsPage() {
   }, []);
 
   const resetForm = useCallback(() => {
-    form.reset({ patientName: "", phone: "", doctorId: sse.doctors[0]?.id || "", department: sse.doctors[0]?.department || "", bookedVia: "Advanced Booking" });
+    form.reset({ 
+      patientName: "", 
+      phone: "", 
+      communicationPhone: "",
+      doctorId: sse.doctors[0]?.id || "", 
+      department: sse.doctors[0]?.department || "", 
+      bookedVia: "Advanced Booking" 
+    });
     setPatientSearchTerm("");
     setSelectedPatient(null);
     setPrimaryPatient(null);
@@ -254,7 +272,8 @@ export function useAppointmentsPage() {
     setPrimaryPatient(p);
     setHasSelectedOption(true);
     form.setValue('patientName', p.name);
-    form.setValue('phone', (p.communicationPhone || p.phone || "").replace('+91', ''));
+    form.setValue('phone', (p.phone || "").replace('+91', ''));
+    form.setValue('communicationPhone', (p.communicationPhone || "").replace('+91', ''));
     form.setValue('age', p.age || 0);
     form.setValue('sex', (p.sex ? p.sex.charAt(0).toUpperCase() + p.sex.slice(1).toLowerCase() : "Male") as any);
     form.setValue('place', p.place || "");
@@ -267,8 +286,13 @@ export function useAppointmentsPage() {
   // 1. Patient Search Effect (Debounced)
   // ─────────────────────────────────────────────────────────────
   useEffect(() => {
+    // If we are currently editing an appointment, don't trigger search
+    if (editingAppointment) return;
+
     if (patientSearchTerm.length < 3) {
       setPatientSearchResults([]);
+      setRelatives([]);
+      setPrimaryPatient(null);
       return;
     }
 
@@ -276,24 +300,30 @@ export function useAppointmentsPage() {
       setIsSearchingPatients(true);
       try {
         // Special Case: 10-digit exact lookup for profile & relatives
-        // ✅ CONTRACT FIX: Backend returns { patient, relatedProfiles }, not { primary, relatives }
         if (patientSearchTerm.length === 10) {
           const profile = await sse.getPatientProfile(patientSearchTerm);
-          const primaryPatientData = (profile as any).patient || (profile as any).primary;
+          const primaryData = (profile as any).patient || (profile as any).primary;
           const relativesData = (profile as any).relatedProfiles || (profile as any).relatives || [];
-          if (primaryPatientData) {
-            handlePatientSelect(primaryPatientData);
-            setRelatives(relativesData);
+          
+          setPrimaryPatient(primaryData || null);
+          setRelatives(relativesData);
+          
+          if (primaryData) {
+            // Populate results with BOTH primary and relatives for the UI cards
+            setPatientSearchResults([primaryData, ...relativesData]);
+            
             toast({
-              title: "Patient & Relatives Loaded",
-              description: `Found ${primaryPatientData.name}${relativesData.length > 0 ? ` and ${relativesData.length} family member(s)` : ''}.`
+              title: "Member Found",
+              description: `Showing ${primaryData.name}${relativesData.length > 0 ? ` and ${relativesData.length} family member(s)` : ''}.`
             });
-            setIsSearchingPatients(false);
-            return;
+          } else {
+            setPatientSearchResults([]);
           }
+          setIsSearchingPatients(false);
+          return;
         }
 
-        // Default Case: Generic search for popover
+        // Default Case: Generic search for popover/list
         const results = await sse.searchPatients(patientSearchTerm);
         setPatientSearchResults(results);
       } catch (error) {
@@ -304,7 +334,7 @@ export function useAppointmentsPage() {
     }, 400); // 400ms debounce
 
     return () => clearTimeout(timer);
-  }, [patientSearchTerm, sse.getPatientProfile, sse.searchPatients, handlePatientSelect, toast]);
+  }, [patientSearchTerm, sse.getPatientProfile, sse.searchPatients, toast, editingAppointment]);
 
   const state = {
     ...sse, ...queue, ...mutations,

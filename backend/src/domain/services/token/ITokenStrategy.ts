@@ -37,7 +37,7 @@ export interface ITokenStrategy {
    * - Advanced: generates and returns A001/A002 token immediately.
    * - Classic: returns null (token assigned on arrival, not at booking).
    */
-  generateBookingToken(params: BookingTokenParams): Promise<TokenResult | null>;
+  generateBookingToken(params: BookingTokenParams, transaction?: any): Promise<TokenResult | null>;
 
   /**
    * Called when patient's status changes to 'Confirmed' (patient arrives).

@@ -11,6 +11,7 @@ import AddToHomeScreenPrompt from "@/components/AddToHomeScreenPrompt";
 import { DailyReminderHandler } from "@/components/clinic/DailyReminderHandler";
 import { NurseDashboardProvider } from "@/contexts/NurseDashboardContext";
 import { AppGuard } from "@/components/layout/AppGuard";
+import { KloqoIntegrationProvider } from "@/contexts/KloqoIntegrationProvider";
 
 export default function RootLayout({
   children,
@@ -49,14 +50,16 @@ export default function RootLayout({
             <AuthProvider>
               <ActiveIdentityProvider>
                 <NurseDashboardProvider>
-                  <GlobalErrorHandler />
-                  <WakeLockHandler />
-                  <DailyReminderHandler />
-                  <AppGuard>
-                    {children}
-                  </AppGuard>
-                  <AddToHomeScreenPrompt />
-                  <Toaster />
+                  <KloqoIntegrationProvider>
+                    <GlobalErrorHandler />
+                    <WakeLockHandler />
+                    <DailyReminderHandler />
+                    <AppGuard>
+                      {children}
+                    </AppGuard>
+                    <AddToHomeScreenPrompt />
+                    <Toaster />
+                  </KloqoIntegrationProvider>
                 </NurseDashboardProvider>
               </ActiveIdentityProvider>
             </AuthProvider>

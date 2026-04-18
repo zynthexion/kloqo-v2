@@ -1,5 +1,14 @@
 import { KloqoRole } from './constants/roles';
 
+// ─── Kloqo IoC Layer ─────────────────────────────────────────────────────────
+export { KloqoProvider, useKloqo } from './context/KloqoContext';
+export type { KloqoIntegrator } from './context/KloqoContext';
+
+// ─── Shared Appointment Hooks ─────────────────────────────────────────────────
+export { useAppointmentMutations } from './hooks/appointments/useAppointmentMutations';
+export { useAppointmentQueue } from './hooks/appointments/useAppointmentQueue';
+
+
 export interface PaginationParams {
   page: number;
   limit: number;

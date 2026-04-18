@@ -22,7 +22,7 @@ export class ClassicTokenStrategy implements ITokenStrategy {
    * Classic mode: no token at booking. Return null.
    * The classicTokenNumber only exists once the patient physically arrives.
    */
-  async generateBookingToken(_params: BookingTokenParams): Promise<null> {
+  async generateBookingToken(_params: BookingTokenParams, _transaction?: any): Promise<null> {
     return null;
   }
 

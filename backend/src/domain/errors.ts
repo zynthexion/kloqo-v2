@@ -29,3 +29,15 @@ export class ForbiddenError extends DomainError {
     super(message);
   }
 }
+
+export class SlotAlreadyBookedError extends DomainError {
+  constructor() {
+    super('This slot was just taken by another user. Please refresh and try again.');
+  }
+}
+
+export class DuplicateBookingError extends DomainError {
+  constructor(message: string = 'Patient already has an active appointment in this session.') {
+    super(message);
+  }
+}

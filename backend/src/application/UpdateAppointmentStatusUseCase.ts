@@ -125,6 +125,14 @@ export class UpdateAppointmentStatusUseCase {
           reason: 'clinic adjustment'
         });
       }
+
+      // ── Release the Atomic Lock ─────────────────────────────────────────────
+      if (appointment.slotIndex !== undefined && appointment.sessionIndex !== undefined) {
+        const lockId = `${appointment.doctorId}_${appointment.date}_s${appointment.sessionIndex}_slot${appointment.slotIndex}`;
+        await this.appointmentRepo.releaseSlotLock(lockId).catch(err => {
+          console.warn(`[UpdateStatus] Failed to release lock ${lockId} for ${appointmentId}:`, err.message);
+        });
+      }
     }
 
     await this.appointmentRepo.update(appointmentId, appointment);

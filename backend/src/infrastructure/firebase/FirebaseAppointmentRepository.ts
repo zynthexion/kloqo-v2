@@ -284,4 +284,40 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   }
+
+  // ── Transaction & Locking Implementations ───────────────────────────────
+
+  async runTransaction<T>(action: (transaction: IDBTransaction) => Promise<T>): Promise<T> {
+    return db.runTransaction(async (t) => {
+      return action(t);
+    });
+  }
+
+  async createSlotLock(
+    lockId: string, 
+    data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number }, 
+    transaction: IDBTransaction
+  ): Promise<void> {
+    const docRef = db.collection('slot-locks').doc(lockId);
+    
+    // Convert to Firestore Transaction cast
+    const t = transaction as admin.firestore.Transaction;
+    
+    // .create() fails atomically at the DB level if the document already exists
+    t.create(docRef, {
+      ...data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+  async releaseSlotLock(lockId: string, transaction?: IDBTransaction): Promise<void> {
+    const docRef = db.collection('slot-locks').doc(lockId);
+    
+    if (transaction) {
+      const t = transaction as admin.firestore.Transaction;
+      t.delete(docRef);
+    } else {
+      await docRef.delete();
+    }
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import { Building2 } from 'lucide-react';
 import { useHomeState } from '@/hooks/use-home-state';
 import { HomeHeader } from '@/components/home/HomeHeader';
@@ -12,12 +12,12 @@ import { SplashScreen } from '@/components/splash-screen';
 import { Suspense } from 'react';
 
 // Lazy-loaded components for better performance
-const BottomNav = dynamic(() => import('@/components/bottom-nav').then(mod => mod.BottomNav), {
+const BottomNav = nextDynamic(() => import('@/components/bottom-nav').then(mod => mod.BottomNav), {
     ssr: false,
     loading: () => <div className="h-16 w-full bg-background" />
 });
 
-const QrScannerOverlay = dynamic(() => import('@/components/qr-scanner-overlay').then(mod => mod.QrScannerOverlay), {
+const QrScannerOverlay = nextDynamic(() => import('@/components/qr-scanner-overlay').then(mod => mod.QrScannerOverlay), {
     ssr: false,
     loading: () => null
 });
@@ -152,4 +152,4 @@ export default function Home() {
     );
 }
 
-export const dynamicForce = 'force-dynamic';
+export const dynamic = 'force-dynamic';

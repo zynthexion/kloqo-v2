@@ -41,7 +41,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
     try {
       if (!isAutoRefresh) setLoading(true);
 
-      const date = format(new Date(), 'd MMMM yyyy');
+      const date = format(new Date(), 'yyyy-MM-dd');
       let dashData = await apiRequest<NurseDashboardData>(
         `/appointments/dashboard?clinicId=${clinicId}&date=${date}`
       );
