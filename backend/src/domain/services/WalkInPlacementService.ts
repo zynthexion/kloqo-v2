@@ -102,7 +102,23 @@ export class WalkInPlacementService {
   ): DailySlot | null {
     const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Skipped', 'Completed']);
 
-    // Sort existing walk-ins and A-tokens for interval math
+    // PHASE A: Smart Bubble (The Zipper Bubble Gap Filling)
+    // Scan for any vacant gaps inside the existing schedule window (60-min lookahead).
+    // This allows Walk-ins to jump into gaps left by A-Token cancellations instantly.
+    const oneHourFromNow = addMinutes(now, 60);
+    const bubbleGap = sessionSlots.find(slot =>
+      !occupiedSlotIndices.has(slot.index) &&
+      !isAfter(slot.time, oneHourFromNow) &&
+      isAfter(slot.time, now)
+    );
+
+    if (bubbleGap) {
+      console.log(`[WalkInPlacement] CLASSIC PHASE A: Bubbling walk-in into zipper gap at slot ${bubbleGap.index}`);
+      return bubbleGap;
+    }
+
+    // PHASE B: Linear 1:N Interval Placement
+    // Find the next rhythmic spot if no gaps are found.
     const activeAppts = appointments
       .filter(a => ACTIVE_STATUSES.has(a.status) && typeof a.slotIndex === 'number')
       .sort((a, b) => a.slotIndex! - b.slotIndex!);
@@ -123,16 +139,13 @@ export class WalkInPlacementService {
         const nthAToken = aTokensAfterLastWalkIn[walkInSpacing - 1];
         minTargetIndex = nthAToken.slotIndex!;
       } else {
-        // Not enough A-Tokens for spacing; place after the last active slot
         const lastActiveIndex = activeAppts[activeAppts.length - 1]?.slotIndex ?? -1;
         minTargetIndex = Math.max(lastWalkInIndex, lastActiveIndex);
       }
     } else {
-      // No spacing configured: place sequentially after last walk-in
       minTargetIndex = lastWalkInIndex;
     }
 
-    // Find the first available slot after the calculated minimum target
     const targetSlot = sessionSlots.find(slot =>
       slot.index > minTargetIndex &&
       !occupiedSlotIndices.has(slot.index) &&
@@ -140,7 +153,7 @@ export class WalkInPlacementService {
     );
 
     if (targetSlot) {
-      console.log(`[WalkInPlacement] CLASSIC: Placing walk-in at slot ${targetSlot.index} (after ${walkInSpacing} A-token spacing)`);
+      console.log(`[WalkInPlacement] CLASSIC PHASE B: Placing walk-in at slot ${targetSlot.index} (Zipper N=${walkInSpacing})`);
       return targetSlot;
     }
 
