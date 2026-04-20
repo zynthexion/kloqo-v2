@@ -1,19 +1,21 @@
 import { Appointment } from '../../../packages/shared/src/index';
-import { 
-  IAppointmentRepository, 
-  IDoctorRepository, 
+import {
+  IAppointmentRepository,
+  IDoctorRepository,
   IClinicRepository,
   IDBTransaction
 } from '../domain/repositories';
 import { ManagePatientUseCase } from './ManagePatientUseCase';
-import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
 import { format } from 'date-fns';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
-import { computeWalkInSchedule, SchedulerAdvance, SchedulerWalkInCandidate } from '../domain/services/SlotScheduler';
+import { WalkInPlacementService } from '../domain/services/WalkInPlacementService';
+import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { sseService } from '../domain/services/SSEService';
 import { db } from '../infrastructure/firebase/config';
 import * as admin from 'firebase-admin';
+import { getClinicNow, getClinicDateString } from '../domain/services/DateUtils';
+import { parse } from 'date-fns';
 
 export interface CreateWalkInAppointmentDTO {
   clinicId: string;
@@ -27,9 +29,8 @@ export interface CreateWalkInAppointmentDTO {
   phoneDisabled?: boolean;
   patientId?: string;
   date: string; // d MMMM yyyy
+  isForceBooked?: boolean; // Nurse-only: bypass capacity cap
 }
-
-import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 
 export class CreateWalkInAppointmentUseCase {
   constructor(
@@ -41,19 +42,33 @@ export class CreateWalkInAppointmentUseCase {
   ) {}
 
   async execute(dto: CreateWalkInAppointmentDTO): Promise<Appointment> {
-    // --- FAIL FAST: Validate domain objects before any operations ---
+    // ── FAIL FAST: Validate domain objects before any operations ──────────────
     const doctor = await this.doctorRepo.findById(dto.doctorId);
     if (!doctor) throw new Error('Doctor not found');
 
     const clinic = await this.clinicRepo.findById(dto.clinicId);
     if (!clinic) throw new Error('Clinic not found');
 
+    const tokenDistribution = (clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
+    const walkInSpacing = clinic.walkInTokenAllotment || 0;
+
+    // Parse the date string to a Date object for slot generation
+    const requestedDate = dto.date.includes('-')
+      ? parse(dto.date, 'yyyy-MM-dd', new Date())
+      : parse(dto.date, 'd MMMM yyyy', new Date());
+
+    const firestoreDateStr = getClinicDateString(requestedDate);
+
+    // Pre-compute all slots (pure, no I/O) — safe to do outside the transaction
+    const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);
+
+    // ── PATIENT MANAGEMENT ────────────────────────────────────────────────────
+    // Runs its own internal transaction. Must be outside the main booking
+    // transaction to avoid Firestore read-after-write conflicts.
     const normalizedPhone = dto.phone
       ? dto.phone.replace(/\D/g, '').slice(-10)
       : '';
 
-    // --- PATIENT MANAGEMENT: Move OUTSIDE main transaction to avoid read-after-write conflicts ---
-    // ManagePatientUseCase runs its own internal transaction if needed.
     const patientId = await this.managePatientUseCase.execute({
       id: dto.patientId,
       name: dto.patientName,
@@ -65,109 +80,66 @@ export class CreateWalkInAppointmentUseCase {
       clinicId: dto.clinicId,
     });
 
+    // ── MAIN BOOKING TRANSACTION ──────────────────────────────────────────────
+    // All reads, compute, and writes are inside one atomic block.
+    // Firestore will automatically retry this on read-invalidation, meaning
+    // if two nurses click at the same moment, one will retry and seamlessly
+    // find the next available slot without a 409 error.
     const result = await db.runTransaction(async (txn) => {
-      const now = new Date();
-      // NOTE: findByDoctorAndDate is a read. It must happen before any writes below.
-      const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.date);
-      const slots = SlotCalculator.generateSlots(doctor, now);
-      
-      // ── Delegate session discovery to BookingSessionEngine (canonical) ─────
+      const now = getClinicNow();
+
+      // 1. READ PATH (inside transaction — acquires Firestore read locks)
+      const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
+        dto.doctorId,
+        firestoreDateStr
+      );
+
+      // 2. ACTIVE SESSION DISCOVERY
       const activeSessionIndex = BookingSessionEngine.findActiveSession(
-        doctor, slots, allAppointments, now, clinic.tokenDistribution || 'advanced'
+        doctor,
+        allSlots,
+        allAppointments,
+        now,
+        tokenDistribution
       );
 
       if (activeSessionIndex === null) {
-        throw new Error('No active session found for walk-in booking.');
+        throw new Error('No active session found. Walk-in booking is not available at this time.');
       }
 
-      // --- TOKEN GENERATION: MUST happen before other writes (contains a READ) ---
-      const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
-        dto.clinicId,
-        dto.doctorId,
-        doctor.name,
-        dto.date,
-        'W',
-        activeSessionIndex,
-        clinic.tokenDistribution,
-        txn as unknown as IDBTransaction
+      const sessionSlots = allSlots.filter(s => s.sessionIndex === activeSessionIndex);
+      const sessionAppointments = allAppointments.filter(a => a.sessionIndex === activeSessionIndex);
+
+      // 3. COMPUTE PATH (inside transaction — uses the locked read data)
+      const targetSlot = WalkInPlacementService.findOptimalWalkInSlot(
+        sessionSlots,
+        sessionAppointments,
+        now,
+        tokenDistribution,
+        walkInSpacing
       );
 
-      // --- ZIPPER SCHEDULING ---
-      const sessionSlots = slots.filter(s => s.sessionIndex === activeSessionIndex);
-
-      const advanceApps: SchedulerAdvance[] = allAppointments
-        .filter(a => a.bookedVia !== 'Walk-in' && a.status !== 'Cancelled')
-        .map(a => ({ id: `__shiftable_${a.id}`, slotIndex: a.slotIndex! }));
-
-      const existingWalkIns: SchedulerWalkInCandidate[] = allAppointments
-        .filter(a => a.bookedVia === 'Walk-in' && a.status !== 'Cancelled')
-        .map(a => ({
-          id: a.id,
-          numericToken: a.numericToken!,
-          createdAt: a.createdAt,
-          currentSlotIndex: a.slotIndex
-        }));
-
-      const newWalkInCandidate: SchedulerWalkInCandidate = {
-        id: '__new_walk_in__',
-        numericToken,
-        createdAt: new Date()
-      };
-
-      const { assignments } = computeWalkInSchedule({
-        slots: sessionSlots,
-        now,
-        walkInTokenAllotment: clinic.walkInTokenAllotment || 0,
-        advanceAppointments: advanceApps,
-        walkInCandidates: [...existingWalkIns, newWalkInCandidate]
-      });
-
-      const newAssignment = assignments.find(a => a.id === '__new_walk_in__');
-      if (!newAssignment) throw new Error('Could not schedule walk-in.');
-
-      // Apply queue shifts atomically
-      for (const assignment of assignments) {
-        if (assignment.id.startsWith('__shiftable_')) {
-          const originalId = assignment.id.replace('__shiftable_', '');
-          await this.appointmentRepo.update(originalId, {
-            slotIndex: assignment.slotIndex,
-            time: format(assignment.slotTime, 'HH:mm'),
-            updatedAt: new Date()
-          }, txn as unknown as IDBTransaction);
+      if (!targetSlot) {
+        // If Force Booked by a nurse, assign to the very next empty slot beyond the session
+        if (dto.isForceBooked) {
+          console.warn('[WalkIn] Force-book: all buffer slots full. Appending beyond session end.');
+          const occupiedIndices = new Set(
+            sessionAppointments
+              .filter(a => typeof a.slotIndex === 'number')
+              .map(a => a.slotIndex!)
+          );
+          const fallback = sessionSlots.find(s => !occupiedIndices.has(s.index));
+          if (!fallback) throw new Error('No walk-in slots available even with force-book.');
+          // Reuse fallback as targetSlot by re-assigning (TypeScript scoping)
+          return this._bookSlot(fallback, sessionSlots.length, txn, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
         }
+        throw new Error('No walk-in slots available. All buffer slots for this session are occupied.');
       }
 
-      // --- CREATE APPOINTMENT ---
-      const isClassic = clinic.tokenDistribution === 'classic';
-
-      const appointment: Appointment = {
-        id: `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        patientId,
-        patientName: dto.patientName,
-        doctorId: dto.doctorId,
-        doctorName: doctor.name,
-        clinicId: dto.clinicId,
-        date: dto.date,
-        time: format(newAssignment.slotTime, 'HH:mm'),
-        status: 'Confirmed',
-        tokenNumber,
-        classicTokenNumber: isClassic ? tokenNumber : undefined,
-        numericToken,
-        bookedVia: 'Walk-in',
-        slotIndex: newAssignment.slotIndex,
-        sessionIndex: activeSessionIndex,
-        arriveByTime: format(newAssignment.slotTime, 'HH:mm'),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      await this.appointmentRepo.save(appointment, txn as unknown as IDBTransaction);
-
-      return appointment;
+      return this._bookSlot(targetSlot, sessionSlots.length, txn, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
     });
 
-    // ── SSE: Inform nurse dashboard of new walk-in instantly ──────────────────
-    // This runs AFTER the transaction commits successfully.
+    // ── SSE: Push real-time update to nurse dashboard ─────────────────────────
     sseService.emit('walk_in_created', dto.clinicId, {
       appointmentId: result.id,
       patientName: result.patientName,
@@ -180,5 +152,72 @@ export class CreateWalkInAppointmentUseCase {
     });
 
     return result;
+  }
+
+  /**
+   * Locks the slot and saves the new W-Token appointment.
+   * Extracted to avoid code duplication between normal and force-booked paths.
+   */
+  private async _bookSlot(
+    targetSlot: import('../domain/services/SlotCalculator').DailySlot,
+    totalSessionSlots: number,
+    txn: admin.firestore.Transaction,
+    dto: CreateWalkInAppointmentDTO,
+    doctor: any,
+    clinic: any,
+    patientId: string,
+    activeSessionIndex: number,
+    firestoreDateStr: string,
+    now: Date,
+    tokenDistribution: 'classic' | 'advanced'
+  ): Promise<Appointment> {
+    const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
+      dto.clinicId,
+      dto.doctorId,
+      doctor.name,
+      firestoreDateStr,
+      'W',
+      activeSessionIndex,
+      tokenDistribution,
+      txn as unknown as IDBTransaction,
+      totalSessionSlots // ← Dynamic Base-100 offset
+    );
+
+    // Create the slot lock to prevent concurrent double-booking
+    const lockId = `${dto.doctorId}_${firestoreDateStr}_s${activeSessionIndex}_slot${targetSlot.index}`;
+    await this.appointmentRepo.createSlotLock(lockId, {
+      appointmentId: `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      doctorId: dto.doctorId,
+      date: firestoreDateStr,
+      sessionIndex: activeSessionIndex,
+      slotIndex: targetSlot.index
+    }, txn as unknown as IDBTransaction);
+
+    const isClassic = tokenDistribution === 'classic';
+    const appointmentId = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    const appointment: Appointment = {
+      id: appointmentId,
+      patientId,
+      patientName: dto.patientName,
+      doctorId: dto.doctorId,
+      doctorName: doctor.name,
+      clinicId: dto.clinicId,
+      date: firestoreDateStr,
+      time: format(targetSlot.time, 'HH:mm'),
+      status: 'Confirmed',
+      tokenNumber,
+      classicTokenNumber: isClassic ? tokenNumber : undefined,
+      numericToken,
+      bookedVia: 'Walk-in',
+      slotIndex: targetSlot.index,
+      sessionIndex: activeSessionIndex,
+      arriveByTime: format(targetSlot.time, 'HH:mm'),
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await this.appointmentRepo.save(appointment, txn as unknown as IDBTransaction);
+    return appointment;
   }
 }

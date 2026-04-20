@@ -11,6 +11,7 @@ import { Appointment, Patient, User } from '../../../packages/shared/src/index';
 import { format, subMinutes, parse } from 'date-fns';
 import { parseClinicTime, parseClinicDate, getClinicDateString } from '../domain/services/DateUtils';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
+import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
 
 export interface BookAdvancedAppointmentRequest {
@@ -109,18 +110,30 @@ export class BookAdvancedAppointmentUseCase {
 
     try {
       const appointment = await this.appointmentRepo.runTransaction(async (transaction) => {
-        // 0. Duplicate Check: same person in same session is a duplicate booking.
-        // We check active appointments (non-cancelled) for this patient on this date/session.
+        // 0. Duplicate Check
         const existingAppts = await this.appointmentRepo.findByDoctorAndDate(doctorId, firestoreDateStr);
-        const isDuplicate = existingAppts.some(a => 
-          a.patientId === finalPatientId && 
-          a.sessionIndex === sessionIndex && 
+        const isDuplicate = existingAppts.some(a =>
+          a.patientId === finalPatientId &&
+          a.sessionIndex === sessionIndex &&
           a.status !== 'Cancelled'
         );
-        
+
         if (isDuplicate) {
           console.warn(`[BookAdvancedAppointmentUseCase] Duplicate booking blocked for patient ${finalPatientId} in session ${sessionIndex}`);
           throw new DuplicateBookingError();
+        }
+
+        // 0b. Buffer Slot Guard (Advanced Distribution Only)
+        // Reject the booking if the requested slotIndex falls in the last 15% of the session,
+        // which is reserved exclusively for walk-in patients.
+        if (clinic.tokenDistribution === 'advanced') {
+          const allSlots = SlotCalculator.generateSlots(doctor, date);
+          const now = parseClinicTime(slotTime, date); // use slot time as 'now' proxy
+          const reservedSlotIndices = BookingSessionEngine.calculateReservedSlots(allSlots, parseClinicTime('00:00', date));
+          if (reservedSlotIndices.has(slotIndex)) {
+            console.warn(`[BookAdvancedAppointmentUseCase] Slot ${slotIndex} is reserved for walk-ins. Blocking advance booking.`);
+            throw new SlotAlreadyBookedError();
+          }
         }
 
         // 1. Generate Token safely within the same transaction to prevent gaps on rejection
