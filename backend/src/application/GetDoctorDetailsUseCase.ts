@@ -105,9 +105,11 @@ export class GetDoctorDetailsUseCase {
     }
 
     return {
-      ...doctor,
-      clinicName,
-      departmentName,
+      doctor: {
+        ...doctor,
+        clinicName,
+        departmentName,
+      }
     };
   }
 }

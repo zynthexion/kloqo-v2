@@ -24,5 +24,8 @@ export async function apiRequest<T>(
     throw new Error(errorData.error || `API Error: ${response.statusText}`);
   }
 
-  return response.json();
+  if (response.status === 204) return null as any;
+
+  const text = await response.text();
+  return text ? JSON.parse(text) : (null as any);
 }

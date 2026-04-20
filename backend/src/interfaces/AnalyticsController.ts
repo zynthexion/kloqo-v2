@@ -5,6 +5,7 @@ import { GetErrorLogsUseCase } from '../application/GetErrorLogsUseCase';
 import { GetClinicDashboardUseCase } from '../application/GetClinicDashboardUseCase';
 import { GetProviderPerformanceUseCase } from '../application/GetProviderPerformanceUseCase';
 import { LogErrorUseCase } from '../application/LogErrorUseCase';
+import { GetInvestorMetricsUseCase } from '../application/GetInvestorMetricsUseCase';
 import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
 
 export class AnalyticsController {
@@ -14,7 +15,8 @@ export class AnalyticsController {
     private getErrorLogsUseCase: GetErrorLogsUseCase,
     private getClinicDashboardUseCase: GetClinicDashboardUseCase,
     private getProviderPerformanceUseCase: GetProviderPerformanceUseCase,
-    private logErrorUseCase: LogErrorUseCase
+    private logErrorUseCase: LogErrorUseCase,
+    private getInvestorMetricsUseCase: GetInvestorMetricsUseCase
   ) {}
 
   async getProviderPerformance(req: Request, res: Response) {
@@ -99,6 +101,15 @@ export class AnalyticsController {
       res.status(201).json({ message: 'Error logged successfully' });
     } catch (error: any) {
       console.error('Error logging failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async getInvestorMetrics(req: Request, res: Response) {
+    try {
+      const metrics = await this.getInvestorMetricsUseCase.execute();
+      res.json(metrics);
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   }

@@ -1,7 +1,8 @@
 import { db } from './config';
+import { ISubscriptionRepository } from '../../domain/repositories';
 import { Subscription } from '../../../../packages/shared/src/index';
 
-export class FirebaseSubscriptionRepository {
+export class FirebaseSubscriptionRepository implements ISubscriptionRepository {
   private collection = db.collection('subscriptions');
 
   async findByClinicId(clinicId: string): Promise<Subscription | null> {

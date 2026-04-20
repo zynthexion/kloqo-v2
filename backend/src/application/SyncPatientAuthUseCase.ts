@@ -24,12 +24,14 @@ export class SyncPatientAuthUseCase {
       isNew = true;
       // Check if there's an existing patient with this phone number
       let existingPatientId: string | null = null;
+      let existingPatientName: string | null = null;
       if (phone_number) {
         const existingPatients = await this.patientRepo.findByPhone(phone_number);
         if (existingPatients.length > 0) {
           // Identify primary or first
           const primary = existingPatients.find(p => p.isPrimary) || existingPatients[0];
           existingPatientId = primary.id;
+          existingPatientName = primary.name;
         }
       }
 
@@ -39,7 +41,7 @@ export class SyncPatientAuthUseCase {
         role: KLOQO_ROLES.PATIENT,
         roles: [KLOQO_ROLES.PATIENT],
         phone: phone_number,
-        name: name || 'Patient User',
+        name: name || existingPatientName || 'Patient User',
         patientId: existingPatientId, // link to patient profile if exists
         createdAt: new Date(),
         updatedAt: new Date(),

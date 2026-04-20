@@ -24,6 +24,23 @@ export class ClinicController {
     private generateShortCodeUseCase: GenerateShortCodeUseCase,
     private syncClinicStatusesUseCase: SyncClinicStatusesUseCase
   ) {}
+  
+  private validateClinicAccess(req: any, clinicId: string) {
+    if (!req.user) return; // Allow public access (if route permits)
+    
+    // Superadmins and Patients have access to view clinic details
+    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.PATIENT])) return;
+
+    const hasAccess = req.user.clinicId === clinicId || 
+                     (req.user.clinicIds && req.user.clinicIds.includes(clinicId));
+    
+    if (!hasAccess) {
+      console.warn(`[ClinicController] Access Denied for user ${req.user.id} to clinic ${clinicId}`);
+      const error = new Error('Access Denied: You do not have permission for this clinic.');
+      (error as any).status = 403;
+      throw error;
+    }
+  }
 
   async syncStatus(req: any, res: Response) {
     try {
@@ -66,12 +83,16 @@ export class ClinicController {
 
   async getClinic(req: Request, res: Response) {
     try {
-      const clinic = await this.getClinicByIdUseCase.execute(req.params.id);
+      const { id } = req.params;
+      this.validateClinicAccess(req, id);
+
+      const clinic = await this.getClinicByIdUseCase.execute(id);
       if (!clinic) {
         return res.status(404).json({ error: 'Clinic not found' });
       }
       res.json(clinic);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ error: error.message });
     }
   }
@@ -87,9 +108,13 @@ export class ClinicController {
 
   async updateClinic(req: Request, res: Response) {
     try {
-      await this.updateClinicUseCase.execute(req.params.id, req.body);
+      const { id } = req.params;
+      this.validateClinicAccess(req, id);
+
+      await this.updateClinicUseCase.execute(id, req.body);
       res.json({ message: 'Clinic updated successfully' });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ error: error.message });
     }
   }
@@ -127,25 +152,33 @@ export class ClinicController {
 
   async updateSettings(req: Request, res: Response) {
     try {
+      const { clinicId } = req.body;
+      if (clinicId) this.validateClinicAccess(req, clinicId);
+      
       await this.updateClinicSettingsUseCase.execute(req.body);
       res.json({ message: 'Clinic settings updated successfully' });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ error: error.message });
     }
   }
 
   async updateWhatsappConfig(req: Request, res: Response) {
     try {
+      const { clinicId } = req.body;
+      if (clinicId) this.validateClinicAccess(req, clinicId);
+
       await this.updateWhatsappConfigUseCase.execute(req.body);
       res.json({ message: 'WhatsApp config updated successfully' });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ error: error.message });
     }
   }
 
   async generateShortCode(req: any, res: Response) {
     try {
-      // Zero-Trust: Enforce session clinicId
+      // Zero-Trust: Prioritize session clinicId
       const isSuperAdmin = RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN]);
       const clinicId = (isSuperAdmin && req.body.clinicId) 
         ? req.body.clinicId 
@@ -154,9 +187,13 @@ export class ClinicController {
       if (!clinicId) {
         return res.status(400).json({ message: 'clinicId context missing' });
       }
+
+      this.validateClinicAccess(req, clinicId);
+
       const shortCode = await this.generateShortCodeUseCase.execute(clinicId);
       res.json({ shortCode });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ message: error.message });
     }
   }

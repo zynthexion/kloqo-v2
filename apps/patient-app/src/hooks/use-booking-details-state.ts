@@ -45,9 +45,10 @@ export function useBookingDetailsState() {
     
     try {
       // Consistent use of unified V2 backend path
-      const data = await apiRequest<Doctor>(`/doctors/${doctorId}`);
-      setDoctor(data);
-      saveDoctorToCache(doctorId, data);
+      const res = await apiRequest<any>(`/public-booking/doctors/${doctorId}`);
+      const doctorData = res?.doctor || res;
+      setDoctor(doctorData);
+      saveDoctorToCache(doctorId, doctorData);
     } catch (error) {
       toast({ variant: 'destructive', title: t.bookAppointment.error });
     } finally {
@@ -61,7 +62,7 @@ export function useBookingDetailsState() {
       const dateStr = format(selectedSlot, 'd MMMM yyyy');
       const timeStr = format(selectedSlot, 'hh:mm a');
       const res = await apiRequest<{ available: boolean }>(
-        `/appointments/public/check-slot?clinicId=${doctor.clinicId}&doctorId=${doctor.id}&date=${dateStr}&time=${timeStr}`
+        `/public-booking/doctors/${doctor.id}/slots/check?clinicId=${doctor.clinicId}&date=${dateStr}&time=${timeStr}`
       );
       setSlotAvailable(res.available);
     } catch (error) {

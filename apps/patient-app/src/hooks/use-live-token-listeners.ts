@@ -48,12 +48,15 @@ export function useLiveTokenListeners({
 
         const fetchClinics = async () => {
             try {
-                // Backend supports filtering by clinicIds
+                // Backend discovery endpoint has been hardened. 
+                // Context-specific clinic info should be fetched via /public-booking/clinics/:id
+                /*
                 const queryStr = clinicIds.map(id => `clinicIds[]=${id}`).join('&');
                 const data = await apiRequest(`/discovery/public?${queryStr}`);
                 if (isMounted && data.clinics) {
                     setClinics(data.clinics);
                 }
+                */
             } catch (err) {
                 console.error('[useLiveTokenListeners] Fetch clinics error:', err);
             }
@@ -72,8 +75,8 @@ export function useLiveTokenListeners({
         const appointmentDateStr = activeAppointment?.date || todayStr;
 
         try {
-            // Get status for today or the appointment date
-            const data = await apiRequest(`/discovery/clinics/${clinicId}/doctors/${doctorId}/queue?date=${appointmentDateStr}`);
+            // Get status for today or the appointment date through the hardened public booking API
+            const data = await apiRequest(`/public-booking/clinics/${clinicId}/doctors/${doctorId}/queue?date=${appointmentDateStr}`);
             
             if (data) {
                 // Map backend response to what frontend expects

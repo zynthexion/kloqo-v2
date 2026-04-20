@@ -85,7 +85,9 @@ export function useHomeState() {
     const { doctors: userDoctors, loading: doctorsLoading } = useDoctors(clinicIds);
     const { appointments: familyAppointments, loading: appointmentsLoading } = useAppointments((user as any)?.patientId);
     
-    const { data: clinicsResponse } = useSWR<any>('/discovery/public', apiRequest, { revalidateOnFocus: false, dedupingInterval: 300000 });
+    // Fetch Clinic Metadata for the patient's linked clinics
+    const clinicsUrl = clinicIds.length > 0 ? `/public-booking/clinics?ids=${clinicIds.join(',')}` : null;
+    const { data: clinicsResponse } = useSWR<any>(clinicsUrl, apiRequest, { revalidateOnFocus: false, dedupingInterval: 300000 });
     const allClinicsData: Clinic[] = useMemo(() => clinicsResponse?.clinics ?? [], [clinicsResponse]);
 
     // ⚡ HISTORY DEDUPLICATION: Extracts unique IDs from patient history to ensure visibility
@@ -97,15 +99,16 @@ export function useHomeState() {
         return Array.from(ids);
     }, [familyAppointments]);
 
-    // 6. Unified Discovery (Nearby + History Metadata)
-    const discoveryUrl = useMemo(() => {
-        const parts = [];
-        if (userLocation) parts.push(`lat=${userLocation.lat}&lng=${userLocation.lng}`);
-        if (historyDoctorIds.length > 0) parts.push(`doctorIds=${historyDoctorIds.join(',')}`);
-        
-        if (parts.length === 0) return null;
-        return `/discovery/public?${parts.join('&')}`;
-    }, [userLocation, historyDoctorIds]);
+    // 6. Discovery Hydration (History Metadata)
+    // We only fetch metadata for doctors in history that AREN'T in the current userDoctors list
+    const missingDoctorIds = useMemo(() => {
+        const currentIds = new Set(userDoctors.map(d => d.id));
+        return historyDoctorIds.filter(id => !currentIds.has(id));
+    }, [userDoctors, historyDoctorIds]);
+
+    const discoveryUrl = missingDoctorIds.length > 0 
+        ? `/doctors?doctorIds=${missingDoctorIds.join(',')}` 
+        : null;
 
     const { data: discoveryResponse, isLoading: discoveryLoading } = useSWR<any>(
         discoveryUrl,
@@ -113,27 +116,28 @@ export function useHomeState() {
         { revalidateOnFocus: false, dedupingInterval: 60000 }
     );
     
-    const discoveryDoctors: Doctor[] = useMemo(() => discoveryResponse?.doctors ?? [], [discoveryResponse]);
+    const historyDoctors: Doctor[] = useMemo(() => {
+        const data = Array.isArray(discoveryResponse) ? discoveryResponse : (discoveryResponse?.data ?? []);
+        return data;
+    }, [discoveryResponse]);
+
+    // Combined pool for My Doctors
+    const myDoctors = useMemo(() => {
+        const merged = [...userDoctors, ...historyDoctors];
+        const unique = new Map<string, Doctor>();
+        merged.forEach(d => unique.set(d.id, d));
+        return Array.from(unique.values());
+    }, [userDoctors, historyDoctors]);
 
     // 7. Caching & Derived Data
     const cachedAppointments = useCachedData<Appointment[]>((user as any)?.id ? `appointments:${(user as any).id}` : null, familyAppointments, !appointmentsLoading);
     
     const effectiveAppointments = useMemo(() => familyAppointments.length > 0 ? familyAppointments : (cachedAppointments ?? []), [familyAppointments, cachedAppointments]);
     
-    const appointmentDoctorIds = useMemo(() => new Set<string>(historyDoctorIds), [historyDoctorIds]);
-
-    const myDoctors = useMemo(() => {
-        // Hydrate history doctors from the discoveryResponse metadata
-        if (appointmentDoctorIds.size === 0) return EMPTY_ARRAY;
-        return discoveryDoctors.filter((doc: Doctor) => appointmentDoctorIds.has(doc.id));
-    }, [discoveryDoctors, appointmentDoctorIds]);
-
     const nearbyDoctors = useMemo(() => {
         if (!userLocation) return EMPTY_ARRAY;
-        // In this unified response, "nearby" doctors are already returned by the backend.
-        // But the backend also returned history ones. We filter by distance here locally for visual accuracy if needed,
-        // or just rely on the backend geofence. Let's trust backend geofence + manual secondary filter for the 50km line.
-        return discoveryDoctors.filter((d: any) => {
+        // Search in the pool of doctors the patient has access to/history with
+        return myDoctors.filter((d: any) => {
             if (!d.latitude || !d.longitude) return false;
             // Radius check (50km)
             const R = 6371;
@@ -143,7 +147,7 @@ export function useHomeState() {
             const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return dist <= 50;
         });
-    }, [discoveryDoctors, userLocation]);
+    }, [myDoctors, userLocation]);
 
     const walkInAppointment = useMemo(() => {
         const active = effectiveAppointments.filter((a: Appointment) => 

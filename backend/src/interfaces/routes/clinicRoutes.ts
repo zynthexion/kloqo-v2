@@ -9,8 +9,8 @@ const { clinicController, analyticsController, doctorController, userController,
         departmentController, appointmentController, patientController,
         prescriptionController } = container;
 
-const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;
-const clinicStaffRoles: KloqoRole[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN];
+const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN, PATIENT } = KLOQO_ROLES;
+const clinicStaffRoles: KloqoRole[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN, PATIENT];
 const adminOnlyRoles: KloqoRole[] = [CLINIC_ADMIN, SUPER_ADMIN];
 
 const staffGuard = [auth, checkRole(...clinicStaffRoles)];
@@ -57,11 +57,11 @@ router.get('/prescriptions/stats', adminGuard, (req: any, res: any) => prescript
 // ── Departments Discovery ────────────────────────────────────────────────
 router.get('/departments', (req, res) => departmentController.getAllDepartments(req, res));
  
-// ── Public clinic discovery (patient-app) ──────────────────────────────────
+// ── Public clinic discovery (Decommissioned - Now Authenticated) ──────────
 // IMPORTANT: ID routes MUST come after specific static routes
-router.get('/', (req, res) => clinicController.getAllClinics(req, res));
-router.get('/:id', (req, res) => clinicController.getClinic(req, res));
-router.get('/:id/doctors', (req, res) => {
+router.get('/', staffGuard, (req: any, res: any) => clinicController.getAllClinics(req, res));
+router.get('/:id', staffGuard, (req: any, res: any) => clinicController.getClinic(req, res));
+router.get('/:id/doctors', staffGuard, (req: any, res: any) => {
   req.query.clinicId = req.params.id;
   return doctorController.getAllDoctors(req, res);
 });

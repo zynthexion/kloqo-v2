@@ -27,8 +27,9 @@ export function useLiveDoctor({ doctorId, clinicId, fallbackDoctor }: UseLiveDoc
   const fetchDoctor = useCallback(async () => {
     if (!doctorId) return;
     try {
-      const data = await apiRequest<Doctor>(`/doctors/${doctorId}`);
-      if (data) setLiveDoctor(data);
+      const res = await apiRequest(`/public-booking/doctors/${doctorId}`);
+      const doctor = res?.doctor || res;
+      if (doctor) setLiveDoctor(doctor);
     } catch (err) {
       console.error('[useLiveDoctor] Initial fetch error:', err);
     }

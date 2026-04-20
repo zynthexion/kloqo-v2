@@ -14,19 +14,7 @@ const superadminGuard = [auth, checkRole(KLOQO_ROLES.SUPER_ADMIN)];
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 router.get('/dashboard', ...superadminGuard, checkPermission('Dashboard'), (req, res) => analyticsController.getDashboard(req, res));
-router.get('/investor-metrics', ...superadminGuard, async (req, res) => {
-  try {
-    const [mrr, activeCount, allAppts] = await Promise.all([
-      container.subscriptionRepo.sumMRR(),
-      container.subscriptionRepo.countByStatus('active'),
-      container.appointmentRepo.findCompletedByClinic('', { pharmacyStatus: 'dispensed' }).catch(() => [] as any[]),
-    ]);
-    const gmvRouted = (allAppts || []).reduce((sum: number, a: any) => sum + (a.dispensedValue || 0), 0);
-    res.json({ mrr, arr: mrr * 12, activeSubscriptions: activeCount, gmvRouted });
-  } catch {
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
+router.get('/investor-metrics', ...superadminGuard, (req, res) => analyticsController.getInvestorMetrics(req, res));
 
 // ── Clinics ────────────────────────────────────────────────────────────────
 router.post('/clinics/status', ...superadminGuard, checkPermission('Clinics'), (req, res) => clinicController.updateClinicStatus(req, res));

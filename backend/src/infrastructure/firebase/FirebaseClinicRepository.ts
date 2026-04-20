@@ -35,6 +35,37 @@ export class FirebaseClinicRepository implements IClinicRepository {
     return clinic;
   }
 
+  async findByIds(ids: string[]): Promise<Clinic[]> {
+    if (!ids || ids.length === 0) return [];
+    
+    // Chunk for Firestore limit (30)
+    const CHUNK_SIZE = 10;
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      chunks.push(ids.slice(i, i + CHUNK_SIZE));
+    }
+
+    const snapshotPromises = chunks.map(chunk => 
+      this.collection.where(admin.firestore.FieldPath.documentId(), 'in', chunk).get()
+    );
+
+    const snapshots = await Promise.all(snapshotPromises);
+    const clinics: Clinic[] = [];
+    const seenIds = new Set<string>();
+
+    snapshots.forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        const data = doc.data() as any;
+        if (data && data.isDeleted !== true && !seenIds.has(doc.id)) {
+          clinics.push({ id: doc.id, ...data } as Clinic);
+          seenIds.add(doc.id);
+        }
+      });
+    });
+
+    return clinics;
+  }
+
   async update(id: string, data: Partial<Clinic>): Promise<void> {
     await this.collection.doc(id).update({
       ...data,

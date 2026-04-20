@@ -7,11 +7,6 @@ const router = Router();
 const { auth, checkRole } = createMiddleware(container.verifySessionUseCase);
 const { appointmentController } = container;
 
-// ── Public discovery (patient-app, unauthenticated) ───────────────────────
-router.get('/public', (req, res) => appointmentController.getPublicAppointments(req, res));
-router.get('/public/check-slot', (req, res) => appointmentController.checkSlot(req, res));
-// Public slot availability for patient-app (30-min buffer, breaks hidden)
-router.get('/public/available-slots', (req: any, res: any) => appointmentController.getPublicAvailableSlots(req, res));
 
 // ── Authenticated history and booking (Authenticated) ─────────────────────
 // Restore root GET for filtered history (used by ReviewChecker)
@@ -20,18 +15,6 @@ router.post('/walk-in', auth, (req, res) => appointmentController.createWalkIn(r
 router.post('/advanced', auth, (req, res) => appointmentController.bookAdvanced(req, res));
 router.post('/book-advanced', auth, (req, res) => appointmentController.bookAdvanced(req, res));
 
-// ── Live Queue status (patient-app public) ─────────────────────────────────
-router.get('/discovery/clinics/:id/doctors/:doctorId/queue', async (req: any, res: any) => {
-  try {
-    const { id, doctorId } = req.params;
-    const { date } = req.query;
-    if (!date) return res.status(400).json({ error: 'Date is required' });
-    const status = await container.getPublicQueueStatusUseCase.execute(id, doctorId, date as string, req.user?.patientId);
-    res.json(status);
-  } catch (err: any) {
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
 
 // ── Authenticated appointment operations ───────────────────────────────────
 const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;

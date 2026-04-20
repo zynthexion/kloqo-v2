@@ -44,7 +44,7 @@ export function DoctorAvailabilityPreview({ doctor }: DoctorAvailabilityPreviewP
         try {
             const dateStr = format(date, 'yyyy-MM-dd');
             const data = await apiRequest<any[]>(
-                `/appointments/public/available-slots?doctorId=${doctor.id}&clinicId=${doctor.clinicId}&date=${encodeURIComponent(dateStr)}`
+                `/public-booking/doctors/${doctor.id}/slots?clinicId=${doctor.clinicId}&date=${encodeURIComponent(dateStr)}`
             );
             setBackendSlots(Array.isArray(data) ? data : []);
         } catch (err) {

@@ -13,7 +13,7 @@ import { UpdateDoctorAccessUseCase } from '../application/UpdateDoctorAccessUseC
 import { RevokeDoctorAccessUseCase } from '../application/RevokeDoctorAccessUseCase';
 import { GetDoctorActivitiesUseCase } from '../application/GetDoctorActivitiesUseCase';
 import { EditBreakUseCase } from '../application/EditBreakUseCase';
-import { KLOQO_ROLES, KloqoRole } from '@kloqo/shared';
+import { KLOQO_ROLES, KloqoRole, RBACUtils } from '@kloqo/shared';
 
 import { GetAvailableSlotsUseCase } from '../application/GetAvailableSlotsUseCase';
 
@@ -36,17 +36,59 @@ export class DoctorController {
     private editBreakUseCase: EditBreakUseCase
   ) {}
 
+  private validateClinicAccess(req: any, clinicId: string) {
+    if (!req.user) return; // Allow public access (if route permits)
+    
+    // Superadmins and Patients have access to view doctor/clinic details
+    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.PATIENT])) return;
+
+    const hasAccess = req.user.clinicId === clinicId || 
+                     (req.user.clinicIds && req.user.clinicIds.includes(clinicId));
+    
+    if (!hasAccess) {
+      console.warn(`[DoctorController] Access Denied for user ${req.user.id} to clinic ${clinicId}`);
+      const error = new Error('Access Denied: You do not have permission for this clinic.');
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+
   async getAllDoctors(req: Request, res: Response) {
     try {
-      const { clinicId, page, limit } = req.query;
+      const { page, limit, doctorIds } = req.query;
+      const ids = doctorIds ? (doctorIds as string).split(',') : undefined;
+
+      // 1. Bulk Detail Fetch (History Hydration)
+      if (ids && ids.length > 0) {
+        // Limit bulk fetch to prevent heavy scraping
+        if (ids.length > 30) return res.status(400).json({ error: 'Cannot fetch more than 30 doctors at once' });
+        const doctors = await this.getAllDoctorsUseCase.execute(undefined, undefined, ids);
+        return res.json(doctors);
+      }
+
+      // 2. Tabulated/Clinic Browse
+      // Prioritize session clinicId. Only SuperAdmins or Patients (cross-clinic browsing) can skip this.
+      const user = (req as any).user;
+      const isSuperAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.SUPER_ADMIN]);
+      const isPatient = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.PATIENT]);
+      
+      const clinicId = (isSuperAdmin && req.query.clinicId) 
+        ? (req.query.clinicId as string) 
+        : user?.clinicId;
+
+      if (clinicId) {
+        this.validateClinicAccess(req, clinicId);
+      }
+
       const params = page && limit ? { 
         page: parseInt(page as string), 
         limit: parseInt(limit as string) 
       } : undefined;
 
-      const doctors = await this.getAllDoctorsUseCase.execute(clinicId as string, params);
+      const doctors = await this.getAllDoctorsUseCase.execute(clinicId, params);
       res.json(doctors);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }
@@ -54,9 +96,14 @@ export class DoctorController {
   async getDoctor(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const doctor = await this.getDoctorDetailsUseCase.execute(id);
+      const { doctor } = await this.getDoctorDetailsUseCase.execute(id);
+      if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+
+      this.validateClinicAccess(req, doctor.clinicId);
+
       res.json({ doctor });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }
@@ -65,6 +112,14 @@ export class DoctorController {
     try {
       const user = req.user;
       const docData = req.body;
+
+      if (docData.clinicId) {
+        this.validateClinicAccess(req, docData.clinicId);
+      } else if (docData.id || docData.userId) {
+        // If updating existing, fetch clinic context
+        const { doctor } = await this.getDoctorDetailsUseCase.execute(docData.id || docData.userId);
+        if (doctor) this.validateClinicAccess(req, doctor.clinicId);
+      }
 
       // 🛡️ RBAC Guard: Only Admin or Self can update doctor meta-data (fees, avg time, etc)
       const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(user.role);
@@ -85,9 +140,15 @@ export class DoctorController {
     try {
       const { id } = req.params;
       const { soft } = req.query;
+
+      // Fetch doctor to check clinic context
+      const { doctor } = await this.getDoctorDetailsUseCase.execute(id);
+      if (doctor) this.validateClinicAccess(req, doctor.clinicId);
+
       await this.deleteDoctorUseCase.execute(id, soft === 'true');
       res.status(204).send();
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }
@@ -96,9 +157,17 @@ export class DoctorController {
     try {
       const { id } = req.params;
       const { status, sessionIndex } = req.body;
+      
+      // Fetch doctor first to check clinic context
+      const { doctor } = await this.getDoctorDetailsUseCase.execute(id);
+      if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+      
+      this.validateClinicAccess(req, doctor.clinicId);
+
       await this.updateDoctorStatusUseCase.execute({ doctorId: id, status, sessionIndex });
       res.status(204).send();
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }
@@ -112,6 +181,12 @@ export class DoctorController {
       if (!doctorId) {
         return res.status(400).json({ error: 'Doctor ID is required' });
       }
+
+      // Fetch doctor to check clinic context
+      const { doctor } = await this.getDoctorDetailsUseCase.execute(doctorId);
+      if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+
+      this.validateClinicAccess(req, doctor.clinicId);
 
       // 🛡️ IDOR GUARD: Doctors can only manage themselves
       if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
@@ -139,6 +214,9 @@ export class DoctorController {
     try {
       const user = req.user;
       const { doctorId, clinicId, date, sessions, action } = req.body;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
       
       // 🛡️ IDOR GUARD
       if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
@@ -167,6 +245,10 @@ export class DoctorController {
     try {
       const user = req.user;
       const { doctorId, clinicId, date, startTime, endTime, sessionIndex, reason, isDryRun = false } = req.body;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
       const result = await this.scheduleBreakUseCase.execute({
         doctorId,
         clinicId,
@@ -200,6 +282,10 @@ export class DoctorController {
       const user = req.user;
       // shouldPullForward defaults to false — must be explicitly set to true in UI
       const { doctorId, clinicId, date, breakId, shouldOpenSlots, shouldPullForward = false } = req.body;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
       const result = await this.cancelBreakUseCase.execute({
         doctorId,
         clinicId,
@@ -226,6 +312,10 @@ export class DoctorController {
     try {
       const user = req.user;
       const { doctorId, clinicId, date, breakId, startTime, endTime } = req.body;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
       await this.editBreakUseCase.execute({ 
         doctorId, 
         clinicId, 
@@ -241,6 +331,7 @@ export class DoctorController {
       });
       res.status(204).send();
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }
@@ -249,6 +340,10 @@ export class DoctorController {
     try {
       const user = req.user;
       const { doctorId, startDate, endDate, forceCancelConflicts = false } = req.body;
+
+      // Fetch doctor to check clinic context
+      const { doctor } = await this.getDoctorDetailsUseCase.execute(doctorId);
+      if (doctor) this.validateClinicAccess(req, doctor.clinicId);
 
       // 🛡️ IDOR GUARD
       if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
@@ -287,6 +382,8 @@ export class DoctorController {
         return res.status(400).json({ error: 'Clinic context is required (missing clinicId)' });
       }
 
+      this.validateClinicAccess(req, clinicId);
+
       const slots = await this.getAvailableSlotsUseCase.execute({ 
         doctorId: id, 
         clinicId, 
@@ -295,6 +392,7 @@ export class DoctorController {
       });
       res.json(slots);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       console.error(`[DoctorController] getAvailableSlots Error:`, error.message);
       res.status(400).json({ error: error.message });
     }
@@ -304,9 +402,14 @@ export class DoctorController {
     try {
       const { id } = req.params;
       const { clinicId, accessibleMenus } = req.body;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
       await this.updateDoctorAccessUseCase.execute(id, clinicId, accessibleMenus);
       res.json({ success: true });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }
@@ -315,9 +418,14 @@ export class DoctorController {
     try {
       const { id } = req.params;
       const { clinicId } = req.body;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
       await this.revokeDoctorAccessUseCase.execute(id, clinicId);
       res.json({ success: true, message: 'Doctor access revoked successfully' });
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       if (error.message === 'Doctor not found' || error.message === 'Unauthorized' || error.message === 'No user account found for this doctor' || error.message === 'Doctor does not have an email associated with an account') {
         res.status(404).json({ error: error.message });
       } else {
@@ -329,12 +437,16 @@ export class DoctorController {
   async getActivityLogs(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const clinicId = req.query.clinicId as string;
+      const clinicId = (req.query.clinicId as string) || (req as any).user?.clinicId;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
 
       const logs = await this.getDoctorActivitiesUseCase.execute(id, clinicId, limit);
       res.json(logs);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });
     }
   }

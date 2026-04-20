@@ -107,23 +107,35 @@ export class BookAdvancedAppointmentUseCase {
     // Generate Lock ID
     const lockId = `${doctorId}_${firestoreDateStr}_s${sessionIndex}_slot${slotIndex}`;
 
-    const appointment = await this.appointmentRepo.runTransaction(async (transaction) => {
-      // 0. Duplicate Check: same person in same session is a duplicate booking.
-      // We check active appointments (non-cancelled) for this patient on this date/session.
-      const existingAppts = await this.appointmentRepo.findByDoctorAndDate(doctorId, firestoreDateStr);
-      const isDuplicate = existingAppts.some(a => 
-        a.patientId === finalPatientId && 
-        a.sessionIndex === sessionIndex && 
-        a.status !== 'Cancelled'
-      );
-      
-      if (isDuplicate) {
-        console.warn(`[BookAdvancedAppointmentUseCase] Duplicate booking blocked for patient ${finalPatientId} in session ${sessionIndex}`);
-        throw new DuplicateBookingError();
-      }
+    try {
+      const appointment = await this.appointmentRepo.runTransaction(async (transaction) => {
+        // 0. Duplicate Check: same person in same session is a duplicate booking.
+        // We check active appointments (non-cancelled) for this patient on this date/session.
+        const existingAppts = await this.appointmentRepo.findByDoctorAndDate(doctorId, firestoreDateStr);
+        const isDuplicate = existingAppts.some(a => 
+          a.patientId === finalPatientId && 
+          a.sessionIndex === sessionIndex && 
+          a.status !== 'Cancelled'
+        );
+        
+        if (isDuplicate) {
+          console.warn(`[BookAdvancedAppointmentUseCase] Duplicate booking blocked for patient ${finalPatientId} in session ${sessionIndex}`);
+          throw new DuplicateBookingError();
+        }
 
-      // 1. Lock the Slot (Fails automatically if already exists)
-      try {
+        // 1. Generate Token safely within the same transaction to prevent gaps on rejection
+        // This MUST happen before createSlotLock because token generation performs a READ (get counter),
+        // and Firestore transactions require all reads before any writes.
+        const tokenResult = await tokenStrategy.generateBookingToken({
+          clinicId,
+          doctorId,
+          doctorName: doctor.name,
+          date: firestoreDateStr,
+          sessionIndex,
+        }, transaction);
+
+        // 2. Lock the Slot (Fails automatically if already exists)
+        // This is a WRITE operation.
         await this.appointmentRepo.createSlotLock(lockId, {
           appointmentId,
           doctorId,
@@ -131,55 +143,46 @@ export class BookAdvancedAppointmentUseCase {
           sessionIndex,
           slotIndex
         }, transaction);
-      } catch (error: any) {
-        // Code 6 is ALREADY_EXISTS in Firestore
-        if (error.code === 6 || error.message?.includes('ALREADY_EXISTS')) {
-          console.warn(`[BookAdvancedAppointmentUseCase] Slot lock collision for ${lockId}`);
-          throw new SlotAlreadyBookedError();
+
+        // 3. Create Appointment object
+        const appt: Appointment = {
+          id: appointmentId,
+          patientId: finalPatientId,
+          patientName: patientName!,
+          doctorId,
+          doctorName: doctor.name,
+          clinicId,
+          date: firestoreDateStr,
+          time: format(appointmentTime, 'HH:mm'),
+          arriveByTime: format(arriveByTime, 'HH:mm'),
+          slotIndex,
+          sessionIndex,
+          status: 'Pending',
+          paymentStatus: 'Unpaid',
+          bookedVia: 'Advanced Booking',
+          tokenNumber: (tokenResult?.tokenNumber ?? null) as any,
+          numericToken: tokenResult?.numericToken,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        if (source === 'phone') {
+          appt.notes = 'Booked via Phone';
         }
-        throw error;
+
+        // 4. Save Appointment within transaction
+        await this.appointmentRepo.save(appt, transaction);
+        return appt;
+      });
+
+      return appointment;
+    } catch (error: any) {
+      // Catch ALREADY_EXISTS errors from createSlotLock during transaction commit
+      if (error.code === 6 || error.message?.includes('ALREADY_EXISTS')) {
+        console.warn(`[BookAdvancedAppointmentUseCase] Slot already occupied (Lock Collision): ${lockId}`);
+        throw new SlotAlreadyBookedError();
       }
-
-      // 2. Generate Token safely within the same transaction to prevent gaps on rejection
-      const tokenResult = await tokenStrategy.generateBookingToken({
-        clinicId,
-        doctorId,
-        doctorName: doctor.name,
-        date: firestoreDateStr,
-        sessionIndex,
-      }, transaction);
-
-      // 3. Create Appointment object
-      const appt: Appointment = {
-        id: appointmentId,
-        patientId: finalPatientId,
-        patientName: patientName!,
-        doctorId,
-        doctorName: doctor.name,
-        clinicId,
-        date: firestoreDateStr,
-        time: format(appointmentTime, 'HH:mm'),
-        arriveByTime: format(arriveByTime, 'HH:mm'),
-        slotIndex,
-        sessionIndex,
-        status: 'Pending',
-        paymentStatus: 'Unpaid',
-        bookedVia: 'Advanced Booking',
-        tokenNumber: (tokenResult?.tokenNumber ?? null) as any,
-        numericToken: tokenResult?.numericToken,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      if (source === 'phone') {
-        appt.notes = 'Booked via Phone';
-      }
-
-      // 4. Save Appointment within transaction
-      await this.appointmentRepo.save(appt, transaction);
-      return appt;
-    });
-
-    return appointment;
+      throw error;
+    }
   }
 }

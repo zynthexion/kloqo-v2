@@ -14,7 +14,7 @@ interface BackendSlot {
 }
 
 interface SessionSlotListProps {
-    /** Flat array of DecoratedSlots from /appointments/public/available-slots */
+    /** Flat array of DecoratedSlots from /public-booking/doctors/:id/slots */
     backendSlots: BackendSlot[];
     selectedSlot: any | null;
     onSlotSelect: (slot: any) => void;

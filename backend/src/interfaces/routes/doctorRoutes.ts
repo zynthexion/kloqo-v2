@@ -8,13 +8,13 @@ const router = Router();
 const { auth, checkRole } = createMiddleware(container.verifySessionUseCase);
 const { doctorController } = container;
 
-const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;
-const clinicStaffRoles: KloqoRole[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN];
+const { CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN, PATIENT } = KLOQO_ROLES;
+const clinicStaffRoles: KloqoRole[] = [CLINIC_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, SUPER_ADMIN, PATIENT];
 const staffGuard = [auth, checkRole(...clinicStaffRoles)];
 
-// ── Public doctor list ─────────────────────────────────────────────────────
-router.get('/', (req: any, res: any) => doctorController.getAllDoctors(req, res));
-router.get('/:id', (req: any, res: any) => doctorController.getDoctor(req, res));
+// ── Doctor Directory ─────────────────────────────────────────────────────
+router.get('/', staffGuard, (req: any, res: any) => doctorController.getAllDoctors(req, res));
+router.get('/:id', staffGuard, (req: any, res: any) => doctorController.getDoctor(req, res));
 router.get('/:id/slots', staffGuard, (req: any, res: any) => doctorController.getAvailableSlots(req, res));
 
 // ── Authenticated doctor operations ───────────────────────────────────────

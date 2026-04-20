@@ -134,9 +134,12 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
   }
 
   async findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Appointment[]> {
-    let query: admin.firestore.Query = this.collection
-      .where('clinicId', '==', clinicId)
-      .where('status', '==', 'Completed');
+    let query: admin.firestore.Query = this.collection.where('status', '==', 'Completed');
+    
+    // Scoped search only if clinicId is provided
+    if (clinicId) {
+      query = query.where('clinicId', '==', clinicId);
+    }
 
     if (filters.doctorId) query = query.where('doctorId', '==', filters.doctorId);
     if (filters.pharmacyStatus) query = query.where('pharmacyStatus', '==', filters.pharmacyStatus);

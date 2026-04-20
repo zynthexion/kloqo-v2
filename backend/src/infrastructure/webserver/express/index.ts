@@ -28,6 +28,7 @@ import doctorRoutes from '../../../interfaces/routes/doctorRoutes';
 import patientRoutes from '../../../interfaces/routes/patientRoutes';
 import superadminRoutes from '../../../interfaces/routes/superadminRoutes';
 import miscRoutes from '../../../interfaces/routes/miscRoutes';
+import publicBookingRoutes from '../../../interfaces/routes/publicBookingRoutes';
 
 // ── Application Setup ──────────────────────────────────────────────────────
 const app = express();
@@ -96,6 +97,10 @@ app.use('/superadmin', superadminRoutes);
 
 // Misc: breaks, prescriptions, storage, payments, webhooks, SSE, FCM, logging
 app.use('/', miscRoutes);
+
+// Public Booking routes (unauthenticated)
+app.use('/public-booking', publicBookingRoutes);
+app.use('/api/public-booking', publicBookingRoutes);
 
 // ── Global Error Handler ───────────────────────────────────────────────────
 // Must be the LAST middleware registered (Express rule for 4-arg handlers).

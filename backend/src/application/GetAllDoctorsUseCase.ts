@@ -7,10 +7,12 @@ export class GetAllDoctorsUseCase {
     private userRepo: IUserRepository
   ) {}
 
-  async execute(clinicId?: string, params?: PaginationParams): Promise<PaginatedResponse<Doctor> | Doctor[]> {
+  async execute(clinicId?: string, params?: PaginationParams, doctorIds?: string[]): Promise<PaginatedResponse<Doctor> | Doctor[]> {
     let result: PaginatedResponse<Doctor> | Doctor[];
     
-    if (clinicId) {
+    if (doctorIds && doctorIds.length > 0) {
+      result = await this.doctorRepo.findByIds(doctorIds);
+    } else if (clinicId) {
       result = await this.doctorRepo.findByClinicId(clinicId, params);
     } else {
       result = await this.doctorRepo.findAll(params);

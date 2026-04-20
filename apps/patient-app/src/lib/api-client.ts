@@ -11,7 +11,12 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
   const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || errorData.message || `API Error: ${response.status}`);
+    const error = new Error(errorData.error || errorData.message || `API Error: ${response.status}`);
+    (error as any).status = response.status;
+    throw error;
   }
-  return response.json();
+
+  if (response.status === 204) return null as any;
+  const text = await response.text();
+  return text ? JSON.parse(text) : (null as any);
 }

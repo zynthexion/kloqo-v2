@@ -114,6 +114,7 @@ import { DeleteAppointmentUseCase } from '../../../application/DeleteAppointment
 import { GetWalkInEstimateUseCase } from '../../../application/GetWalkInEstimateUseCase';
 import { GetWalkInPreviewUseCase } from '../../../application/GetWalkInPreviewUseCase';
 import { ConfirmArrivalUseCase } from '../../../application/ConfirmArrivalUseCase';
+import { FilterAppointmentsByTenantUseCase } from '../../../application/FilterAppointmentsByTenantUseCase';
 import { GetPublicQueueStatusUseCase } from '../../../application/GetPublicQueueStatusUseCase';
 import { CreateWalkInAppointmentUseCase } from '../../../application/CreateWalkInAppointmentUseCase';
 import { GetPatientsByClinicUseCase } from '../../../application/GetPatientsByClinicUseCase';
@@ -129,6 +130,7 @@ import { InviteSuperAdminStaffUseCase } from '../../../application/InviteSuperAd
 import { ForcePasswordResetUseCase } from '../../../application/ForcePasswordResetUseCase';
 import { VerifySubscriptionUpgradeUseCase } from '../../../application/VerifySubscriptionUpgradeUseCase';
 import { ImpersonateClinicUseCase } from '../../../application/ImpersonateClinicUseCase';
+import { GetInvestorMetricsUseCase } from '../../../application/GetInvestorMetricsUseCase';
 
 // ── Interfaces: Controllers ────────────────────────────────────────────────
 import { AppointmentController } from '../../../interfaces/AppointmentController';
@@ -148,6 +150,7 @@ import { WebhookController } from '../../../interfaces/WebhookController';
 import { WhatsAppWebhookController } from '../../../interfaces/http/controllers/WhatsAppWebhookController';
 import { SettingsController } from '../../../interfaces/SettingsController';
 import { SuperAdminController } from '../../../interfaces/SuperAdminController';
+import { PublicBookingController } from '../../../interfaces/PublicBookingController';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 1: Repositories & Infrastructure Services
@@ -296,6 +299,7 @@ const getNotificationConfigsUseCase = new GetNotificationConfigsUseCase(notifica
 const updateNotificationConfigUseCase = new UpdateNotificationConfigUseCase(notificationRepo);
 const resetNotificationConfigsUseCase = new ResetNotificationConfigsUseCase(notificationRepo);
 const processBatchNotificationsUseCase = new ProcessBatchNotificationsUseCase(batchNotificationService);
+const getInvestorMetricsUseCase = new GetInvestorMetricsUseCase(subscriptionRepo, appointmentRepo);
 
 // Settings
 const getGlobalSettingsUseCase = new GetGlobalSettingsUseCase(globalSettingsRepo);
@@ -304,6 +308,8 @@ const updateGlobalSettingsUseCase = new UpdateGlobalSettingsUseCase(globalSettin
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 4: Controllers
 // ═══════════════════════════════════════════════════════════════════════════
+const filterAppointmentsByTenantUseCase = new FilterAppointmentsByTenantUseCase(appointmentRepo, doctorRepo);
+
 const appointmentController = new AppointmentController(
   getAllAppointmentsUseCase,
   getNurseDashboardUseCase,
@@ -316,6 +322,7 @@ const appointmentController = new AppointmentController(
   getWalkInEstimateUseCase,
   getWalkInPreviewUseCase,
   confirmArrivalUseCase,
+  filterAppointmentsByTenantUseCase,
   appointmentRepo,
   doctorRepo
 );
@@ -372,7 +379,6 @@ const patientController = new PatientController(
   getPatientsByClinicUseCase,
   getPatientHistoryUseCase,
   getPatientAppointmentsUseCase,
-  getPublicDiscoveryUseCase,
   syncPatientAuthUseCase,
   unlinkRelativeUseCase
 );
@@ -383,7 +389,8 @@ const analyticsController = new AnalyticsController(
   getErrorLogsUseCase,
   getClinicDashboardUseCase,
   getProviderPerformanceUseCase,
-  logErrorUseCase
+  logErrorUseCase,
+  getInvestorMetricsUseCase
 );
 
 const userController = new UserController(
@@ -427,6 +434,15 @@ const paymentController = new PaymentController(confirmAppointmentPaymentUseCase
 const storageController = new StorageController();
 const sseController = new SSEController();
 const superAdminController = new SuperAdminController(impersonateClinicUseCase);
+const publicBookingController = new PublicBookingController(
+  getAllDoctorsUseCase,
+  getClinicByIdUseCase,
+  getAvailableSlotsUseCase,
+  getDoctorDetailsUseCase,
+  getPublicQueueStatusUseCase,
+  appointmentRepo,
+  clinicRepo
+);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Exports — the route files import exactly what they need
@@ -450,6 +466,7 @@ export const container = {
   storageController,
   sseController,
   superAdminController,
+  publicBookingController,
 
   // Exposed for middleware factory and inline route handlers
   verifySessionUseCase,

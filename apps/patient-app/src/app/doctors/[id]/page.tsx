@@ -16,17 +16,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // Fetch doctor data helper using V2 Backend API
 async function getDoctor(id: string) {
     try {
-        const doctorRes = await fetch(`${API_URL}/doctors/${id}`, { next: { revalidate: 60 } }).then(res => res.json());
-        if (!doctorRes || doctorRes.error) return null;
+        const res = await fetch(`${API_URL}/public-booking/doctors/${id}`, { next: { revalidate: 60 } }).then(res => res.json());
+        if (!res || res.error) return null;
         
-        const doctor = doctorRes;
+        const doctor = res.doctor || res;
         
         // Fetch clinic details separately if not nested
         let clinic = null;
         if (doctor.clinicId) {
-            const clinicRes = await fetch(`${API_URL}/clinics/${doctor.clinicId}`, { next: { revalidate: 3600 } }).then(res => res.json());
+            const clinicRes = await fetch(`${API_URL}/public-booking/clinics/${doctor.clinicId}`, { next: { revalidate: 3600 } }).then(res => res.json());
             if (clinicRes && !clinicRes.error) {
-                clinic = clinicRes;
+                clinic = clinicRes.clinic || clinicRes;
             }
         }
         

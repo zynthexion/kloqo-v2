@@ -10,11 +10,11 @@ import { subMinutes, format } from 'date-fns';
 import { getClinicTimeString } from '@kloqo/shared-core';
 import { ConvenienceFeeDisplay } from '@/components/convenience-fee-display';
 
-export function DoctorInfoCard({ doctor, selectedSlot, language, departments, t }: { doctor: any; selectedSlot: Date | null; language: string; departments: any[]; t: any }) {
+export function DoctorInfoCard({ doctor, selectedSlot, language, departments, t, isPulsating }: { doctor: any; selectedSlot: Date | null; language: string; departments: any[]; t: any; isPulsating?: boolean }) {
     if (!doctor) return <Skeleton className="h-40 w-full" />;
 
     return (
-        <Card>
+        <Card className={isPulsating ? 'animate-pulse ring-2 ring-blue-500' : ''}>
             <CardContent className="p-4 space-y-4">
                 <div className="flex items-center gap-4">
                     <Avatar className="h-16 w-16">

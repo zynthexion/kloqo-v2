@@ -1,89 +1,89 @@
+'use client';
 
-import { Metadata } from 'next';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MapPin, Stethoscope, Star, CheckCircle, Search, Map } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useSWRConfig } from 'swr';
+import useSWR from 'swr';
+import { apiRequest } from '@/lib/api-client';
+import { AuthGuard } from '@/components/auth-guard';
+import { Doctor, Clinic } from '@kloqo/shared';
 
-import { Doctor } from '@kloqo/shared';
+function DoctorsDirectory() {
+    const [query, setQuery] = useState('');
+    const [sort, setSort] = useState('recommended');
+    const [dept, setDept] = useState('');
+    const [city, setCity] = useState('');
 
-export const metadata: Metadata = {
-    title: 'Top Rated Doctors and Specialists - Kloqo',
-    description: 'Browse top specialists and clinics near you. Book your care instantly with verified reviews and real-time availability.',
-};
+    const { data: doctorsData, isLoading: doctorsLoading } = useSWR<any>('/doctors', apiRequest);
+    const { data: clinicsData, isLoading: clinicsLoading } = useSWR<any>('/clinics', apiRequest);
 
-export const dynamic = 'force-dynamic';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-
-async function getDoctorsAndClinics() {
-    try {
-        const [doctorsRes, clinicsRes] = await Promise.all([
-            fetch(`${API_URL}/doctors`, { next: { revalidate: 60 } }).then(res => res.json()),
-            fetch(`${API_URL}/clinics`, { next: { revalidate: 60 } }).then(res => res.json())
-        ]);
-
-        const doctors = Array.isArray(doctorsRes) ? doctorsRes : (doctorsRes.data || []);
-        const clinicsArr = Array.isArray(clinicsRes) ? clinicsRes : (clinicsRes.data || []);
-
-        const clinics = clinicsArr.reduce((acc: any, c: any) => {
+    const doctors: Doctor[] = useMemo(() => {
+        const docs = Array.isArray(doctorsData) ? doctorsData : (doctorsData?.data || []);
+        const clinicsArr = Array.isArray(clinicsData) ? clinicsData : (clinicsData?.clinics || clinicsData?.data || []);
+        
+        const clinicsMap = clinicsArr.reduce((acc: any, c: any) => {
             acc[c.id] = c;
             return acc;
         }, {} as any);
 
-        return doctors.map((d: any) => ({
+        return docs.map((d: any) => ({
             ...d,
-            clinic: clinics[d.clinicId] || null
+            clinic: clinicsMap[d.clinicId] || null
         }));
-    } catch (error) {
-        console.error('Error fetching doctors and clinics:', error);
-        return [];
+    }, [doctorsData, clinicsData]);
+
+    const filteredDoctors = useMemo(() => {
+        let filtered = doctors.filter((doctor: any) => {
+            const searchMatches = !query || 
+                doctor.name?.toLowerCase().includes(query.toLowerCase()) ||
+                doctor.specialization?.toLowerCase().includes(query.toLowerCase()) ||
+                doctor.clinic?.name?.toLowerCase().includes(query.toLowerCase());
+
+            const deptMatches = !dept || 
+                doctor.department?.toLowerCase().includes(dept.toLowerCase()) || 
+                doctor.specialization?.toLowerCase().includes(dept.toLowerCase()) ||
+                doctor.specialty?.toLowerCase().includes(dept.toLowerCase());
+
+            const cityMatches = !city || 
+                doctor.clinic?.city?.toLowerCase().includes(city.toLowerCase()) ||
+                doctor.clinic?.address?.toLowerCase().includes(city.toLowerCase());
+
+            return searchMatches && deptMatches && cityMatches;
+        });
+
+        if (sort === 'rating') {
+            filtered.sort((a: any, b: any) => (b.rating || 0) - (a.rating || 0));
+        } else if (sort === 'fee-low') {
+            filtered.sort((a: any, b: any) => (a.consultationFee || 0) - (b.consultationFee || 0));
+        } else if (sort === 'experience') {
+            filtered.sort((a: any, b: any) => (parseInt(b.experience) || 0) - (parseInt(a.experience) || 0));
+        }
+        return filtered;
+    }, [doctors, query, dept, city, sort]);
+
+    const departments = useMemo(() => 
+        Array.from(new Set(doctors.map((d: any) => d.department || d.specialization || d.specialty).filter(Boolean))).sort()
+    , [doctors]);
+
+    const cities = useMemo(() => 
+        Array.from(new Set(doctors.map((d: any) => d.clinic?.city || d.clinic?.address?.split(',').pop()?.trim()).filter(Boolean))).sort()
+    , [doctors]);
+
+    if (doctorsLoading || clinicsLoading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Hydrating Directory...</p>
+                </div>
+            </div>
+        );
     }
-}
-
-export default async function DoctorsDirectoryPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-    const doctors = await getDoctorsAndClinics();
-    const resolvedSearchParams = await searchParams;
-
-    const query = typeof resolvedSearchParams.q === 'string' ? resolvedSearchParams.q.toLowerCase() : '';
-    const dept = typeof resolvedSearchParams.dept === 'string' ? resolvedSearchParams.dept.toLowerCase() : '';
-    const city = typeof resolvedSearchParams.city === 'string' ? resolvedSearchParams.city.toLowerCase() : '';
-    const sort = typeof resolvedSearchParams.sort === 'string' ? resolvedSearchParams.sort : 'recommended';
-
-    let filteredDoctors = doctors.filter((doctor: any) => {
-        const searchMatches = !query || 
-            doctor.name?.toLowerCase().includes(query) ||
-            doctor.specialization?.toLowerCase().includes(query) ||
-            doctor.clinic?.name?.toLowerCase().includes(query);
-
-        const deptMatches = !dept || 
-            doctor.department?.toLowerCase().includes(dept) || 
-            doctor.specialization?.toLowerCase().includes(dept);
-
-        const cityMatches = !city || 
-            doctor.clinic?.city?.toLowerCase().includes(city) ||
-            doctor.clinic?.address?.toLowerCase().includes(city);
-
-        return searchMatches && deptMatches && cityMatches;
-    });
-
-    // Handle Sorting
-    if (sort === 'rating') {
-        filteredDoctors.sort((a: any, b: any) => (b.rating || 0) - (a.rating || 0));
-    } else if (sort === 'fee-low') {
-        filteredDoctors.sort((a: any, b: any) => (a.consultationFee || 0) - (b.consultationFee || 0));
-    } else if (sort === 'experience') {
-        filteredDoctors.sort((a: any, b: any) => (parseInt(b.experience) || 0) - (parseInt(a.experience) || 0));
-    }
-
-    const departments = Array.from(new Set(doctors.map((d: Doctor) => d.department || (d as any).specialization).filter(Boolean))).sort();
-    const cities = Array.from(new Set(doctors.map((d: Doctor) => (d as any).clinic?.city || (d as any).clinic?.address?.split(',').pop()?.trim()).filter(Boolean))).sort();
 
     return (
         <div className="min-h-screen bg-slate-50 font-body">
@@ -102,19 +102,14 @@ export default async function DoctorsDirectoryPage({
                                 <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-widest leading-none">Verified Doctors In Your Area</p>
                             </div>
                         </div>
-                        <div className="flex gap-3">
-                            <Link href="/login">
-                                <Button variant="outline" className="rounded-xl font-bold uppercase text-xs tracking-widest h-10 border-slate-200">Sign In</Button>
-                            </Link>
-                        </div>
                     </div>
 
-                    <form action="/doctors" method="GET" className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3">
                         <div className="relative flex-grow">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
-                                name="q"
-                                defaultValue={query}
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Search by name, specialization, or clinic..."
                                 className="w-full h-12 pl-12 pr-4 bg-slate-50 border-none rounded-2xl text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all shadow-inner"
                             />
@@ -122,8 +117,8 @@ export default async function DoctorsDirectoryPage({
                         
                         <div className="flex gap-2">
                              <select 
-                                name="sort" 
-                                defaultValue={sort}
+                                value={sort}
+                                onChange={(e) => setSort(e.target.value)}
                                 className="h-12 px-4 bg-slate-50 border-none rounded-2xl text-xs font-black uppercase tracking-widest text-slate-600 focus:ring-2 focus:ring-primary/20 shadow-inner"
                             >
                                 <option value="recommended">Recommended</option>
@@ -131,31 +126,31 @@ export default async function DoctorsDirectoryPage({
                                 <option value="fee-low">Lowest Fee</option>
                                 <option value="experience">Experience</option>
                             </select>
-                            <Button type="submit" className="h-12 w-12 rounded-2xl p-0">
-                                <Search className="w-5 h-5" />
-                            </Button>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
 
             <main className="container mx-auto px-4 py-8 max-w-5xl flex flex-col md:flex-row gap-8">
-                {/* Side Filter Component (Server component pseudo-sidebar) */}
+                {/* Side Filter Component */}
                 <aside className="w-full md:w-64 space-y-8 flex-shrink-0">
                     <div className="space-y-4">
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Popular Specialties</h3>
                         <div className="flex flex-wrap md:flex-col gap-2">
-                            <Link href="/doctors" className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${!dept ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 hover:bg-slate-100'}`}>
+                            <button 
+                                onClick={() => setDept('')}
+                                className={`text-left px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${!dept ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+                            >
                                 All
-                            </Link>
+                            </button>
                             {departments.slice(0, 8).map((d: any) => (
-                                <Link 
+                                <button 
                                     key={d}
-                                    href={`/doctors?dept=${encodeURIComponent(d)}`}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${dept === d.toLowerCase() ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+                                    onClick={() => setDept(d)}
+                                    className={`text-left px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${dept === d ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
                                 >
                                     {d}
-                                </Link>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -164,13 +159,13 @@ export default async function DoctorsDirectoryPage({
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">City Filter</h3>
                         <div className="flex flex-wrap md:flex-col gap-2">
                             {cities.map((c: any) => (
-                                <Link 
+                                <button 
                                     key={c}
-                                    href={`/doctors?city=${encodeURIComponent(c)}`}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${city === c.toLowerCase() ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+                                    onClick={() => setCity(c)}
+                                    className={`text-left px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${city === c ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
                                 >
                                     {c}
-                                </Link>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -191,12 +186,12 @@ export default async function DoctorsDirectoryPage({
                                     <CardContent className="p-6 md:p-8 flex flex-col md:flex-row gap-6 items-start">
                                         <div className="relative flex-shrink-0 group-hover:scale-110 transition-transform duration-500">
                                             <Avatar className="h-24 w-24 md:h-32 md:w-32 rounded-[1.5rem] shadow-lg ring-4 ring-white">
-                                                <AvatarImage src={doctor.photoUrl} alt={doctor.name} className="object-cover" />
+                                                <AvatarImage src={doctor.avatar || doctor.photoUrl} alt={doctor.name} className="object-cover" />
                                                 <AvatarFallback className="text-3xl bg-slate-100 font-black text-slate-300">
                                                     {doctor.name?.[0]}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            {doctor.rating >= 4.5 && (
+                                            {(doctor.rating >= 4.5 || !doctor.rating) && (
                                                 <div className="absolute -top-3 -right-3 h-8 w-8 bg-amber-400 rounded-full flex items-center justify-center shadow-lg transform rotate-12">
                                                     <Star className="w-4 h-4 text-white fill-white" />
                                                 </div>
@@ -212,7 +207,7 @@ export default async function DoctorsDirectoryPage({
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                         <Badge variant="secondary" className="bg-slate-100 text-[10px] font-black tracking-widest uppercase text-slate-500 border-none px-2 py-0.5 rounded-lg">
-                                                            {doctor.department || doctor.specialization}
+                                                            {doctor.specialty || doctor.department || doctor.specialization}
                                                         </Badge>
                                                         {doctor.experience && (
                                                             <Badge className="bg-green-100 text-green-700 text-[10px] font-black tracking-widest uppercase border-none px-2 py-0.5 rounded-lg">
@@ -230,7 +225,7 @@ export default async function DoctorsDirectoryPage({
                                             <div className="flex flex-col space-y-2 py-3 border-y border-slate-50">
                                                 <div className="flex items-center gap-2 text-slate-500">
                                                     <Stethoscope className="w-4 h-4 text-primary" />
-                                                    <span className="text-xs font-bold">{doctor.qualification || 'Verified Specialist'}</span>
+                                                    <span className="text-xs font-bold">{doctor.qualifications || doctor.qualification || 'Verified Specialist'}</span>
                                                 </div>
                                                 <div className="flex items-start gap-2 text-slate-500">
                                                     <MapPin className="w-4 h-4 text-red-400 mt-0.5" />
@@ -265,15 +260,31 @@ export default async function DoctorsDirectoryPage({
                                 </div>
                                 <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">No Doctors Found</h3>
                                 <p className="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">Try adjusting your filters or location</p>
-                                <Link href="/doctors">
-                                    <Button variant="ghost" className="mt-8 font-black uppercase text-xs tracking-widest text-primary">Clear all filters</Button>
-                                </Link>
+                                <Button 
+                                    variant="ghost" 
+                                    className="mt-8 font-black uppercase text-xs tracking-widest text-primary"
+                                    onClick={() => {
+                                        setQuery('');
+                                        setDept('');
+                                        setCity('');
+                                    }}
+                                >
+                                    Clear all filters
+                                </Button>
                             </div>
                         )}
                     </div>
                 </div>
             </main>
         </div>
+    );
+}
+
+export default function DoctorsDirectoryPage() {
+    return (
+        <AuthGuard>
+            <DoctorsDirectory />
+        </AuthGuard>
     );
 }
 

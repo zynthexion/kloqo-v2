@@ -9,7 +9,7 @@ import { getPatientListFromCache, savePatientListToCache } from '@/lib/patient-c
 import type { Patient } from '@kloqo/shared';
 import { FormValues, createFormSchema } from './types';
 
-export function usePatientForm() {
+export function usePatientForm(clinicId?: string) {
     const { user } = useAuth();
     const { toast } = useToast();
     const { t } = useLanguage();
@@ -100,8 +100,12 @@ export function usePatientForm() {
         setIsLoading(true);
         try {
             // Call the V2 backend profile endpoint using unified apiRequest
-            const data = await apiRequest(`/patients/profile?phone=${encodeURIComponent(user.phone)}`);
-            const { primary, relatives } = data;
+            const queryParams = new URLSearchParams({ phone: user.phone });
+            if (clinicId) {
+                queryParams.append('clinicId', clinicId);
+            }
+            const data = await apiRequest(`/patients/profile?${queryParams.toString()}`);
+            const { patient: primary = null, relatedProfiles: relatives = [] } = data || {};
             savePatientListToCache(user.phone, primary, relatives);
 
             if (!primary) {
@@ -133,7 +137,7 @@ export function usePatientForm() {
         } finally {
             setIsLoading(false);
         }
-    }, [user?.phone, form, t, toast, normalizeSex]);
+    }, [user?.phone, clinicId, form, t, toast, normalizeSex]);
 
     useEffect(() => {
         if (user?.phone) {

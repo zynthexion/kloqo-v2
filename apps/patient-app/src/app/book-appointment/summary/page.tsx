@@ -19,6 +19,7 @@ function BookingSummaryContent() {
     const {
         doctor, patient, clinicData, selectedSlot, loading,
         isSubmitting, status, bookingDetails, handleConfirmBooking,
+        isPulsating,
         t, language, router, isWalkIn, user
     } = useBookingSummaryState();
 
@@ -47,6 +48,7 @@ function BookingSummaryContent() {
                     language={language} 
                     departments={departments} 
                     t={t} 
+                    isPulsating={isPulsating}
                 />
                 <PatientInfoCard 
                     patient={patient} 

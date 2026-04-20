@@ -10,6 +10,7 @@ import { SendBookingLinkUseCase } from '../application/SendBookingLinkUseCase';
 import { GetWalkInEstimateUseCase } from '../application/GetWalkInEstimateUseCase';
 import { GetWalkInPreviewUseCase } from '../application/GetWalkInPreviewUseCase';
 import { ConfirmArrivalUseCase } from '../application/ConfirmArrivalUseCase';
+import { FilterAppointmentsByTenantUseCase } from '../application/FilterAppointmentsByTenantUseCase';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
 import { IAppointmentRepository, IDoctorRepository } from '../domain/repositories';
 import { ClinicNotApprovedError, OnboardingIncompleteError, SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
@@ -28,6 +29,7 @@ export class AppointmentController {
     private getWalkInEstimateUseCase: GetWalkInEstimateUseCase,
     private getWalkInPreviewUseCase: GetWalkInPreviewUseCase,
     private confirmArrivalUseCase: ConfirmArrivalUseCase,
+    private filterAppointmentsUseCase: FilterAppointmentsByTenantUseCase,
     private appointmentRepo: IAppointmentRepository,
     private doctorRepo: IDoctorRepository
   ) {}
@@ -35,8 +37,8 @@ export class AppointmentController {
   private validateClinicAccess(req: any, clinicId: string) {
     if (!req.user) return; // Allow public access (if route permits)
     
-    // Superadmins have access to all clinics
-    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN])) return;
+    // Superadmins and Patients have access across clinics
+    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.PATIENT])) return;
 
     const hasAccess = req.user.clinicId === clinicId || 
                      (req.user.clinicIds && req.user.clinicIds.includes(clinicId));
@@ -220,29 +222,6 @@ export class AppointmentController {
     }
   }
 
-  /**
-   * Public slot endpoint — used by the patient-app (unauthenticated).
-   * Applies a 30-minute buffer and hides break labels.
-   */
-  async getPublicAvailableSlots(req: any, res: Response) {
-    try {
-      const { doctorId, clinicId, date } = req.query;
-
-      if (!doctorId || !clinicId || !date) {
-        return res.status(400).json({ message: 'doctorId, clinicId and date are required' });
-      }
-      // Patient route: 30-minute booking buffer; breaks show as 'booked'
-      const slots = await this.getAvailableSlotsUseCase.execute({
-        doctorId: doctorId as string,
-        clinicId: clinicId as string,
-        date: date as string,
-        source: 'patient'
-      });
-      res.json(slots);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  }
 
   /**
    * Generic /book endpoint — delegates to bookAdvancedAppointmentUseCase.
@@ -352,93 +331,18 @@ export class AppointmentController {
     }
   }
 
-  async getPublicAppointments(req: Request, res: Response) {
-    try {
-      const { doctorId, date, clinicId } = req.query;
-      if (!clinicId || !doctorId || !date) {
-        return res.status(400).json({ error: 'clinicId, doctorId and date are required' });
-      }
-      const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, date as string);
-      const publicApps = appointments.map(a => ({
-        id: a.id,
-        date: a.date,
-        time: a.time,
-        status: a.status,
-      }));
-      res.json({ appointments: publicApps });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  }
 
   async getAppointments(req: any, res: Response) {
     try {
-      const { patientId, status, clinicId, reviewed, includeDoctorData, date } = req.query;
-      const user = req.user;
-
-      // 🛡️ SECURITY: IDR-01/Rule 15 Patient Isolation Guard
-      if (user?.role === KLOQO_ROLES.PATIENT) {
-        const tokenPatientId = user.patientId || user.id;
-        if (patientId && patientId !== tokenPatientId) {
-          console.warn(`[IDOR Guard] Access denied for ${user.email}. Requested patientId (${patientId}) does not match authorized id (${tokenPatientId})`);
-          return res.status(403).json({ error: 'Access Denied: You cannot query appointments for another patient.' });
-        }
-      }
-
-      let appointments: Appointment[] = [];
-
-      // Fetch by filters
-      if (patientId) {
-        appointments = await this.appointmentRepo.findByPatientId(patientId as string);
-      } else if (clinicId && date) {
-        appointments = await this.appointmentRepo.findByClinicAndDate(clinicId as string, date as string);
-      } else if (clinicId) {
-        appointments = await this.appointmentRepo.findByClinicId(clinicId as string);
-      } else {
-        // Fallback for staff
-        const staffClinicId = user?.clinicId;
-        if (staffClinicId) {
-          appointments = await this.appointmentRepo.findByClinicId(staffClinicId);
-        }
-      }
-
-      // Apply in-memory filters
-      if (status) {
-        const statusList = (status as string).split(',');
-        appointments = appointments.filter(a => statusList.includes(a.status));
-      }
-      if (reviewed !== undefined) {
-        const isReviewed = reviewed === 'true';
-        appointments = appointments.filter(a => a.reviewed === isReviewed);
-      }
-
-      // 💰 FINOPS/Rule 14: Efficient Join with In-Memory Cache
-      if (includeDoctorData === 'true' && appointments.length > 0) {
-        const doctorCache = new Map<string, Doctor>();
-        const hydratedAppointments = await Promise.all(appointments.map(async (appt) => {
-          if (!appt.doctorId) return appt;
-          
-          let doctor = doctorCache.get(appt.doctorId);
-          if (!doctor) {
-            doctor = await this.doctorRepo.findById(appt.doctorId) as Doctor;
-            if (doctor) doctorCache.set(appt.doctorId, doctor);
-          }
-
-          return {
-            ...appt,
-            doctorData: doctor ? {
-              name: doctor.name,
-              specialty: doctor.specialty,
-              avatar: doctor.avatar,
-              averageConsultingTime: doctor.averageConsultingTime
-            } : null
-          };
-        }));
-        return res.json({ appointments: hydratedAppointments });
-      }
-
+      const appointments = await this.filterAppointmentsUseCase.execute({
+        ...req.query,
+        user: req.user
+      });
       res.json({ appointments });
     } catch (error: any) {
+      if (error.message.includes('Unauthorized') || error.message.includes('Access Denied')) {
+        return res.status(403).json({ error: error.message });
+      }
       res.status(500).json({ error: error.message });
     }
   }

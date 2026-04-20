@@ -93,7 +93,7 @@ export function useBookingState() {
         const fetchDoctor = async () => {
             if (!cachedDoctor) setLoading(true);
             try {
-                const res = await apiRequest(`/doctors/${doctorId}`, { signal: controller.signal });
+                const res = await apiRequest(`/public-booking/doctors/${doctorId}`, { signal: controller.signal });
                 console.log('[DEBUG] useBookingState - Raw API Response:', res);
                 const currentDoctor: Doctor = res?.doctor || res;
                 
@@ -159,7 +159,7 @@ export function useBookingState() {
         try {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
             const data = await apiRequest<any[]>(
-              `/appointments/public/available-slots?doctorId=${effectiveDoctorId}&clinicId=${effectiveClinicId}&date=${encodeURIComponent(dateStr)}`
+              `/public-booking/doctors/${effectiveDoctorId}/slots?clinicId=${effectiveClinicId}&date=${encodeURIComponent(dateStr)}`
             );
             setBackendSlots(Array.isArray(data) ? data : []);
         } catch (err) {

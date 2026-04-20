@@ -41,21 +41,37 @@ export class CreateWalkInAppointmentUseCase {
   ) {}
 
   async execute(dto: CreateWalkInAppointmentDTO): Promise<Appointment> {
+    // --- FAIL FAST: Validate domain objects before any operations ---
+    const doctor = await this.doctorRepo.findById(dto.doctorId);
+    if (!doctor) throw new Error('Doctor not found');
+
+    const clinic = await this.clinicRepo.findById(dto.clinicId);
+    if (!clinic) throw new Error('Clinic not found');
+
+    const normalizedPhone = dto.phone
+      ? dto.phone.replace(/\D/g, '').slice(-10)
+      : '';
+
+    // --- PATIENT MANAGEMENT: Move OUTSIDE main transaction to avoid read-after-write conflicts ---
+    // ManagePatientUseCase runs its own internal transaction if needed.
+    const patientId = await this.managePatientUseCase.execute({
+      id: dto.patientId,
+      name: dto.patientName,
+      phone: normalizedPhone,
+      communicationPhone: dto.communicationPhone,
+      age: dto.age,
+      sex: dto.sex,
+      place: dto.place,
+      clinicId: dto.clinicId,
+    });
+
     const result = await db.runTransaction(async (txn) => {
-      // --- FAIL FAST: Validate domain objects before any write operations ---
-      const doctor = await this.doctorRepo.findById(dto.doctorId);
-      if (!doctor) throw new Error('Doctor not found');
-
-      const clinic = await this.clinicRepo.findById(dto.clinicId);
-      if (!clinic) throw new Error('Clinic not found');
-
       const now = new Date();
+      // NOTE: findByDoctorAndDate is a read. It must happen before any writes below.
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.date);
       const slots = SlotCalculator.generateSlots(doctor, now);
       
       // ── Delegate session discovery to BookingSessionEngine (canonical) ─────
-      // findActiveSession encapsulates the full Sticky + Jumping logic
-      // mirroring the battle-tested legacy walk-in.service.ts logic.
       const activeSessionIndex = BookingSessionEngine.findActiveSession(
         doctor, slots, allAppointments, now, clinic.tokenDistribution || 'advanced'
       );
@@ -64,23 +80,7 @@ export class CreateWalkInAppointmentUseCase {
         throw new Error('No active session found for walk-in booking.');
       }
 
-      const normalizedPhone = dto.phone
-        ? dto.phone.replace(/\D/g, '').slice(-10)
-        : '';
-
-      // --- PATIENT MANAGEMENT: Participates in current transaction ---
-      const patientId = await this.managePatientUseCase.execute({
-        id: dto.patientId,
-        name: dto.patientName,
-        phone: normalizedPhone,
-        communicationPhone: dto.communicationPhone,
-        age: dto.age,
-        sex: dto.sex,
-        place: dto.place,
-        clinicId: dto.clinicId,
-      }, txn as unknown as IDBTransaction);
-
-      // --- TOKEN GENERATION: Participates in current transaction ---
+      // --- TOKEN GENERATION: MUST happen before other writes (contains a READ) ---
       const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
         dto.clinicId,
         dto.doctorId,

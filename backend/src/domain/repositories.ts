@@ -1,4 +1,4 @@
-import { Clinic, User, Patient, Appointment, TrafficData, Department, Doctor, CampaignSend, MarketingAnalytics, MarketingInteraction, WhatsappSession, NotificationConfig, PunctualityLog, ErrorLog, PaginationParams, PaginatedResponse, Prescription } from '../../../packages/shared/src/index';
+import { Clinic, User, Patient, Appointment, TrafficData, Department, Doctor, CampaignSend, MarketingAnalytics, MarketingInteraction, WhatsappSession, NotificationConfig, PunctualityLog, ErrorLog, PaginationParams, PaginatedResponse, Prescription, Subscription } from '../../../packages/shared/src/index';
 
 export interface IDBTransaction {}
 
@@ -53,6 +53,7 @@ export interface IDoctorRepository {
 export interface IClinicRepository {
   findAll(params?: PaginationParams): Promise<PaginatedResponse<Clinic> | Clinic[]>;
   findById(id: string): Promise<Clinic | null>;
+  findByIds(ids: string[]): Promise<Clinic[]>;
   update(id: string, data: Partial<Clinic>): Promise<void>;
   updateLastSyncAt(id: string, date: Date): Promise<void>;
   save(clinic: Clinic): Promise<void>;
@@ -150,6 +151,16 @@ export interface IWhatsappSessionRepository {
   findByPhone(phone: string, clinicId: string): Promise<WhatsappSession | null>;
   save(session: WhatsappSession): Promise<void>;
   update(phone: string, clinicId: string, data: Partial<WhatsappSession>): Promise<void>;
+}
+
+export interface ISubscriptionRepository {
+  findByClinicId(clinicId: string): Promise<Subscription | null>;
+  findByRazorpaySubscriptionId(razorpaySubscriptionId: string): Promise<Subscription | null>;
+  save(subscription: Omit<Subscription, 'id'>): Promise<Subscription>;
+  update(id: string, data: Partial<Subscription>): Promise<void>;
+  getAll(): Promise<Subscription[]>;
+  countByStatus(status: string): Promise<number>;
+  sumMRR(): Promise<number>;
 }
 
 export interface IActivityRepository {

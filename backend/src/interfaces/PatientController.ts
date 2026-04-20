@@ -8,10 +8,9 @@ import { GetLinkPendingPatientsUseCase } from '../application/GetLinkPendingPati
 import { GetPatientsByClinicUseCase } from '../application/GetPatientsByClinicUseCase';
 import { GetPatientHistoryUseCase } from '../application/GetPatientHistoryUseCase';
 import { GetPatientAppointmentsUseCase } from '../application/GetPatientAppointmentsUseCase';
-import { GetPublicDiscoveryUseCase } from '../application/GetPublicDiscoveryUseCase';
 import { SyncPatientAuthUseCase } from '../application/SyncPatientAuthUseCase';
 import { UnlinkRelativeUseCase } from '../application/UnlinkRelativeUseCase';
-import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
+import { RBACUtils, KLOQO_ROLES, PaginationParams } from '@kloqo/shared';
 
 export class PatientController {
   constructor(
@@ -24,7 +23,6 @@ export class PatientController {
     private getPatientsByClinicUseCase: GetPatientsByClinicUseCase,
     private getPatientHistoryUseCase: GetPatientHistoryUseCase,
     private getPatientAppointmentsUseCase: GetPatientAppointmentsUseCase,
-    private getPublicDiscoveryUseCase: GetPublicDiscoveryUseCase,
     private syncPatientAuthUseCase: SyncPatientAuthUseCase,
     private unlinkRelativeUseCase: UnlinkRelativeUseCase
   ) {}
@@ -47,14 +45,29 @@ export class PatientController {
 
   async getAllPatients(req: Request, res: Response) {
     try {
+      // Prioritize session clinicId. Only SuperAdmins can override via query.
+      const isSuperAdmin = RBACUtils.hasAnyRole((req as any).user, [KLOQO_ROLES.SUPER_ADMIN]);
+      const clinicId = (isSuperAdmin && req.query.clinicId) 
+        ? (req.query.clinicId as string) 
+        : (req as any).user?.clinicId;
+
+      if (!clinicId) {
+        return res.status(400).json({ error: 'clinicId is required' });
+      }
+
+      this.validateClinicAccess(req, clinicId);
+
       const { page, limit } = req.query;
-      const params = page && limit ? { 
-        page: parseInt(page as string), 
-        limit: parseInt(limit as string) 
-      } : undefined;
+      const params: PaginationParams = {
+        page: page ? parseInt(page as string) : 1,
+        limit: limit ? parseInt(limit as string) : 10,
+        clinicId: clinicId as string
+      };
+      
       const patients = await this.getAllPatientsUseCase.execute(params);
       res.json(patients);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ error: error.message });
     }
   }
@@ -160,6 +173,8 @@ export class PatientController {
       const clinicId = req.user?.clinicId;
       if (!clinicId) return res.status(401).json({ error: 'Unauthorized: Clinic ID not found' });
       
+      this.validateClinicAccess(req, clinicId);
+
       const { page, limit, search } = req.query;
       const params = page && limit ? { 
         page: parseInt(page as string), 
@@ -170,6 +185,7 @@ export class PatientController {
       const patients = await this.getPatientsByClinicUseCase.execute(clinicId, params);
       res.json(patients);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(500).json({ error: error.message });
     }
   }
@@ -179,10 +195,13 @@ export class PatientController {
       const clinicId = req.user?.clinicId;
       if (!clinicId) return res.status(401).json({ error: 'Unauthorized: Clinic ID not found' });
       
+      this.validateClinicAccess(req, clinicId);
+
       const { id } = req.params;
       const history = await this.getPatientHistoryUseCase.execute(id, clinicId);
       res.json(history);
     } catch (error: any) {
+      if (error.status === 403) return res.status(403).json({ error: error.message });
       if (error.message === 'Patient not found' || error.message.includes('Unauthorized')) {
         res.status(403).json({ error: error.message });
       } else {
@@ -206,23 +225,6 @@ export class PatientController {
     }
   }
 
-  async getPublicDiscovery(req: Request, res: Response) {
-    try {
-      const clinicIdsParam = req.query.clinicIds as string;
-      const clinicIds = clinicIdsParam ? clinicIdsParam.split(',') : undefined;
-      
-      const doctorIdsParam = req.query.doctorIds as string;
-      const doctorIds = doctorIdsParam ? doctorIdsParam.split(',') : undefined;
-
-      const lat = req.query.lat ? parseFloat(req.query.lat as string) : undefined;
-      const lng = req.query.lng ? parseFloat(req.query.lng as string) : undefined;
-
-      const data = await this.getPublicDiscoveryUseCase.execute({ clinicIds, lat, lng, doctorIds });
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  }
 
   async syncAuth(req: Request, res: Response) {
     try {
@@ -257,21 +259,71 @@ export class PatientController {
 
   async getPatientProfile(req: any, res: Response) {
     try {
-      const { phone } = req.query;
+      const { phone, clinicId: queryClinicId } = req.query;
       if (!phone) return res.status(400).json({ error: 'phone is required' });
       
+      const isPatientRole = req.user && RBACUtils.hasRole(req.user, KLOQO_ROLES.PATIENT) && !RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.DOCTOR, KLOQO_ROLES.NURSE, KLOQO_ROLES.RECEPTIONIST, KLOQO_ROLES.PHARMACIST]);
+
+      // IDOR CHECK: Patients can only lookup their own phone numbers.
+      if (isPatientRole && req.user.phone !== phone) {
+        return res.status(403).json({ error: 'Access Denied: Insufficient Permissions', message: 'Patients may only access their own profiles.' });
+      }
+
       // ✅ FIX: Force search scope to the authenticated user's clinicId. 
       // Prevents "Blind Phone Search" tenant bleed.
-      const clinicId = req.user?.clinicId;
+      // If patient, they may pass the booking flow's clinicId through the query.
+      const clinicId = req.user?.clinicId || (isPatientRole ? queryClinicId : null);
+      
       if (!clinicId) {
         return res.status(401).json({ error: 'Unauthorized: Active clinic context required for profile lookup' });
       }
 
-      const patients = await this.searchPatientsByPhoneUseCase.execute(phone as string, clinicId);
+      const patients = await this.searchPatientsByPhoneUseCase.execute(phone as string, clinicId as string);
       const primary = patients.find(p => p.isPrimary) || (patients.length > 0 ? patients[0] : null);
       const relatives = patients.filter(p => !p.isPrimary && p.id !== primary?.id);
       
       res.json({ patient: primary, relatedProfiles: relatives });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async getPatientDetail(req: any, res: Response) {
+    try {
+      const { id } = req.params;
+      
+      // Zero-Trust: Identify user and clinic context
+      const isPatientRole = req.user && RBACUtils.hasRole(req.user, KLOQO_ROLES.PATIENT) && !RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.DOCTOR, KLOQO_ROLES.NURSE, KLOQO_ROLES.RECEPTIONIST, KLOQO_ROLES.PHARMACIST]);
+      const clinicId = req.user?.clinicId || (req.query.clinicId as string);
+
+      // ClinicId is required for staff (tenant isolation), but optional for patients viewing their own data.
+      if (!clinicId && !isPatientRole && !RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN])) {
+        return res.status(401).json({ error: 'Clinic context required' });
+      }
+
+      // Execute use case (patientRepo.findById doesn't strictly need clinicId for the raw fetch)
+      const patient = await this.getPatientByIdUseCase.execute(id, clinicId || 'GLOBAL');
+      
+      if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+      // IDOR CHECK: Patients can only fetch their own profile or profiles linked via phone.
+      if (isPatientRole) {
+        const userPhone = req.user.phone;
+        const userPatientId = req.user.patientId;
+
+        const isPrimaryOwner = userPatientId && patient.id === userPatientId;
+        const isLinkedByPhone = userPhone && (
+          patient.phone === userPhone || 
+          patient.communicationPhone === userPhone
+        );
+
+        if (!isPrimaryOwner && !isLinkedByPhone) {
+          console.warn(`[IDOR] Patient ${userPatientId || 'UNSYNCED'} / ${userPhone} attempted to access profile ${id}`);
+          return res.status(403).json({ error: 'Access Denied: You do not have permission to view this profile.' });
+        }
+      }
+
+      res.json(patient);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

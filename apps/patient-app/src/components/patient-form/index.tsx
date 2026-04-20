@@ -5,7 +5,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogClose, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, Zap, Clock, Calendar, Users, Radio, Trash2 } from 'lucide-react';
+import { Loader2, Zap, Clock, Calendar, Users, Radio, Trash2, ArrowRight } from 'lucide-react';
 
 import { PatientFormProps } from '@kloqo/shared';
 import { usePatientForm } from './use-patient-form';
@@ -36,7 +36,7 @@ export function PatientForm({ selectedDoctor, appointmentType, renderLoadingOver
         handleUnlink,
         handlePatientSelect,
         handleAddNewClick
-    } = usePatientForm();
+    } = usePatientForm(selectedDoctor?.clinicId);
 
     const {
         isSubmitting,
@@ -111,10 +111,8 @@ export function PatientForm({ selectedDoctor, appointmentType, renderLoadingOver
                     >
                         {isSubmitting ? (
                             <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> {pt.processing || 'Processing...'}</>
-                        ) : appointmentType === 'Walk-in' ? (
-                            <><Zap className="w-5 h-5 mr-2" /> {pt.getToken || 'Get Token'}</>
                         ) : (
-                            <><Calendar className="w-5 h-5 mr-2" /> {pb.book || 'Book'}</>
+                            <>{pt.proceedToSummary || 'Proceed to Summary'}<ArrowRight className="w-5 h-5 ml-2" /></>
                         )}
                     </Button>
                 </form>

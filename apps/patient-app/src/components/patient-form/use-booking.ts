@@ -72,70 +72,25 @@ export function useBooking(selectedDoctor: Doctor, appointmentType: 'Walk-in' | 
         setIsSubmitting(true);
         setIsEstimateModalOpen(false);
 
-        if (!hasRecalculated) {
-            try {
-                // In V2, we should have an endpoint for this recalculation.
-                setHasRecalculated(true);
-            } catch (recalcError: any) {
-                console.error(`[WALK-IN DEBUG] Error during pre-confirmation recalculation:`, recalcError);
-                setHasRecalculated(true); 
-            }
-        }
-
         const { patientId, formData } = walkInData;
 
-        try {
-            const result = await apiRequest('/appointments/walk-in', {
-                method: 'POST',
-                body: JSON.stringify({
-                    patientId,
-                    doctorId: selectedDoctor.id,
-                    clinicId: selectedDoctor.clinicId,
-                    patientName: formData.name,
-                    age: formData.age,
-                    sex: formData.sex,
-                    place: formData.place,
-                    phone: formData.phone || user.phone,
-                    date: getClinicDateString(getClinicNow())
-                }),
-            });
+        const params = new URLSearchParams();
+        params.set('doctorId', selectedDoctor.id);
+        params.set('patientId', patientId);
+        params.set('name', formData.name);
+        params.set('age', String(formData.age));
+        params.set('sex', formData.sex);
+        params.set('place', formData.place);
+        params.set('phone', formData.phone || user.phone);
+        params.set('isWalkIn', 'true');
 
-            if (result?.patientsAhead !== undefined) {
-                setPatientsAhead(result.patientsAhead);
-            }
-            if (result?.estimatedTime) {
-                setEstimatedConsultationTime(new Date(result.estimatedTime));
-            }
-            if (result?.tokenNumber) {
-                setGeneratedToken(result.tokenNumber);
-            }
-
-            const params = new URLSearchParams();
-            params.set('doctorId', selectedDoctor.id);
-            params.set('patientId', patientId);
-            params.set('appointmentId', result.appointmentId);
-            params.set('isWalkIn', 'true');
-            params.set('slot', result.estimatedTime);
-
-            router.push(`/book-appointment/summary?${params.toString()}`);
-
-        } catch (error) {
-            console.error('[WALK-IN DEBUG] API booking failed', error);
-            const err = error as Error;
-            toast({
-                variant: 'destructive',
-                title: t.bookAppointment.error,
-                description: err?.message || t.bookAppointment.bookingFailed,
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
+        router.push(`/book-appointment/summary?${params.toString()}`);
+        setIsSubmitting(false);
     };
 
     const onSubmitBooking = async (data: FormValues, selectedPatientId: string) => {
         setIsSubmitting(true);
         const { name, age, sex, place, phone } = data;
-        
         const computedPhone = phone && phone.length > 0 ? (phone.startsWith('+91') ? phone : `+91${phone}`) : user?.phone;
 
         try {
@@ -161,37 +116,21 @@ export function useBooking(selectedDoctor: Doctor, appointmentType: 'Walk-in' | 
                     return;
                 }
 
-                const walkInResponse = await apiRequest('/appointments/walk-in', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        doctorId: selectedDoctor.id,
-                        clinicId: selectedDoctor.clinicId,
-                        patientId: selectedPatientId !== 'new' ? selectedPatientId : undefined,
-                        patientName: name,
-                        age,
-                        sex,
-                        place,
-                        phone: computedPhone,
-                        date: getClinicDateString(getClinicNow())
-                    })
-                });
-
-                if (walkInResponse.tokenNumber) {
-                    setGeneratedToken(walkInResponse.tokenNumber);
-                    const params = new URLSearchParams();
-                    params.set('doctorId', selectedDoctor.id);
-                    params.set('patientId', walkInResponse.patientId);
-                    params.set('appointmentId', walkInResponse.id);
-                    params.set('isWalkIn', 'true');
-                    params.set('slot', walkInResponse.arriveByTime);
-                    router.push(`/book-appointment/summary?${params.toString()}`);
-                }
+                // Redirect to summary for walk-in confirmation
+                const params = new URLSearchParams();
+                params.set('doctorId', selectedDoctor.id);
+                params.set('patientId', selectedPatientId);
+                params.set('name', name);
+                params.set('age', String(age));
+                params.set('sex', sex);
+                params.set('place', place);
+                params.set('phone', computedPhone || '');
+                params.set('isWalkIn', 'true');
+                router.push(`/book-appointment/summary?${params.toString()}`);
             } else {
                 const slotISO = searchParams.get('slot');
-                const selectedSlot = slotISO ? new Date(slotISO) : null;
-                
-                if (!selectedSlot) {
-                     toast({
+                if (!slotISO) {
+                    toast({
                         variant: 'destructive',
                         title: t.bookAppointment.error,
                         description: "No slot selected."
@@ -200,39 +139,23 @@ export function useBooking(selectedDoctor: Doctor, appointmentType: 'Walk-in' | 
                     return;
                 }
 
-                const onlineResponse = await apiRequest('/appointments/advanced', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        doctorId: selectedDoctor.id,
-                        clinicId: selectedDoctor.clinicId,
-                        patientId: selectedPatientId !== 'new' ? selectedPatientId : undefined,
-                        patientName: name,
-                        age,
-                        sex,
-                        place,
-                        phone: computedPhone,
-                        date: getClinicDateString(selectedSlot),
-                        slotIndex: searchParams.get('slotIndex') ? parseInt(searchParams.get('slotIndex')!) : undefined,
-                        sessionIndex: searchParams.get('sessionIndex') ? parseInt(searchParams.get('sessionIndex')!) : undefined,
-                        time: getClinicTimeString(selectedSlot),
-                        source: 'app'
-                    })
-                });
-
+                // Redirect to summary for online confirmation
                 const params = new URLSearchParams();
                 params.set('doctorId', selectedDoctor.id);
-                params.set('patientId', onlineResponse.patientId);
-                params.set('appointmentId', onlineResponse.id);
-                params.set('slot', onlineResponse.time);
+                params.set('patientId', selectedPatientId);
+                params.set('name', name);
+                params.set('age', String(age));
+                params.set('sex', sex);
+                params.set('place', place);
+                params.set('phone', computedPhone || '');
+                params.set('slot', slotISO);
+                params.set('slotIndex', searchParams.get('slotIndex') || '');
+                params.set('sessionIndex', searchParams.get('sessionIndex') || '');
+                
                 router.push(`/book-appointment/summary?${params.toString()}`);
             }
         } catch (error: any) {
-            console.error('[PF:SUBMIT] ❌ API call failed:', error);
-            toast({
-                variant: 'destructive',
-                title: t.bookAppointment.bookingFailed,
-                description: error.message
-            });
+            console.error('[PF:SUBMIT] ❌ Navigation failed:', error);
         } finally {
             setIsSubmitting(false);
         }
