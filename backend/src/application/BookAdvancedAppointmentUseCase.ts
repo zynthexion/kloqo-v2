@@ -96,7 +96,8 @@ export class BookAdvancedAppointmentUseCase {
     const patientName = patient.name;
 
     // --- STRATEGY PATTERN: Factory picks the correct token strategy ---
-    const tokenStrategy = TokenStrategyFactory.create(clinic.tokenDistribution, this.tokenGenerator);
+    const tokenDistribution = (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
+    const tokenStrategy = TokenStrategyFactory.create(tokenDistribution, this.tokenGenerator);
 
     // Calculate Arrive By Time (15 mins before)
     const appointmentTime = parseClinicTime(slotTime, date);
@@ -126,7 +127,7 @@ export class BookAdvancedAppointmentUseCase {
         // 0b. Buffer Slot Guard (Advanced Distribution Only)
         // Reject the booking if the requested slotIndex falls in the last 15% of the session,
         // which is reserved exclusively for walk-in patients.
-        if (clinic.tokenDistribution === 'advanced') {
+        if (tokenDistribution === 'advanced') {
           const allSlots = SlotCalculator.generateSlots(doctor, date);
           const now = parseClinicTime(slotTime, date); // use slot time as 'now' proxy
           const reservedSlotIndices = BookingSessionEngine.calculateReservedSlots(allSlots, parseClinicTime('00:00', date));
@@ -145,6 +146,7 @@ export class BookAdvancedAppointmentUseCase {
           doctorName: doctor.name,
           date: firestoreDateStr,
           sessionIndex,
+          slotIndex // ← Pass the Orchestrate Position
         }, transaction);
 
         // 2. Lock the Slot (Fails automatically if already exists)

@@ -358,7 +358,14 @@
     "confirmArrival": "Confirm Arrival at Clinic",
     "confirmedPatientsAhead": "Confirmed patients ahead of you",
     "arriveAtClinicInstruction": "Your position will update as patients are consulted.",
-    "showLiveQueue": "Show Live Queue"
+    "showLiveQueue": "Show Live Queue",
+    "nowInside": "NOW INSIDE",
+    "upNext": "UP NEXT",
+    "nextInLine": "Next in Line",
+    "systemNotice": "System Notice",
+    "actionRequired": "Action Required",
+    "doctorOnShortBreak": "Doctor is on a short break",
+    "consultationInProgress": "Consultation in Progress"
   },
   "clinics": {
     "title": "Clinics",

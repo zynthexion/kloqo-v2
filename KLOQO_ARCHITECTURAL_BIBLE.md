@@ -35,15 +35,18 @@ graph LR
 
 ---
 
-## Volume II: Classic vs. Advanced Modes
+## Volume II: Doctor-Specific Personalities
 
-Kloqo V2 handles two distinct clinic personalities: the **1:N Zipper** (Classic) and the **85/15 Buffer** (Advanced).
+Kloqo V2 handles two distinct scheduling personalities: the **1:N Zipper** (Classic) and the **85/15 Buffer** (Advanced). 
+
+> [!NOTE]
+> **Autonomy Standard**: Distribution logic is configured **per doctor**, not per clinic. This allows a hybrid floor where a senior specialist (Advanced) and a general practitioner (Classic) coexist in the same facility.
 
 | Feature | **Classic (The Zipper)** | **Advanced (The Buffer)** |
 | :--- | :--- | :--- |
 | **Logic** | **Rhythmic Interleaving** | **Clustered Priority** |
 | **Experience** | Patients see a balanced mix of appointments and walk-ins. | Appointments are cleared first; Walk-ins are handled in bulk later. |
-| **Capacity** | **100% Session Hard-Cap** (No 85% A-Token restriction, but strictly halts bookings once physical slots are filled, shifting control to Nurse-Only Force Book) | **85% A-Token Cap** (Reserved space) |
+| **Capacity** | **100% Session Hard-Cap** (Strictly halts bookings once physical slots are filled, shifting control to Nurse-Only Force Book) | **85% A-Token Cap** (Reserved space for walk-ins) |
 | **Best For** | High-volume hospitals with massive walk-in traffic. | High-end boutique clinics with primarily app bookings. |
 
 ### 🧩 The Pattern Layout

@@ -22,84 +22,103 @@ export class QueueBubblingService {
   constructor(private appointmentRepo: IAppointmentRepository) {}
 
   /**
-   * Scans for a vacant slot and promotes the earliest eligible W-Token.
+   * Scans the entire session for vacant slots and pulls ALL eligible W-Tokens forward.
+   * This is the "Vacuum" engine that ensures a dense queue even after mass vacancies.
    *
-   * @param vacatedSlotIndex - The slot index that just became vacant.
-   * @param sessionIndex     - The session this vacancy belongs to.
+   * @param sessionIndex     - The session to re-optimize.
    * @param doctorId         - The doctor for this session.
    * @param clinicId         - The clinic for SSE broadcasting.
    * @param date             - Firestore date string ('d MMMM yyyy').
    */
   async reoptimize(params: {
-    vacatedSlotIndex: number;
+    vacatedSlotIndex?: number; // Optional hint, used to start the scan
     sessionIndex: number;
     doctorId: string;
     clinicId: string;
     date: string;
   }): Promise<void> {
-    const { vacatedSlotIndex, sessionIndex, doctorId, clinicId, date } = params;
+    const { sessionIndex, doctorId, clinicId, date } = params;
 
     await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
-      // 1. Read all appointments for the session within the transaction.
-      //    This acquires Firestore read-locks, preventing race conditions.
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
-      const sessionAppointments = allAppointments.filter(a => a.sessionIndex === sessionIndex);
-
-      // 2. Verify the slot is still actually vacant (double-check inside txn).
-      const isStillVacant = !sessionAppointments.some(
-        a => a.slotIndex === vacatedSlotIndex && (a.status === 'Confirmed' || a.status === 'InConsultation')
+      const sessionAppointments = allAppointments.filter(
+        a => a.sessionIndex === sessionIndex && !a.isDeleted
       );
 
-      if (!isStillVacant) {
-        // Another concurrent transaction already filled this gap. Nothing to do.
-        console.log(`[QueueBubbling] Slot ${vacatedSlotIndex} already filled. Skipping.`);
-        return;
+      const reslottedEvents: any[] = [];
+      let hasMutated = true;
+
+      // Iterative Vacuum Sweep
+      while (hasMutated) {
+        hasMutated = false;
+
+        // 1. Identify all current gaps in the session
+        // A gap exists at slot index 'i' if:
+        // - There is no Confirmed/InConsultation appointment at 'i'
+        // - AND there is at least one Confirmed appointment at some 'j' where 'j > i'
+        const activeAppts = sessionAppointments.filter(a => 
+          a.status === 'Confirmed' || a.status === 'InConsultation' || a.status === 'Completed'
+        );
+        const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
+        const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
+
+        if (maxOccupiedIndex <= 0) break;
+
+        // Find the earliest gap
+        let earliestGap = -1;
+        for (let i = 0; i < maxOccupiedIndex; i++) {
+          if (!occupiedIndices.has(i)) {
+            earliestGap = i;
+            break;
+          }
+        }
+
+        if (earliestGap === -1) break; // No gaps found below the max index
+
+        // 2. Find W-Token candidates to fill this specific gap
+        const candidates = sessionAppointments
+          .filter(a =>
+            a.bookedVia === 'Walk-in' &&
+            a.status === 'Confirmed' &&
+            a.slotIndex! > earliestGap
+          )
+          .sort((a, b) => a.slotIndex! - b.slotIndex!);
+
+        if (candidates.length === 0) break;
+
+        // 3. Promote the earliest candidate into the gap
+        const candidate = candidates[0];
+        const oldSlotIndex = candidate.slotIndex!;
+        
+        candidate.slotIndex = earliestGap;
+        candidate.updatedAt = new Date();
+
+        await this.appointmentRepo.update(candidate.id, {
+          slotIndex: earliestGap,
+          updatedAt: candidate.updatedAt
+        }, txn);
+
+        reslottedEvents.push({
+          appointmentId: candidate.id,
+          patientId: candidate.patientId,
+          patientName: candidate.patientName,
+          tokenNumber: candidate.tokenNumber,
+          oldSlotIndex,
+          newSlotIndex: earliestGap,
+        });
+
+        console.log(`[QueueBubbling] Vacuum: Promoted ${candidate.tokenNumber} from ${oldSlotIndex} to ${earliestGap}`);
+        hasMutated = true; // Continue sweeping
       }
 
-      // 3. Build the W-Token candidate pool.
-      //    ⚠️ IMMUTABILITY FIREWALL: A-Tokens are strictly excluded here.
-      const walkinCandidates = sessionAppointments
-        .filter(a =>
-          a.bookedVia === 'Walk-in' &&
-          a.status === 'Confirmed' &&
-          a.slotIndex !== undefined &&
-          a.slotIndex > vacatedSlotIndex // Only move patients from further back
-        )
-        .sort((a, b) => (a.slotIndex! - b.slotIndex!)); // Earliest slot first
-
-      if (walkinCandidates.length === 0) {
-        console.log(`[QueueBubbling] No W-Token candidates to bubble for session ${sessionIndex}.`);
-        return;
+      // 4. BATCHED BROADCAST: Fire once per transaction commit
+      if (reslottedEvents.length > 0) {
+        sseService.emit('queue_reoptimized', clinicId, {
+          doctorId,
+          sessionIndex,
+          reslotted: reslottedEvents
+        });
       }
-
-      // 4. Promote the earliest-scheduled W-Token into the vacancy.
-      const candidate = walkinCandidates[0];
-      const oldSlotIndex = candidate.slotIndex!;
-
-      await this.appointmentRepo.update(
-        candidate.id,
-        {
-          slotIndex: vacatedSlotIndex,
-          updatedAt: new Date(),
-        },
-        txn
-      );
-
-      console.log(
-        `[QueueBubbling] Promoted W-Token ${candidate.tokenNumber} ` +
-        `from slot ${oldSlotIndex} to slot ${vacatedSlotIndex} for doctor ${doctorId}`
-      );
-
-      // 5. Broadcast the re-slot event via SSE so all frontends instantly update.
-      sseService.emit('appointment_reslotted', clinicId, {
-        appointmentId: candidate.id,
-        patientId: candidate.patientId,
-        patientName: candidate.patientName,
-        tokenNumber: candidate.tokenNumber,
-        oldSlotIndex,
-        newSlotIndex: vacatedSlotIndex,
-        sessionIndex,
-      });
     });
   }
 }

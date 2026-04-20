@@ -186,10 +186,10 @@ export class BookingSessionEngine {
   // ── 3. Walk-in Reserved Slots (85/15 Rule) ──────────────────────────────────
 
   /**
-   * Calculates the last 15% of FUTURE slots in each session as reserved for walk-ins.
+   * Calculates the reserved slots for walk-ins based on the provided ratio.
    * ⚠️ This is recalculated dynamically — as time passes the reserved set shrinks.
    */
-  static calculateReservedSlots(slots: DailySlot[], now: Date): Set<number> {
+  static calculateReservedSlots(slots: DailySlot[], now: Date, reserveRatio: number = 0.15): Set<number> {
     const reservedSlots = new Set<number>();
     const slotsBySession = new Map<number, DailySlot[]>();
 
@@ -204,7 +204,7 @@ export class BookingSessionEngine {
       const futureSlots = sessionSlots.filter(s => s.time.getTime() >= now.getTime());
       if (futureSlots.length === 0) return;
 
-      const reserveCount  = Math.ceil(futureSlots.length * 0.15);
+      const reserveCount  = Math.ceil(futureSlots.length * reserveRatio);
       const reserveStart  = futureSlots.length - reserveCount;
       for (let i = reserveStart; i < futureSlots.length; i++) {
         reservedSlots.add(futureSlots[i].index);
@@ -235,12 +235,13 @@ export class BookingSessionEngine {
     bookedMap: Map<number, string>,      // slotIndex → tokenNumber
     breakSlotIndices: Set<number>,       // slot indices blocked by breaks
     now: Date,
-    source: SlotSource
+    source: SlotSource,
+    reserveRatio: number = 0.15
   ): DecoratedSlot[] {
     const isToday    = getClinicISOString(now) === (allSlots[0] ? getClinicISOString(allSlots[0].time) : '');
     const bufferMins = this.getBookingBuffer(source);
     const cutoff    = addMinutes(now, bufferMins);
-    const reserved  = this.calculateReservedSlots(allSlots, now);
+    const reserved  = this.calculateReservedSlots(allSlots, now, reserveRatio);
 
     // Pre-pass: find the first truly available slot per session
     const firstAvailablePerSession = new Map<number, number>(); // sessionIndex → slotIndex

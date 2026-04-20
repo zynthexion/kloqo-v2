@@ -310,10 +310,42 @@ export function PersonalInfoTab({
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
+              name="tokenDistribution"
+              render={({ field }) => (
+                <FormItem className="col-span-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Distribution Strategy</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="bg-emerald-50/30 border-emerald-100 hover:bg-emerald-50 transition-colors">
+                        <SelectValue placeholder="Select strategy" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="advanced">
+                        <div className="flex flex-col">
+                          <span className="font-bold">Advanced (The Buffer)</span>
+                          <span className="text-[10px] text-muted-foreground">85/15 Protection Ratio • Appts First</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="classic">
+                        <div className="flex flex-col">
+                          <span className="font-bold">Classic (The Zipper)</span>
+                          <span className="text-[10px] text-muted-foreground">1:N Rhythmic Interleaving • Balanced</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="walkInReserveRatio"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[10px] font-black uppercase tracking-widest">Walk-in Buffer (%)</FormLabel>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Walk-in Buffer (%)</FormLabel>
                   <FormControl>
                     <Input type="number" step="0.01" min="0" max="1" {...field} value={field.value} onChange={(e) => field.onChange(Number(e.target.value))} />
                   </FormControl>
@@ -328,7 +360,7 @@ export function PersonalInfoTab({
               name="gracePeriodMinutes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[10px] font-black uppercase tracking-widest">Skip Grace (min)</FormLabel>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Skip Grace (min)</FormLabel>
                   <FormControl>
                     <Input type="number" min="5" max="60" {...field} />
                   </FormControl>

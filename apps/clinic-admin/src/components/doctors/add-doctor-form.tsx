@@ -65,6 +65,7 @@ const formSchema = z.object({
   advanceBookingDays: z.coerce.number().min(0, "Cannot be negative.").optional(),
   walkInReserveRatio: z.coerce.number().min(0).max(1).default(0.15),
   gracePeriodMinutes: z.coerce.number().min(5).max(60).default(15),
+  tokenDistribution: z.enum(['classic', 'advanced']).default('advanced'),
   accessibleMenus: z.array(z.string()).optional(),
   roles: z.array(z.string()).default(['doctor']),
 });
@@ -91,7 +92,7 @@ export function AddDoctorForm({ onSave, isOpen, setIsOpen, doctor, departments, 
 
   const form = useForm<AddDoctorFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", specialty: "", department: "", registrationNumber: "", bio: "", experience: 0, consultationFee: undefined, averageConsultingTime: 5, availabilitySlots: [], freeFollowUpDays: 7, advanceBookingDays: 7, walkInReserveRatio: 0.15, gracePeriodMinutes: 15, accessibleMenus: AVAILABLE_MENUS.map(m => m.id), roles: ['doctor'] },
+    defaultValues: { name: "", specialty: "", department: "", registrationNumber: "", bio: "", experience: 0, consultationFee: undefined, averageConsultingTime: 5, availabilitySlots: [], freeFollowUpDays: 7, advanceBookingDays: 7, walkInReserveRatio: 0.15, gracePeriodMinutes: 15, tokenDistribution: 'advanced', accessibleMenus: AVAILABLE_MENUS.map(m => m.id), roles: ['doctor'] },
     mode: 'onBlur',
   });
 
@@ -117,7 +118,7 @@ export function AddDoctorForm({ onSave, isOpen, setIsOpen, doctor, departments, 
       if (doctor) {
         const slots = doctor.availabilitySlots?.map(s => ({ ...s, timeSlots: s.timeSlots.map(ts => ({ from: format(parseTime(ts.from, new Date()), 'HH:mm'), to: format(parseTime(ts.to, new Date()), 'HH:mm') })) })) || [];
         const roles = doctor.roles && doctor.roles.length > 0 ? doctor.roles : (doctor.role ? [doctor.role] : ['doctor']);
-        form.reset({ ...doctor as any, availabilitySlots: slots, registrationNumber: doctor.registrationNumber || "", email: doctor.email || "", bio: doctor.bio || "", experience: doctor.experience || 0, walkInReserveRatio: doctor.walkInReserveRatio || 0.15, gracePeriodMinutes: doctor.gracePeriodMinutes || 15, accessibleMenus: doctor.accessibleMenus || AVAILABLE_MENUS.map(m => m.id), roles });
+        form.reset({ ...doctor as any, availabilitySlots: slots, registrationNumber: doctor.registrationNumber || "", email: doctor.email || "", bio: doctor.bio || "", experience: doctor.experience || 0, walkInReserveRatio: doctor.walkInReserveRatio || 0.15, gracePeriodMinutes: doctor.gracePeriodMinutes || 15, tokenDistribution: doctor.tokenDistribution || 'advanced', accessibleMenus: doctor.accessibleMenus || AVAILABLE_MENUS.map(m => m.id), roles });
         setPhotoPreview(doctor.avatar || MALE_AVATAR);
         setDefaultAvatar(doctor.avatar === FEMALE_AVATAR ? FEMALE_AVATAR : MALE_AVATAR);
         if (slots.length > 0) setSharedTimeSlots(slots[0].timeSlots);

@@ -44,7 +44,7 @@ export class GetPublicQueueStatusUseCase {
       throw new Error('Clinic or Doctor not found');
     }
 
-    const tokenDistribution = clinic.tokenDistribution || 'classic';
+    const tokenDistribution = doctor.tokenDistribution || clinic.tokenDistribution || 'advanced';
 
     // ANALYTICS GUARDRAIL: Strip system-generated ghost break-blocker records
     // before any queue logic runs. These records exist to block the scheduling

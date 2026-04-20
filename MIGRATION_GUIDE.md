@@ -118,6 +118,12 @@ Ensure `.env` is set to the **NEW** project before running these.
    npx ts-node src/scripts/migrateRolesToArrays.ts
    ```
 
+4. **Migrate Doctor Distribution (V2 Hardened Scheduling)**:
+   Propagate legacy clinic distribution settings to individual doctors and set hardening defaults (Reserve Ratio & Grace Period):
+   ```bash
+   npx ts-node src/scripts/migrate-doctor-distribution.ts
+   ```
+
 ### 5. Post-Migration Setup
 1. **Create Super Admin User**:
    If you need to create a new super admin account to access the dashboard:

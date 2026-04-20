@@ -145,12 +145,14 @@ export class GetAvailableSlotsUseCase {
     if (allSlots.length === 0) return [];
 
     // ── 7. Decorate via BookingSessionEngine — single source of truth ─────────
+    const reserveRatio = doctor.walkInReserveRatio ?? clinic.walkInReserveRatio ?? 0.15;
     const decoratedSlots = BookingSessionEngine.decorateSlots(
       allSlots,
       bookedMap,
       breakSlotIndices,
       now,
-      source
+      source,
+      reserveRatio
     );
 
     // ── 8. Staff Parity: Enforce "Next Available Only" per Session ────────────

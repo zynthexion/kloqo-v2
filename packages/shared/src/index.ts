@@ -150,6 +150,8 @@ export interface Doctor {
   sessions?: any[];
   latitude?: number;
   longitude?: number;
+  /** 'classic' (1:N Zipper) or 'advanced' (85/15 Buffer) distribution logic. */
+  tokenDistribution?: 'classic' | 'advanced';
   /** Walk-in buffer ratio (0.0 – 1.0). Default 0.15 = 15% of session reserved for W-Tokens. */
   walkInReserveRatio?: number;
   /** Minutes after scheduled time before a Confirmed patient is auto-Skipped by the Sweep Engine. Default 15. */
@@ -308,6 +310,7 @@ export interface Clinic {
   departments?: string[];
   shortCode?: string;
   genderPreference?: 'Men' | 'Women' | 'General';
+  /** DEPRECATED: Distribution logic is now set at the Doctor level. This remains for legacy fallback. */
   tokenDistribution?: 'classic' | 'advanced';
   showEstimatedWaitTime?: boolean;
   /** Clinic-level walk-in buffer ratio override (0.0 – 1.0). Doctor-level config takes precedence if set. */

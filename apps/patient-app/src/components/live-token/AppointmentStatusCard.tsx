@@ -24,102 +24,49 @@ export const AppointmentStatusCard = () => {
         yourAppointment,
         t,
         language,
-        departments,
         formattedDate,
         isAppointmentToday,
         isConfirmedAppointment,
-        isPendingAppointment, // Derived from status locally if needed
+        isPendingAppointment,
         isSkippedAppointment,
         isReportingPastDue,
         reportingCountdownLabel,
-        reportByTimeDisplay,
-        patientsAhead,
-        estimatedWaitTime,
-        breakMinutes,
-        doctorStatusInfo,
         isDoctorIn,
         handleConfirmArrivalInline,
-        totalDelayMinutes,
-    } = useLiveToken() as any; // Using any briefly for convenience while context stabilizes
+    } = useLiveToken() as any;
 
     if (!yourAppointment) return null;
 
     const isPending = yourAppointment.status === 'Pending';
 
-    // Wait Time / Consultation Time Display
-    const estimatedConsultationTime = useMemo(() => {
-        if (!yourAppointment) return null;
-        try {
-            // Re-calculating here or pass from context
-            // From context: estimatedWaitTime + currentTime
-            return null; // For now
-        } catch { return null; }
-    }, [yourAppointment]);
-
-    const confirmedStatusBanner = useMemo(() => {
-        if (!isConfirmedAppointment) return null;
-        const { isBreak, isLate, isAffected } = doctorStatusInfo;
-        const hasActiveBreak = breakMinutes > 0;
-
-        if ((hasActiveBreak && !isDoctorIn) || isLate || isAffected) {
-            return {
-                text: t.liveToken?.doctorIsLate || (language === 'ml' ? 'ഡോക്ടർ ഇന്ന് വൈകി' : 'Doctor is late today'),
-                className: 'text-red-600',
-            };
-        }
-
-        if (isDoctorIn) {
-            if (patientsAhead === 0) {
-                return {
-                    text: language === 'ml' ? 'ദയവായി കൺസൾട്ടേഷൻ റൂമിലേക്ക് പോകുക' : 'Please go to the consultation room',
-                    className: 'text-green-600',
-                };
-            }
-            return {
-                text: language === 'ml' ? 'കൺസൾട്ടേഷൻ നടന്നുകൊണ്ടിരിക്കുന്നു' : 'Consultation in progress',
-                className: 'text-green-600',
-            };
-        }
-
-        return {
-            text: language === 'ml' ? 'പരിശോധന ഉടൻ ആരംഭിക്കും' : 'Consultation starting soon',
-            className: 'text-green-600',
-        };
-    }, [isConfirmedAppointment, breakMinutes, doctorStatusInfo, isDoctorIn, patientsAhead, t.liveToken, language]);
-
-    const renderReportingTimeSection = () => {
+    const renderArrivalStatus = () => {
         if (!isAppointmentToday) return null;
 
         if (isConfirmedAppointment) {
             return (
-                <div className="flex flex-col items-center justify-center py-4 space-y-2">
+                <div className="flex flex-col items-center justify-center pt-2 space-y-1">
                     <div className="flex items-center gap-2 text-primary">
-                        <UserCheck className="w-6 h-6" />
-                        <span className="text-lg font-bold">
-                            {language === 'ml' ? 'നിങ്ങൾ റിപ്പോർട്ട് ചെയ്തു' : 'You have arrived'}
+                        <UserCheck className="w-5 h-5" />
+                        <span className="text-sm font-bold">
+                            {language === 'ml' ? 'നിങ്ങൾ റിപ്പോർട്ട് ചെയ്തു' : 'Arrived & Verified'}
                         </span>
                     </div>
-                    {confirmedStatusBanner && (
-                        <p className={`text-sm font-medium ${confirmedStatusBanner.className} animate-pulse`}>
-                            {confirmedStatusBanner.text}
-                        </p>
-                    )}
                 </div>
             );
         }
 
         if (isPending || isSkippedAppointment) {
-            const bgClass = isReportingPastDue ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700';
-            const reportingLabel = language === 'ml' ? 'ക്ലിനിക്കിൽ റിപ്പോർട്ട് ചെയ്യേണ്ട സമയം' : 'Estimated reporting time';
+            const bgClass = isReportingPastDue ? 'bg-red-50 text-red-700' : 'bg-primary/5 text-primary';
+            const reportingLabel = language === 'ml' ? 'റിപ്പോർട്ട് ചെയ്യേണ്ട സമയം' : 'Report By';
             
             return (
-                <div className="w-full text-center py-4">
-                    <div className={`${bgClass} rounded-full px-4 py-3 flex flex-col items-center justify-center gap-1`}>
-                        <Hourglass className="w-6 h-6" />
-                        <div className="flex flex-col items-center justify-center">
-                            <span className="text-sm font-medium">{reportingLabel}</span>
-                            <span className="font-bold text-lg">{reportingCountdownLabel}</span>
+                <div className="w-full text-center pt-4">
+                    <div className={`${bgClass} rounded-2xl px-4 py-3 flex flex-col items-center justify-center`}>
+                        <div className="flex items-center gap-2 mb-1">
+                            <Hourglass className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">{reportingLabel}</span>
                         </div>
+                        <span className="font-black text-xl">{reportingCountdownLabel}</span>
                     </div>
                 </div>
             );
@@ -129,121 +76,81 @@ export const AppointmentStatusCard = () => {
     };
 
     return (
-        <Card className="border-none shadow-lg overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 pointer-events-none"></div>
-            
-            <CardContent className="p-6">
+        <Card className="border-none shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+            <CardContent className="p-8">
                 <div className="flex flex-col items-center space-y-6">
-                    <div className="text-center">
-                        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-1">
-                            {t.liveToken.tokenNumber}
+                    {/* Identity Header */}
+                    <div className="text-center space-y-1">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
+                            {yourAppointment.doctorName}
                         </p>
-                        <h2 className="text-6xl font-black text-primary tracking-tighter">
-                            {yourAppointment.tokenNumber}
+                        <h2 className="text-xl font-bold text-foreground">
+                            {yourAppointment.patientName}
                         </h2>
-                        <div className="flex items-center justify-center gap-2 mt-2">
-                            <div className={`w-2 h-2 rounded-full ${isConfirmedAppointment ? 'bg-green-500' : 'bg-blue-500'} animate-pulse`}></div>
-                            <p className="text-sm font-semibold text-muted-foreground capitalize">
-                                {language === 'ml' ? (isConfirmedAppointment ? 'ക്ലിനിക്കിൽ ഇരിക്കുന്നു' : 'നിങ്ങൾ ക്ലിനിക്കിൽ എത്തിയിട്ടില്ല') : yourAppointment.status}
-                            </p>
+                    </div>
+
+                    {/* Alphanumeric Identity Tag */}
+                    <div className="relative group">
+                        <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full scale-75 group-hover:scale-100 transition-transform duration-500"></div>
+                        <div className="relative bg-background border-2 border-primary/10 rounded-3xl px-8 py-4 flex flex-col items-center shadow-inner">
+                            <span className="text-[10px] font-bold text-primary tracking-widest mb-1 opacity-60">MY TOKEN</span>
+                            <span className="text-6xl font-black text-primary tracking-tighter">
+                                {yourAppointment.tokenNumber}
+                            </span>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 w-full gap-4 border-y border-dashed border-gray-100 py-6">
-                        <div className="text-center">
-                            <p className="text-xs text-muted-foreground font-bold uppercase mb-1">{t.home.date}</p>
-                            <p className="font-bold text-gray-900">{formattedDate}</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs text-muted-foreground font-bold uppercase mb-1">{t.home.time}</p>
-                            <p className="font-bold text-gray-900">{yourAppointment.time}</p>
-                        </div>
-                    </div>
-
+                    {/* Check-in Logic */}
                     <div className="w-full">
-                        {renderReportingTimeSection()}
+                        {renderArrivalStatus()}
                         
-                        {isAppointmentToday && !isSkippedAppointment && (
-                            <div className="mt-4 flex flex-col items-center space-y-4">
-                                <div className="grid grid-cols-2 w-full gap-4">
-                                    <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-100 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 group">
-                                        <div className="bg-blue-100/50 p-2 rounded-xl mb-3 group-hover:scale-110 transition-transform">
-                                            <Users className="w-5 h-5 text-blue-600" />
-                                        </div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                                            {t.liveToken.patientsAhead}
-                                        </p>
-                                        <p className="text-3xl font-black text-slate-900 tracking-tighter">{patientsAhead}</p>
-                                    </div>
-
-                                    <div className="bg-gradient-to-br from-indigo-50/30 to-white border border-indigo-100/50 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 group">
-                                        <div className="absolute top-2 right-3 flex items-center gap-1">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                            </span>
-                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter">Live</span>
-                                        </div>
-                                        
-                                        <div className="bg-indigo-100/50 p-2 rounded-xl mb-3 group-hover:scale-110 transition-transform">
-                                            <Clock className="w-5 h-5 text-indigo-600" />
-                                        </div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                                            {t.liveToken.waitTime}
-                                        </p>
-                                        <p className="text-3xl font-black text-slate-900 tracking-tighter">
-                                            {estimatedWaitTime} <span className="text-sm font-bold text-slate-400 -ml-1">m</span>
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {isPending && isAppointmentToday && (
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-14 rounded-2xl shadow-lg shadow-primary/20 group">
-                                                <UserCheck className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
-                                                {language === 'ml' ? 'ഞാൻ എത്തി എന്ന് അറിയിക്കുക' : 'Confirm Arrival'}
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent className="w-[90%] rounded-2xl">
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle className="text-xl font-bold">
-                                                    {language === 'ml' ? 'നിങ്ങൾ എത്തിക്കഴിഞ്ഞോ?' : 'Have you arrived?'}
-                                                </AlertDialogTitle>
-                                                <AlertDialogDescription className="text-base">
-                                                    {language === 'ml' 
-                                                        ? 'ദയവായി ക്ലിനിക്കിൽ റിപ്പോർട്ട് ചെയ്തതിനുശേഷം മാത്രം ഈ ബട്ടൺ അമർത്തുക.' 
-                                                        : 'Please only confirm if you are physically present at the clinic.'}
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter className="flex flex-col-reverse gap-2">
-                                                <AlertDialogCancel className="w-full rounded-xl h-12 border-none bg-slate-100 hover:bg-slate-200">
-                                                    {language === 'ml' ? 'അല്ല' : 'No, Cancel'}
-                                                </AlertDialogCancel>
-                                                <AlertDialogAction 
-                                                    onClick={handleConfirmArrivalInline}
-                                                    className="w-full rounded-xl h-12 bg-primary font-bold"
-                                                >
-                                                    {language === 'ml' ? 'അതെ, ഞാൻ എത്തി' : 'Yes, I am here'}
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                )}
+                        {isPending && isAppointmentToday && (
+                            <div className="mt-6">
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-14 rounded-2xl shadow-lg shadow-primary/20 group">
+                                            <UserCheck className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform" />
+                                            {language === 'ml' ? 'ഞാൻ എത്തി എന്ന് അറിയിക്കുക' : 'Check-in Now'}
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="w-[90%] rounded-2xl">
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle className="text-xl font-bold">
+                                                {language === 'ml' ? 'നിങ്ങൾ എത്തിക്കഴിഞ്ഞോ?' : 'Confirm Arrival?'}
+                                            </AlertDialogTitle>
+                                            <AlertDialogDescription className="text-base text-muted-foreground">
+                                                {language === 'ml' 
+                                                    ? 'ക്ലിനിക്കിൽ റിപ്പോർട്ട് ചെയ്തതിനുശേഷം മാത്രം ഇത് ക്ലിക്ക് ചെയ്യുക.' 
+                                                    : 'Only check-in if you are physically present at the clinic.'}
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter className="flex flex-col-reverse gap-2">
+                                            <AlertDialogCancel className="w-full rounded-xl h-12 border-none bg-slate-100 hover:bg-slate-200">
+                                                {language === 'ml' ? 'അല്ല' : 'Cancel'}
+                                            </AlertDialogCancel>
+                                            <AlertDialogAction 
+                                                onClick={handleConfirmArrivalInline}
+                                                className="w-full rounded-xl h-12 bg-primary font-bold"
+                                            >
+                                                {language === 'ml' ? 'അതെ, ഞാൻ എത്തി' : 'I Have Arrived'}
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             </div>
                         )}
 
                         {isSkippedAppointment && isAppointmentToday && (
-                            <div className="mt-4 p-4 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-orange-600 mt-0.5" />
+                            <div className="mt-6 p-4 bg-red-50 rounded-2xl border border-red-100 flex items-start gap-3 animate-in fade-in zoom-in duration-300">
+                                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
                                 <div>
-                                    <p className="font-bold text-orange-800 text-sm">
-                                        {language === 'ml' ? 'നിങ്ങൾ സ്കിപ്പ് ചെയ്യപ്പെട്ടു' : 'You were skipped'}
+                                    <p className="font-bold text-red-800 text-sm">
+                                        {language === 'ml' ? 'സ്കിപ്പ് ചെയ്യപ്പെട്ടു' : 'Token Skipped'}
                                     </p>
-                                    <p className="text-orange-700 text-xs mt-1 leading-relaxed">
+                                    <p className="text-red-700 text-xs mt-1 leading-relaxed">
                                         {language === 'ml' 
-                                            ? 'നിങ്ങൾ കൃത്യസമയത്ത് റിപ്പോർട്ട് ചെയ്യാത്തതിനാൽ ടോക്കൺ സ്കിപ്പ് ചെയ്യപ്പെട്ടു. ഉടൻ റിപ്പോർട്ട് ചെയ്യുക.' 
-                                            : 'Your token was skipped because you were not present. Report immediately to rejoin the queue.'}
+                                            ? 'റിപ്പോർട്ട് ചെയ്യാത്തതിനാൽ ടോക്കൺ സ്കിപ്പ് ചെയ്യപ്പെട്ടു. ഉടൻ റിപ്പോർട്ട് ചെയ്യുക.' 
+                                            : 'Your token was skipped. Report to the clinic immediately to reactivate.'}
                                     </p>
                                 </div>
                             </div>

@@ -19,20 +19,12 @@ export class ClassicTokenStrategy implements ITokenStrategy {
   constructor(private tokenGenerator: TokenGeneratorService) {}
 
   /**
-   * Classic mode: no token at booking. Return null.
-   * The classicTokenNumber only exists once the patient physically arrives.
+   * Classic Mode: Assign the permanent numeric calling token at booking time.
+   * This ensures the 'Fixed Promise' — your place in line is secured purely
+   * by your slot selection, not your arrival time.
    */
-  async generateBookingToken(_params: BookingTokenParams, _transaction?: any): Promise<null> {
-    return null;
-  }
-
-  async generateArrivalToken(params: ArrivalTokenParams): Promise<string | null> {
-    const { clinicId, doctorId, doctorName, date, sessionIndex, existingClassicTokenNumber } = params;
-
-    // Idempotent: if already assigned, return it unchanged
-    if (existingClassicTokenNumber) {
-      return existingClassicTokenNumber;
-    }
+  async generateBookingToken(params: BookingTokenParams, transaction?: any): Promise<TokenResult | null> {
+    const { clinicId, doctorId, doctorName, date, sessionIndex, slotIndex } = params;
 
     const result = await this.tokenGenerator.generateToken(
       clinicId,
@@ -41,9 +33,25 @@ export class ClassicTokenStrategy implements ITokenStrategy {
       date,
       'A',
       sessionIndex,
-      'classic'
+      'classic',
+      transaction,
+      0, // totalSessionSlots not strictly needed for A-tokens here
+      false, // isPriority
+      slotIndex
     );
 
-    return result.tokenNumber;
+    return result;
+  }
+
+  /**
+   * Classic Mode: Idempotent no-op.
+   * The token is now assigned at booking. This method remains for interface
+   * parity and returns the existing token number.
+   */
+  async generateArrivalToken(params: ArrivalTokenParams): Promise<string | null> {
+    const { existingClassicTokenNumber } = params;
+
+    // The token is already assigned at booking source
+    return existingClassicTokenNumber || null;
   }
 }

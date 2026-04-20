@@ -6,14 +6,12 @@ import {
   ITransaction
 } from '../domain/repositories';
 import { ManagePatientUseCase } from './ManagePatientUseCase';
-import { format } from 'date-fns';
+import { format, addMinutes } from 'date-fns';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { WalkInPlacementService } from '../domain/services/WalkInPlacementService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { sseService } from '../domain/services/SSEService';
-import { db } from '../infrastructure/firebase/config';
-import * as admin from 'firebase-admin';
 import { getClinicNow, getClinicDateString } from '../domain/services/DateUtils';
 import { parse } from 'date-fns';
 
@@ -50,7 +48,9 @@ export class CreateWalkInAppointmentUseCase {
     const clinic = await this.clinicRepo.findById(dto.clinicId);
     if (!clinic) throw new Error('Clinic not found');
 
-    const tokenDistribution = (clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
+    // ── PER-DOCTOR DISTRIBUTION LOGIC ─────────────────────────────────────────
+    // Individual doctor's logic (Classic vs Advanced) takes precedence over clinic defaults.
+    const tokenDistribution = (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
     const walkInSpacing = clinic.walkInTokenAllotment || 0;
 
     // Parse the date string to a Date object for slot generation
@@ -86,7 +86,7 @@ export class CreateWalkInAppointmentUseCase {
     // Firestore will automatically retry this on read-invalidation, meaning
     // if two nurses click at the same moment, one will retry and seamlessly
     // find the next available slot without a 409 error.
-    const result = await db.runTransaction(async (txn) => {
+    const result = await this.appointmentRepo.runTransaction(async (txn) => {
       const now = getClinicNow();
 
       // 1. READ PATH (inside transaction — acquires Firestore read locks)
@@ -122,23 +122,34 @@ export class CreateWalkInAppointmentUseCase {
       );
 
       if (!targetSlot) {
-        // If Force Booked by a nurse, assign to the very next empty slot beyond the session
+        // 🚨 SCENARIO 5: THE OVERTIME VALVE
+        // If Force Booked by a nurse, we assign an "Overtime Slot" beyond the session bounds.
         if (dto.isForceBooked) {
-          console.warn('[WalkIn] Force-book: all buffer slots full. Appending beyond session end.');
-          const occupiedIndices = new Set(
-            sessionAppointments
-              .filter(a => typeof a.slotIndex === 'number')
-              .map(a => a.slotIndex!)
-          );
-          const fallback = sessionSlots.find(s => !occupiedIndices.has(s.index));
-          if (!fallback) throw new Error('No walk-in slots available even with force-book.');
-          // Reuse fallback as targetSlot by re-assigning (TypeScript scoping)
-          return this._bookSlot(fallback, sessionSlots.length, txn, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
+          console.warn(`[WalkIn] Force-book: all slots full for session ${activeSessionIndex}. Appending overtime slot.`);
+          
+          const maxOccupiedIndex = sessionAppointments.length > 0 
+            ? Math.max(...sessionAppointments.filter(a => typeof a.slotIndex === 'number').map(a => a.slotIndex!))
+            : -1;
+            
+          const lastSessionSlot = sessionSlots[sessionSlots.length - 1];
+          const overtimeIndex = Math.max(sessionSlots.length - 1, maxOccupiedIndex) + 1;
+          
+          // Calculate virtual time: last slot time + average consultation duration
+          const avgConsultTime = doctor.averageConsultingTime || 15;
+          const virtualTime = addMinutes(lastSessionSlot.time, avgConsultTime * (overtimeIndex - (sessionSlots.length - 1)));
+
+          const virtualSlot = {
+            index: overtimeIndex,
+            time: virtualTime,
+            sessionIndex: activeSessionIndex
+          };
+
+          return this._bookSlot(virtualSlot, sessionSlots.length, txn as unknown as ITransaction, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
         }
         throw new Error('No walk-in slots available. All buffer slots for this session are occupied.');
       }
 
-      return this._bookSlot(targetSlot, sessionSlots.length, txn, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
+      return this._bookSlot(targetSlot, sessionSlots.length, txn as unknown as ITransaction, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
     });
 
     // ── SSE: Push real-time update to nurse dashboard ─────────────────────────
@@ -163,7 +174,7 @@ export class CreateWalkInAppointmentUseCase {
   private async _bookSlot(
     targetSlot: import('../domain/services/SlotCalculator').DailySlot,
     totalSessionSlots: number,
-    txn: admin.firestore.Transaction,
+    txn: ITransaction,
     dto: CreateWalkInAppointmentDTO,
     doctor: any,
     clinic: any,
@@ -182,7 +193,9 @@ export class CreateWalkInAppointmentUseCase {
       activeSessionIndex,
       tokenDistribution,
       txn as unknown as ITransaction,
-      totalSessionSlots // ← Dynamic Base-100 offset
+      totalSessionSlots, // ← Dynamic Base-100 offset
+      dto.isPriority,
+      targetSlot.index
     );
 
     // Create the slot lock to prevent concurrent double-booking
@@ -193,7 +206,7 @@ export class CreateWalkInAppointmentUseCase {
       date: firestoreDateStr,
       sessionIndex: activeSessionIndex,
       slotIndex: targetSlot.index
-    }, txn as unknown as ITransaction);
+    }, txn);
 
     const isClassic = tokenDistribution === 'classic';
     const appointmentId = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -220,7 +233,7 @@ export class CreateWalkInAppointmentUseCase {
       updatedAt: now
     };
 
-    await this.appointmentRepo.save(appointment, txn as unknown as ITransaction);
+    await this.appointmentRepo.save(appointment, txn);
 
     // ── Atomically increment the session booked-count counter ──────────────
     // This runs inside the same txn as the appointment write.
@@ -231,7 +244,7 @@ export class CreateWalkInAppointmentUseCase {
       firestoreDateStr,
       activeSessionIndex,
       1,
-      txn as unknown as ITransaction
+      txn
     );
 
     return appointment;

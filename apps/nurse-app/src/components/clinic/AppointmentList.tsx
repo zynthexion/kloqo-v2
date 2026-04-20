@@ -670,17 +670,9 @@ export default function AppointmentList({
                                   )}
                                   <div className="flex items-center gap-2">
                                     <p className={cn("font-semibold", isInactive(appt) && 'line-through text-muted-foreground')}>
-                                      {(() => {
-                                        if (tokenDistribution === 'classic') {
-                                          if (appt.status === 'Pending' || !appt.classicTokenNumber) {
-                                            return appt.patientName;
-                                          }
-                                          return `#${appt.classicTokenNumber.toString().padStart(3, '0')} - ${appt.patientName}`;
-                                        }
-                                        return (['Completed', 'Cancelled', 'No-show'].includes(appt.status) || !appt.tokenNumber)
-                                          ? appt.patientName
-                                          : `#${appt.tokenNumber} - ${appt.patientName}`;
-                                      })()}
+                                      {appt.tokenNumber 
+                                        ? `${appt.tokenNumber} - ${appt.patientName}` 
+                                        : appt.patientName}
                                     </p>
                                     {appt.skippedAt && (
                                       <Badge variant="outline" className="text-[10px] h-4 px-1 bg-amber-200 border-amber-400 text-amber-800 leading-none flex items-center justify-center font-bold">

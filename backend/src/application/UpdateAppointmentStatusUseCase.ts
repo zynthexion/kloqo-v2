@@ -6,6 +6,7 @@ import { NotificationService } from '../domain/services/NotificationService';
 import { sseService } from '../domain/services/SSEService';
 import { QueueBubblingService } from '../domain/services/QueueBubblingService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
+import { SlotsFullError } from '../domain/errors';
 
 export class UpdateAppointmentStatusUseCase {
   constructor(
@@ -79,77 +80,13 @@ export class UpdateAppointmentStatusUseCase {
     } else if (status === 'Confirmed') {
       appointment.confirmedAt = new Date();
 
-      // 🧼 WALK-IN DOWNGRADE PROTOCOL (Scenario A: Rahul's Late Arrival)
-      // If a patient was Skipped and tries to re-enter, we must verify if their slot is still ours.
-      if (oldStatus === 'Skipped' && appointment.slotIndex !== undefined) {
-        const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
-          appointment.doctorId,
-          appointment.date
-        );
-        
-        const isSlotAvailable = !allAppointments.some(a => 
-          a.id !== appointment.id && 
-          a.slotIndex === appointment.slotIndex && 
-          a.sessionIndex === appointment.sessionIndex &&
-          (a.status === 'Confirmed' || a.status === 'InConsultation')
-        );
 
-        if (!isSlotAvailable) {
-          console.warn(`[Downgrade] Slot ${appointment.slotIndex} for ${appointment.id} was bubbled. Downgrading to W-Token.`);
-          
-          // 1. Strip A-Token identity
-          appointment.bookedVia = 'Walk-in';
-          
-          // 2. Find a new slot as a standard Walk-in
-          const doctor = await this.doctorRepo.findById(appointment.doctorId);
-          if (doctor) {
-            const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, new Date(appointment.date));
-            const sessionSlots = allSlots.filter(s => s.sessionIndex === appointment.sessionIndex);
-            const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
-            
-            const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
-              sessionSlots,
-              sessionAppts,
-              new Date(),
-              clinic?.tokenDistribution || 'classic',
-              clinic?.walkInTokenAllotment || 0,
-              appointment.isPriority
-            );
-            
-            if (newSlot) {
-              appointment.slotIndex = newSlot.index;
-              appointment.time = format(newSlot.time, 'HH:mm');
-            } else {
-              // No slots? Fallback to appending at the absolute end (Force Book behavior)
-              const maxSlot = Math.max(...sessionSlots.map(s => s.index));
-              appointment.slotIndex = maxSlot + 1;
-            }
-          }
-
-          // 3. Issue a new W-Token (visual indicator of downgrade)
-          const totalSlots = (appointment as any).totalSlots || 100; // Fallback
-          const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
-            appointment.clinicId,
-            appointment.doctorId,
-            appointment.doctorName,
-            appointment.date,
-            'W',
-            appointment.sessionIndex || 0,
-            clinic?.tokenDistribution as any,
-            undefined,
-            totalSlots,
-            appointment.isPriority
-          );
-          appointment.tokenNumber = tokenNumber;
-          appointment.numericToken = numericToken;
-          if (clinic?.tokenDistribution === 'classic') {
-            appointment.classicTokenNumber = tokenNumber;
-          }
-        }
-      }
+      // ── PER-DOCTOR DISTRIBUTION LOGIC ───────────────────────────────────────
+      const doctor = await this.doctorRepo.findById(appointment.doctorId);
+      const effectiveDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
 
       // --- STRATEGY PATTERN: Assign arrival token (classic only) ---
-      const tokenStrategy = TokenStrategyFactory.create(clinic?.tokenDistribution, this.tokenGenerator);
+      const tokenStrategy = TokenStrategyFactory.create(effectiveDistribution, this.tokenGenerator);
       const classicTokenNumber = await tokenStrategy.generateArrivalToken({
         clinicId: appointment.clinicId,
         doctorId: appointment.doctorId,
@@ -200,6 +137,73 @@ export class UpdateAppointmentStatusUseCase {
     const hasSesssionInfo = appointment.sessionIndex !== undefined && appointment.slotIndex !== undefined;
 
     await this.appointmentRepo.runTransaction(async (txn) => {
+      // 🧼 WALK-IN DOWNGRADE PROTOCOL (Scenario A: Rahul's Late Arrival)
+      // If a patient was Skipped and tries to re-confirm, we must verify if their slot was bubbled.
+      if (oldStatus === 'Skipped' && status === 'Confirmed' && appointment.slotIndex !== undefined) {
+        const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
+          appointment.doctorId,
+          appointment.date
+        );
+        
+        const isSlotAvailable = !allAppointments.some(a => 
+          a.id !== appointment.id && 
+          a.slotIndex === appointment.slotIndex && 
+          a.sessionIndex === appointment.sessionIndex &&
+          (a.status === 'Confirmed' || a.status === 'InConsultation' || a.status === 'Completed')
+        );
+
+        if (!isSlotAvailable) {
+          console.warn(`[Downgrade] Slot ${appointment.slotIndex} was bubbled. Moving to next gap.`);
+          
+          appointment.bookedVia = 'Walk-in';
+          const doctor = await this.doctorRepo.findById(appointment.doctorId);
+          const effectiveDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
+          
+          if (doctor) {
+            const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, new Date(appointment.date));
+            const sessionSlots = allSlots.filter((s: any) => s.sessionIndex === appointment.sessionIndex);
+            const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
+            
+            const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
+              sessionSlots,
+              sessionAppts,
+              new Date(),
+              effectiveDistribution as any,
+              clinic?.walkInTokenAllotment || 0,
+              appointment.isPriority
+            );
+            
+            if (newSlot) {
+              appointment.slotIndex = newSlot.index;
+              appointment.time = format(newSlot.time, 'HH:mm');
+            } else {
+              // Forced overflow logic if session is 100% full
+              const maxSlotInSession = sessionSlots.length > 0 ? Math.max(...sessionSlots.map((s: any) => s.index)) : 0;
+              const maxOccupied = sessionAppts.length > 0 ? Math.max(...sessionAppts.map(a => a.slotIndex || 0)) : 0;
+              appointment.slotIndex = Math.max(maxSlotInSession, maxOccupied) + 1;
+            }
+
+            // Issue new W-Token
+            const totalSlots = (appointment as any).totalSlots || Math.max(100, sessionSlots.length);
+            const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
+              appointment.clinicId,
+              appointment.doctorId,
+              appointment.doctorName,
+              appointment.date,
+              'W',
+              appointment.sessionIndex || 0,
+              effectiveDistribution as any,
+              txn,
+              totalSlots,
+              appointment.isPriority,
+              appointment.slotIndex
+            );
+            appointment.tokenNumber = tokenNumber;
+            appointment.numericToken = numericToken;
+          }
+        }
+      }
+
       await this.appointmentRepo.update(appointmentId, appointment, txn);
 
       // Decrement bookedCount for every terminal status transition.
@@ -258,14 +262,19 @@ export class UpdateAppointmentStatusUseCase {
   private async triggerBufferRefill(clinicId: string, doctorName: string) {
     // Match Firestore date format 'd MMMM yyyy'
     const today = format(new Date(), 'd MMMM yyyy');
-    const clinic = await this.clinicRepo.findById(clinicId);
-    if (!clinic) return;
-    const tokenDistribution = clinic.tokenDistribution || 'classic';
-
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
     const doctorAppointments = appointments.filter(
       apt => apt.doctorName === doctorName && apt.status === 'Confirmed'
     );
+
+    if (doctorAppointments.length === 0) return;
+
+    const firstAppt = doctorAppointments[0];
+    const doctor = await this.doctorRepo.findById(firstAppt.doctorId);
+    const clinic = await this.clinicRepo.findById(clinicId);
+    
+    // Per-doctor distribution takes precedence
+    const tokenDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
 
     const currentBuffered = doctorAppointments.filter(a => a.isInBuffer);
     if (currentBuffered.length < 2) {

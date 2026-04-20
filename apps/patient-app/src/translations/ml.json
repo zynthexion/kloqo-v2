@@ -363,7 +363,14 @@
     "confirmArrival": "ക്ലിനിക്കിലെത്തി എന്ന് ഉറപ്പാക്കുക",
     "confirmedPatientsAhead": "നിങ്ങളുടെ മുന്നിൽ ഉള്ള സ്ഥിരീകരിച്ച രോഗികൾ",
     "arriveAtClinicInstruction": "ഓരോ രോഗിയെയും പരിശോധിക്കുമ്പോൾ നിങ്ങളുടെ സ്ഥാനം മാറിക്കൊണ്ടിരിക്കും.",
-    "showLiveQueue": "ലൈവ് ക്യൂ കാണുക"
+    "showLiveQueue": "ലൈവ് ക്യൂ കാണുക",
+    "nowInside": "ഇപ്പോൾ ഉള്ളിൽ",
+    "upNext": "അടുത്ത ഊഴം",
+    "nextInLine": "അടുത്തത്",
+    "systemNotice": "അറിയിപ്പ്",
+    "actionRequired": "ശ്രദ്ധിക്കുക",
+    "doctorOnShortBreak": "ഡോക്ടർ ചെറിയൊരു വിശ്രമത്തിലാണ്",
+    "consultationInProgress": "പരിശോധന നടന്നുകൊണ്ടിരിക്കുന്നു"
   },
   "clinics": {
     "title": "ക്ലിനിക്കുകൾ",

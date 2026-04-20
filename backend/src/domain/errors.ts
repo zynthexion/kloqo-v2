@@ -41,3 +41,8 @@ export class DuplicateBookingError extends DomainError {
     super(message);
   }
 }
+export class SlotsFullError extends DomainError {
+  constructor() {
+    super('No walk-in slots available');
+  }
+}

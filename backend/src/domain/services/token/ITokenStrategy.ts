@@ -14,6 +14,7 @@ export interface BookingTokenParams {
   doctorName: string;
   date: string; // 'd MMMM yyyy'
   sessionIndex: number;
+  slotIndex: number;
 }
 
 export interface ArrivalTokenParams {

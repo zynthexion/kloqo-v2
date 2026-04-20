@@ -14,9 +14,19 @@ export class AdvancedTokenStrategy implements ITokenStrategy {
   constructor(private tokenGenerator: TokenGeneratorService) {}
 
   async generateBookingToken(params: BookingTokenParams, transaction?: any): Promise<TokenResult> {
-    const { clinicId, doctorId, doctorName, date, sessionIndex } = params;
+    const { clinicId, doctorId, doctorName, date, sessionIndex, slotIndex } = params;
     return this.tokenGenerator.generateToken(
-      clinicId, doctorId, doctorName, date, 'A', sessionIndex, 'advanced', transaction
+      clinicId, 
+      doctorId, 
+      doctorName, 
+      date, 
+      'A', 
+      sessionIndex, 
+      'advanced', 
+      transaction,
+      0, // totalSessionSlots
+      false, // isPriority
+      slotIndex
     );
   }
 

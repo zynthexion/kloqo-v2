@@ -58,17 +58,16 @@ export class GetNurseDashboardUseCase {
     }
 
     const doctorsList = Array.isArray(doctors) ? doctors : doctors.data;
-    const tokenDistribution = clinic.tokenDistribution || 'classic';
-
     // Compute queues for each doctor
     const queues: Record<string, QueueState> = {};
 
     doctorsList.forEach(doctor => {
       const doctorAppointments = filteredAppointments.filter(apt => apt.doctorName === doctor.name);
+      const docDistribution = doctor.tokenDistribution || clinic.tokenDistribution || 'advanced';
       
       const arrivedQueue = doctorAppointments
         .filter(apt => apt.status === 'Confirmed' && !apt.isPriority)
-        .sort(tokenDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
+        .sort(docDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
 
       const priorityQueue = doctorAppointments
         .filter(apt => apt.status === 'Confirmed' && apt.isPriority)

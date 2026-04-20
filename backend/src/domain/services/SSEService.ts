@@ -17,7 +17,8 @@ export type SSEEventType =
   | 'session_ended'
   | 'break_scheduled'
   | 'break_cancelled'
-  | 'appointment_reslotted';
+  | 'appointment_reslotted'
+  | 'queue_reoptimized';
 
 export interface SSEEvent {
   type: SSEEventType;
