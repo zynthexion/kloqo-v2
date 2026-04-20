@@ -20,7 +20,8 @@ export class TokenGeneratorService {
      * even for large (100+ slot) sessions.
      * Defaults to 0 → falls back to legacy flat +100.
      */
-    totalSessionSlots: number = 0
+    totalSessionSlots: number = 0,
+    isPriority: boolean = false
   ): Promise<{ tokenNumber: string; numericToken: number }> {
     const isClassic = tokenDistribution === 'classic';
     let counterDocId: string;
@@ -34,17 +35,18 @@ export class TokenGeneratorService {
     const result = await this.appointmentRepo.incrementTokenCounter(counterDocId, isClassic, transaction);
 
     if (isClassic) {
-      const tokenNumber = String(result).padStart(3, '0');
-      return { tokenNumber, numericToken: result };
+      const numericPart = result;
+      const prefix = isPriority ? 'PW-' : '';
+      const tokenNumber = `${prefix}${String(numericPart).padStart(3, '0')}`;
+      return { tokenNumber, numericToken: numericPart };
     }
 
-    // Dynamic Base Offset: the numericToken for W-tokens must always be higher
-    // than any possible A-token (which equals slotIndex+1, max = totalSessionSlots).
-    // Math.max(100, totalSessionSlots) gives us a guaranteed safe floor.
     const numericPart = type === 'W'
       ? Math.max(100, totalSessionSlots) + result
       : result;
-    const tokenNumber = `${type}${String(numericPart).padStart(3, '0')}`;
+    
+    const prefix = isPriority ? 'PW' : type;
+    const tokenNumber = `${prefix}${String(numericPart).padStart(3, '0')}`;
 
     return { tokenNumber, numericToken: numericPart };
   }

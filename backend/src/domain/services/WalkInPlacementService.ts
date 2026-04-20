@@ -32,7 +32,8 @@ export class WalkInPlacementService {
     appointments: Appointment[],
     now: Date,
     mode: 'classic' | 'advanced',
-    walkInSpacing: number
+    walkInSpacing: number,
+    isPriority: boolean = false
   ): DailySlot | null {
     const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Skipped', 'Completed']);
 
@@ -42,6 +43,19 @@ export class WalkInPlacementService {
         .filter(a => ACTIVE_STATUSES.has(a.status) && typeof a.slotIndex === 'number')
         .map(a => a.slotIndex!)
     );
+
+    // 🚑 PRIORITY TRIAGE (PW-Token Logic)
+    // If priority, we bypass ALL rhythmic/buffer constraints and take the first physical gap.
+    if (isPriority) {
+      const bubbleGap = sessionSlots.find(slot =>
+        !occupiedSlotIndices.has(slot.index) &&
+        isAfter(slot.time, now)
+      );
+      if (bubbleGap) {
+        console.log(`[WalkInPlacement] PRIORITY: Injecting PW-Token into first physical gap at slot ${bubbleGap.index}`);
+        return bubbleGap;
+      }
+    }
 
     if (mode === 'advanced') {
       return this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now);

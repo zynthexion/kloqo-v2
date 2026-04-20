@@ -30,6 +30,7 @@ export interface CreateWalkInAppointmentDTO {
   patientId?: string;
   date: string; // d MMMM yyyy
   isForceBooked?: boolean; // Nurse-only: bypass capacity cap
+  isPriority?: boolean; // Triage cases (PW-Tokens)
 }
 
 export class CreateWalkInAppointmentUseCase {
@@ -116,7 +117,8 @@ export class CreateWalkInAppointmentUseCase {
         sessionAppointments,
         now,
         tokenDistribution,
-        walkInSpacing
+        walkInSpacing,
+        dto.isPriority
       );
 
       if (!targetSlot) {
@@ -213,6 +215,7 @@ export class CreateWalkInAppointmentUseCase {
       slotIndex: targetSlot.index,
       sessionIndex: activeSessionIndex,
       arriveByTime: format(targetSlot.time, 'HH:mm'),
+      isPriority: dto.isPriority,
       createdAt: now,
       updatedAt: now
     };

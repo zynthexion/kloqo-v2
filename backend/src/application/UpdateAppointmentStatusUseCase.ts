@@ -79,6 +79,75 @@ export class UpdateAppointmentStatusUseCase {
     } else if (status === 'Confirmed') {
       appointment.confirmedAt = new Date();
 
+      // 🧼 WALK-IN DOWNGRADE PROTOCOL (Scenario A: Rahul's Late Arrival)
+      // If a patient was Skipped and tries to re-enter, we must verify if their slot is still ours.
+      if (oldStatus === 'Skipped' && appointment.slotIndex !== undefined) {
+        const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
+          appointment.doctorId,
+          appointment.date
+        );
+        
+        const isSlotAvailable = !allAppointments.some(a => 
+          a.id !== appointment.id && 
+          a.slotIndex === appointment.slotIndex && 
+          a.sessionIndex === appointment.sessionIndex &&
+          (a.status === 'Confirmed' || a.status === 'InConsultation')
+        );
+
+        if (!isSlotAvailable) {
+          console.warn(`[Downgrade] Slot ${appointment.slotIndex} for ${appointment.id} was bubbled. Downgrading to W-Token.`);
+          
+          // 1. Strip A-Token identity
+          appointment.bookedVia = 'Walk-in';
+          
+          // 2. Find a new slot as a standard Walk-in
+          const doctor = await this.doctorRepo.findById(appointment.doctorId);
+          if (doctor) {
+            const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, new Date(appointment.date));
+            const sessionSlots = allSlots.filter(s => s.sessionIndex === appointment.sessionIndex);
+            const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
+            
+            const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
+              sessionSlots,
+              sessionAppts,
+              new Date(),
+              clinic?.tokenDistribution || 'classic',
+              clinic?.walkInTokenAllotment || 0,
+              appointment.isPriority
+            );
+            
+            if (newSlot) {
+              appointment.slotIndex = newSlot.index;
+              appointment.time = format(newSlot.time, 'HH:mm');
+            } else {
+              // No slots? Fallback to appending at the absolute end (Force Book behavior)
+              const maxSlot = Math.max(...sessionSlots.map(s => s.index));
+              appointment.slotIndex = maxSlot + 1;
+            }
+          }
+
+          // 3. Issue a new W-Token (visual indicator of downgrade)
+          const totalSlots = (appointment as any).totalSlots || 100; // Fallback
+          const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
+            appointment.clinicId,
+            appointment.doctorId,
+            appointment.doctorName,
+            appointment.date,
+            'W',
+            appointment.sessionIndex || 0,
+            clinic?.tokenDistribution as any,
+            undefined,
+            totalSlots,
+            appointment.isPriority
+          );
+          appointment.tokenNumber = tokenNumber;
+          appointment.numericToken = numericToken;
+          if (clinic?.tokenDistribution === 'classic') {
+            appointment.classicTokenNumber = tokenNumber;
+          }
+        }
+      }
+
       // --- STRATEGY PATTERN: Assign arrival token (classic only) ---
       const tokenStrategy = TokenStrategyFactory.create(clinic?.tokenDistribution, this.tokenGenerator);
       const classicTokenNumber = await tokenStrategy.generateArrivalToken({
