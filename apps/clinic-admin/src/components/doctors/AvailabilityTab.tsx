@@ -62,7 +62,9 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
     averageConsultingTime: doctor.averageConsultingTime || 10,
     consultationFee: doctor.consultationFee || 0,
     freeFollowUpDays: doctor.freeFollowUpDays || 0,
-    advanceBookingDays: doctor.advanceBookingDays || 7
+    advanceBookingDays: doctor.advanceBookingDays || 7,
+    walkInReserveRatio: doctor.walkInReserveRatio || 0.15,
+    gracePeriodMinutes: doctor.gracePeriodMinutes || 15
   });
 
   const form = useForm<WeeklyAvailabilityFormValues>({
@@ -92,7 +94,9 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
         averageConsultingTime: doctor.averageConsultingTime || 10,
         consultationFee: doctor.consultationFee || 0,
         freeFollowUpDays: doctor.freeFollowUpDays || 0,
-        advanceBookingDays: doctor.advanceBookingDays || 7
+        advanceBookingDays: doctor.advanceBookingDays || 7,
+        walkInReserveRatio: doctor.walkInReserveRatio || 0.15,
+        gracePeriodMinutes: doctor.gracePeriodMinutes || 15
       });
     }
   }, [doctor, isEditingSettings]);
@@ -140,7 +144,9 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
         averageConsultingTime: Number(settingsForm.averageConsultingTime),
         consultationFee: Number(settingsForm.consultationFee),
         freeFollowUpDays: Number(settingsForm.freeFollowUpDays),
-        advanceBookingDays: Number(settingsForm.advanceBookingDays)
+        advanceBookingDays: Number(settingsForm.advanceBookingDays),
+        walkInReserveRatio: Number(settingsForm.walkInReserveRatio),
+        gracePeriodMinutes: Number(settingsForm.gracePeriodMinutes)
       });
       setIsEditingSettings(false);
       toast({ title: "Settings Updated" });
@@ -178,19 +184,22 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
           )}
         </CardHeader>
         <CardContent className="p-8">
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
             {[
               { label: "Avg Consulting Time", val: settingsForm.averageConsultingTime, key: "averageConsultingTime", unit: "min" },
               { label: "Consultation Fee", val: settingsForm.consultationFee, key: "consultationFee", unit: "₹", prefix: true },
               { label: "Free Follow-up", val: settingsForm.freeFollowUpDays, key: "freeFollowUpDays", unit: "days" },
-              { label: "Advance Window", val: settingsForm.advanceBookingDays, key: "advanceBookingDays", unit: "days" }
+              { label: "Advance Window", val: settingsForm.advanceBookingDays, key: "advanceBookingDays", unit: "days" },
+              { label: "Walk-in Buffer", val: (settingsForm.walkInReserveRatio * 100).toFixed(0), key: "walkInReserveRatio", unit: "%", isRatio: true },
+              { label: "Skip Grace Period", val: settingsForm.gracePeriodMinutes, key: "gracePeriodMinutes", unit: "min" }
             ].map((item) => (
               <div key={item.key} className="space-y-4 p-6 bg-slate-50/50 rounded-3xl border-2 border-slate-100/50 transition-all hover:border-emerald-100 group">
                  <Label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none block mb-1 group-hover:text-emerald-500 transition-colors">{item.label}</Label>
                  {isEditingSettings ? (
                     <Input 
                       type="number" 
-                      value={item.val} 
+                      step={item.isRatio ? "0.01" : "1"}
+                      value={item.isRatio ? settingsForm.walkInReserveRatio : item.val} 
                       onChange={e => setSettingsForm({ ...settingsForm, [item.key]: Number(e.target.value) })}
                       className="rounded-xl border-2 border-slate-100 bg-white font-black text-base text-slate-800 h-12 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-200" 
                     />

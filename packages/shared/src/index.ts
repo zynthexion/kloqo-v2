@@ -150,6 +150,10 @@ export interface Doctor {
   sessions?: any[];
   latitude?: number;
   longitude?: number;
+  /** Walk-in buffer ratio (0.0 – 1.0). Default 0.15 = 15% of session reserved for W-Tokens. */
+  walkInReserveRatio?: number;
+  /** Minutes after scheduled time before a Confirmed patient is auto-Skipped by the Sweep Engine. Default 15. */
+  gracePeriodMinutes?: number;
 }
 
 
@@ -209,6 +213,10 @@ export interface Appointment {
   delay?: number;
   cutOffTime?: any;
   doctorDelayMinutes?: number;
+  /**
+   * True when a nurse bypassed the full-capacity guard via the Emergency Valve.
+   * The slot counter still increments — nursing UI will show overtime (e.g. 102/100).
+   */
   isForceBooked?: boolean;
   isSkipped?: boolean;
   reviewed?: boolean;
@@ -302,6 +310,10 @@ export interface Clinic {
   genderPreference?: 'Men' | 'Women' | 'General';
   tokenDistribution?: 'classic' | 'advanced';
   showEstimatedWaitTime?: boolean;
+  /** Clinic-level walk-in buffer ratio override (0.0 – 1.0). Doctor-level config takes precedence if set. */
+  walkInReserveRatio?: number;
+  /** Clinic-level grace period in minutes for the Sweep Engine. Doctor-level config takes precedence if set. */
+  gracePeriodMinutes?: number;
   operatingHours?: {
     day: string;
     isClosed: boolean;

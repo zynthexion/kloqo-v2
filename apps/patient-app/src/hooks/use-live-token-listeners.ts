@@ -4,10 +4,13 @@
  * useLiveTokenListeners
  *
  * Migrated to V2 Backend API.
- * Uses polling to simulate live updates from the backend queue status.
+ * Uses SSE for real-time updates with a resilience layer:
+ *   1. appointment_reslotted → instant EWT recalculation (Phase 4)
+ *   2. Foreground Sync → re-fetches queue when tab regains visibility (Phase 4)
+ *   3. 60s Polling Fallback → activates when SSE drops, stops when it reconnects (Phase 4)
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { getClinicNow, getClinicDateString } from '@kloqo/shared-core';
 import type { Appointment, Doctor, Clinic } from '@kloqo/shared';
 import { apiRequest } from '@/lib/api-client';
@@ -40,33 +43,15 @@ export function useLiveTokenListeners({
     const [liveDoctor, setLiveDoctor] = useState<Doctor | null>(null);
     const [clinics, setClinics] = useState<Clinic[]>([]);
     const [loading, setLoading] = useState(true);
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // 1. Fetch Clinics Metadata
     useEffect(() => {
         if (clinicIds.length === 0) return;
-        let isMounted = true;
-
-        const fetchClinics = async () => {
-            try {
-                // Backend discovery endpoint has been hardened. 
-                // Context-specific clinic info should be fetched via /public-booking/clinics/:id
-                /*
-                const queryStr = clinicIds.map(id => `clinicIds[]=${id}`).join('&');
-                const data = await apiRequest(`/discovery/public?${queryStr}`);
-                if (isMounted && data.clinics) {
-                    setClinics(data.clinics);
-                }
-                */
-            } catch (err) {
-                console.error('[useLiveTokenListeners] Fetch clinics error:', err);
-            }
-        };
-
-        fetchClinics();
-        return () => { isMounted = false; };
+        // Clinic metadata loaded from clinicData in parent context via /clinics/:id
     }, [clinicIds]);
 
-    // 2. Fetch Queue Status
+    // 2. Core Queue Fetch
     const fetchQueueStatus = useCallback(async () => {
         if (!doctorId || !clinicId) return;
 
@@ -75,14 +60,10 @@ export function useLiveTokenListeners({
         const appointmentDateStr = activeAppointment?.date || todayStr;
 
         try {
-            // Get status for today or the appointment date through the hardened public booking API
             const data = await apiRequest(`/public-booking/clinics/${clinicId}/doctors/${doctorId}/queue?date=${appointmentDateStr}`);
             
             if (data) {
-                // Map backend response to what frontend expects
                 setLiveDoctor(data.doctor as Doctor);
-                
-                // If it's today's queue
                 if (appointmentDateStr === todayStr) {
                     setAllClinicAppointments(data.masterQueue as Appointment[]);
                 } else {
@@ -96,24 +77,75 @@ export function useLiveTokenListeners({
         }
     }, [doctorId, clinicId, activeAppointment?.date]);
 
+    // 3. Initial fetch
     useEffect(() => {
         fetchQueueStatus();
     }, [fetchQueueStatus]);
 
-    // SSE: Listen for real-time updates from the backend
-    useSSE({
+    // 4. Foreground Sync: Re-fetch when the patient brings the app back into view.
+    //    Handles the case where SSE missed events while the app was minimized.
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log('[useLiveTokenListeners] App foregrounded — re-syncing queue...');
+                fetchQueueStatus();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [fetchQueueStatus]);
+
+    // 5. SSE: Primary real-time channel.
+    //    appointment_reslotted → triggers EWT recalculation by refreshing queue state.
+    const { readyState } = useSSE({
         clinicId,
         onEvent: useCallback((event) => {
-            if (['appointment_status_changed', 'walk_in_created', 'queue_updated', 'token_called'].includes(event.type)) {
+            // All queue-mutating events trigger a re-fetch.
+            // appointment_reslotted specifically ensures EWT instantly reflects the new slot order.
+            const queueEvents = [
+                'appointment_status_changed',
+                'walk_in_created',
+                'queue_updated',
+                'token_called',
+                'appointment_reslotted', // EWT instant bind: slot moved → refresh queue → UI recalculates EWT
+            ];
+            if (queueEvents.includes(event.type)) {
                 fetchQueueStatus();
             }
         }, [fetchQueueStatus])
     });
 
-    // 3. Fallback/Special case for future appointments if not the current one
-    // (Handled by the poll now since it uses activeAppointment?.date)
+    // 6. 60s Polling Fallback: Activates when SSE is CONNECTING or CLOSED.
+    //    Stops automatically once the SSE connection is re-established (OPEN).
+    useEffect(() => {
+        const SSE_OPEN = 1; // EventSource.OPEN
 
-    // Merge today + future into a single de-duplicated list
+        if (readyState !== SSE_OPEN) {
+            // SSE is down — start polling every 60 seconds
+            if (!pollingIntervalRef.current) {
+                console.warn('[useLiveTokenListeners] SSE unavailable — starting 60s polling fallback.');
+                pollingIntervalRef.current = setInterval(() => {
+                    fetchQueueStatus();
+                }, 60_000);
+            }
+        } else {
+            // SSE is up — clear polling fallback
+            if (pollingIntervalRef.current) {
+                console.log('[useLiveTokenListeners] SSE restored — stopping polling fallback.');
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        }
+
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, [readyState, fetchQueueStatus]);
+
+    // 7. Merge today + future into a de-duplicated list
     const allRelevantAppointments = useMemo<Appointment[]>(() => {
         const merged = [...allClinicAppointments, ...futureAppointments];
         const map = new Map<string, Appointment>();
@@ -130,3 +162,4 @@ export function useLiveTokenListeners({
         loading
     };
 }
+

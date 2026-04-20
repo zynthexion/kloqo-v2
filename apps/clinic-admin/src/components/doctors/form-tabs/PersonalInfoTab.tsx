@@ -301,6 +301,45 @@ export function PersonalInfoTab({
           )}
         />
 
+        <div className="pt-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-emerald-500" />
+            <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Queue Optimization</Label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="walkInReserveRatio"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest">Walk-in Buffer (%)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min="0" max="1" {...field} value={field.value} onChange={(e) => field.onChange(Number(e.target.value))} />
+                  </FormControl>
+                  <FormDescription className="text-[9px]">e.g. 0.15 = 15%</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="gracePeriodMinutes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest">Skip Grace (min)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min="5" max="60" {...field} />
+                  </FormControl>
+                  <FormDescription className="text-[9px]">Auto-skip after arrival</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+
         <div className="pt-6 border-t border-slate-100 flex flex-col gap-4">
            <div className="flex items-center gap-2">
               <Shield className="h-4 w-4 text-theme-blue" />

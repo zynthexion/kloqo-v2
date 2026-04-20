@@ -1,6 +1,6 @@
 import { Appointment, PaginationParams, PaginatedResponse } from '../../../../packages/shared/src/index';
 import * as admin from 'firebase-admin';
-import { IAppointmentRepository, IDBTransaction } from '../../domain/repositories';
+import { IAppointmentRepository, ITransaction } from '../../domain/repositories';
 import { db, paginate } from './config';
 
 export class FirebaseAppointmentRepository implements IAppointmentRepository {
@@ -73,7 +73,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(doc => !doc.isDeleted);
   }
 
-  async save(appointment: Appointment, transaction?: IDBTransaction): Promise<void> {
+  async save(appointment: Appointment, transaction?: ITransaction): Promise<void> {
     const data: any = {
       ...appointment,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -88,7 +88,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
-  async update(id: string, data: Partial<Appointment>, transaction?: IDBTransaction): Promise<void> {
+  async update(id: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void> {
     const updateData: any = {
       ...data,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -167,7 +167,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(doc => !doc.isDeleted && !!doc.prescriptionUrl);
   }
 
-  async incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: IDBTransaction): Promise<number> {
+  async incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number> {
     const safeCounterId = counterId.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
     const counterRef = db.collection('token-counters').doc(safeCounterId);
 
@@ -290,22 +290,19 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
 
   // ── Transaction & Locking Implementations ───────────────────────────────
 
-  async runTransaction<T>(action: (transaction: IDBTransaction) => Promise<T>): Promise<T> {
+  async runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T> {
     return db.runTransaction(async (t) => {
       return action(t);
     });
   }
 
   async createSlotLock(
-    lockId: string, 
-    data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number }, 
-    transaction: IDBTransaction
+    lockId: string,
+    data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number },
+    transaction: ITransaction
   ): Promise<void> {
     const docRef = db.collection('slot-locks').doc(lockId);
-    
-    // Convert to Firestore Transaction cast
     const t = transaction as admin.firestore.Transaction;
-    
     // .create() fails atomically at the DB level if the document already exists
     t.create(docRef, {
       ...data,
@@ -313,14 +310,43 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     });
   }
 
-  async releaseSlotLock(lockId: string, transaction?: IDBTransaction): Promise<void> {
+  async releaseSlotLock(lockId: string, transaction?: ITransaction): Promise<void> {
     const docRef = db.collection('slot-locks').doc(lockId);
-    
     if (transaction) {
       const t = transaction as admin.firestore.Transaction;
       t.delete(docRef);
     } else {
       await docRef.delete();
     }
+  }
+
+  /**
+   * Atomically updates the session-level booked-count Firestore document.
+   * MUST be called inside the same transaction as the appointment write.
+   * delta = +1 for new bookings, -1 for cancellation/skip/no-show.
+   */
+  async updateBookedCount(
+    clinicId: string,
+    doctorId: string,
+    date: string,
+    sessionIndex: number,
+    delta: 1 | -1,
+    transaction: ITransaction
+  ): Promise<void> {
+    const safeDate = date.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    const counterId = `${clinicId}_${doctorId}_${safeDate}_${sessionIndex}`;
+    const counterRef = db.collection('session-booked-counts').doc(counterId);
+    const t = transaction as admin.firestore.Transaction;
+
+    // Use FieldValue.increment for a true atomic operation.
+    // If the document doesn't exist, set() with merge will create it.
+    t.set(counterRef, {
+      clinicId,
+      doctorId,
+      date,
+      sessionIndex,
+      bookedCount: admin.firestore.FieldValue.increment(delta),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
   }
 }

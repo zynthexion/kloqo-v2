@@ -45,6 +45,7 @@ import { BatchNotificationService } from '../../../domain/services/BatchNotifica
 import { TokenGeneratorService } from '../../../domain/services/token/TokenGeneratorService';
 import { SSEService } from '../../../domain/services/SSEService';
 import { PrescriptionPDFService } from '../../pdf/PrescriptionPDFService';
+import { QueueBubblingService } from '../../../domain/services/QueueBubblingService';
 
 // ── Application: Use Cases ─────────────────────────────────────────────────
 import { ManagePatientUseCase } from '../../../application/ManagePatientUseCase';
@@ -131,6 +132,7 @@ import { ForcePasswordResetUseCase } from '../../../application/ForcePasswordRes
 import { VerifySubscriptionUpgradeUseCase } from '../../../application/VerifySubscriptionUpgradeUseCase';
 import { ImpersonateClinicUseCase } from '../../../application/ImpersonateClinicUseCase';
 import { GetInvestorMetricsUseCase } from '../../../application/GetInvestorMetricsUseCase';
+import { ProcessGracePeriodsUseCase } from '../../../application/ProcessGracePeriodsUseCase';
 
 // ── Interfaces: Controllers ────────────────────────────────────────────────
 import { AppointmentController } from '../../../interfaces/AppointmentController';
@@ -194,6 +196,7 @@ const batchNotificationService = new BatchNotificationService(
 );
 const tokenGeneratorService = new TokenGeneratorService(appointmentRepo);
 const sseService = new SSEService();
+const queueBubblingService = new QueueBubblingService(appointmentRepo);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 3: Use Cases
@@ -264,7 +267,7 @@ const deleteDepartmentUseCase = new DeleteDepartmentUseCase(departmentRepo);
 // Appointments
 const getAllAppointmentsUseCase = new GetAllAppointmentsUseCase(appointmentRepo);
 const getNurseDashboardUseCase = new GetNurseDashboardUseCase(clinicRepo, doctorRepo, appointmentRepo, syncClinicStatusesUseCase);
-const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService);
+const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, queueBubblingService);
 const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
 const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
 const getAvailableSlotsUseCase = new GetAvailableSlotsUseCase(appointmentRepo, doctorRepo, clinicRepo);
@@ -300,6 +303,7 @@ const updateNotificationConfigUseCase = new UpdateNotificationConfigUseCase(noti
 const resetNotificationConfigsUseCase = new ResetNotificationConfigsUseCase(notificationRepo);
 const processBatchNotificationsUseCase = new ProcessBatchNotificationsUseCase(batchNotificationService);
 const getInvestorMetricsUseCase = new GetInvestorMetricsUseCase(subscriptionRepo, appointmentRepo);
+const processGracePeriodsUseCase = new ProcessGracePeriodsUseCase(appointmentRepo, clinicRepo, doctorRepo, queueBubblingService);
 
 // Settings
 const getGlobalSettingsUseCase = new GetGlobalSettingsUseCase(globalSettingsRepo);
@@ -474,4 +478,5 @@ export const container = {
   subscriptionRepo,
   appointmentRepo,
   getPublicQueueStatusUseCase,
+  processGracePeriodsUseCase,
 };

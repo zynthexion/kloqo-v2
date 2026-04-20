@@ -166,24 +166,33 @@ export const AppointmentStatusCard = () => {
                         {isAppointmentToday && !isSkippedAppointment && (
                             <div className="mt-4 flex flex-col items-center space-y-4">
                                 <div className="grid grid-cols-2 w-full gap-4">
-                                    <div className="bg-slate-50 rounded-2xl p-4 flex flex-col items-center justify-center">
-                                        <div className="text-primary/60 mb-1">
-                                            <Info className="w-4 h-4" />
+                                    <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-100 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 group">
+                                        <div className="bg-blue-100/50 p-2 rounded-xl mb-3 group-hover:scale-110 transition-transform">
+                                            <Users className="w-5 h-5 text-blue-600" />
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                                             {t.liveToken.patientsAhead}
                                         </p>
-                                        <p className="text-2xl font-black text-slate-900">{patientsAhead}</p>
+                                        <p className="text-3xl font-black text-slate-900 tracking-tighter">{patientsAhead}</p>
                                     </div>
-                                    <div className="bg-slate-50 rounded-2xl p-4 flex flex-col items-center justify-center">
-                                        <div className="text-primary/60 mb-1">
-                                            <Clock className="w-4 h-4" />
+
+                                    <div className="bg-gradient-to-br from-indigo-50/30 to-white border border-indigo-100/50 rounded-3xl p-5 flex flex-col items-center justify-center shadow-sm relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 group">
+                                        <div className="absolute top-2 right-3 flex items-center gap-1">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                            </span>
+                                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter">Live</span>
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        
+                                        <div className="bg-indigo-100/50 p-2 rounded-xl mb-3 group-hover:scale-110 transition-transform">
+                                            <Clock className="w-5 h-5 text-indigo-600" />
+                                        </div>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                                             {t.liveToken.waitTime}
                                         </p>
-                                        <p className="text-2xl font-black text-slate-900">
-                                            {estimatedWaitTime} <span className="text-sm font-normal text-slate-400">{t.liveToken.minutes}</span>
+                                        <p className="text-3xl font-black text-slate-900 tracking-tighter">
+                                            {estimatedWaitTime} <span className="text-sm font-bold text-slate-400 -ml-1">m</span>
                                         </p>
                                     </div>
                                 </div>

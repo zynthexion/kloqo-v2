@@ -1,4 +1,4 @@
-import { IPatientRepository, IDBTransaction } from '../domain/repositories';
+import { IPatientRepository, ITransaction } from '../domain/repositories';
 import { Patient } from '../../../packages/shared/src/index';
 import { db } from '../infrastructure/firebase/config';
 import * as admin from 'firebase-admin';
@@ -18,7 +18,7 @@ export interface ManagePatientRequest {
 export class ManagePatientUseCase {
   constructor(private patientRepo: IPatientRepository) {}
 
-  async execute(request: ManagePatientRequest, transaction?: IDBTransaction): Promise<string> {
+  async execute(request: ManagePatientRequest, transaction?: ITransaction): Promise<string> {
     const { id, name, phone, communicationPhone, age, sex, place, clinicId, isLinkPending } = request;
     const txn = transaction as admin.firestore.Transaction | undefined;
 

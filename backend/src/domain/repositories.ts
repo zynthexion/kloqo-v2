@@ -1,6 +1,13 @@
 import { Clinic, User, Patient, Appointment, TrafficData, Department, Doctor, CampaignSend, MarketingAnalytics, MarketingInteraction, WhatsappSession, NotificationConfig, PunctualityLog, ErrorLog, PaginationParams, PaginatedResponse, Prescription, Subscription } from '../../../packages/shared/src/index';
 
-export interface IDBTransaction {}
+/**
+ * ITransaction
+ *
+ * Opaque wrapper around a Firestore Transaction.
+ * Named generically so the domain layer stays infrastructure-agnostic.
+ * ⚠️ DO NOT use the global `ITransaction` name — that is the browser IndexedDB type.
+ */
+export interface ITransaction {}
 
 export type { WhatsappSession };
 
@@ -22,19 +29,27 @@ export interface IAppointmentRepository {
   findAllByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
   findLatestByPatientIds(patientIds: string[], clinicId: string): Promise<Map<string, Appointment>>;
   findByPatientId(patientId: string): Promise<Appointment[]>;
-  save(appointment: Appointment, transaction?: IDBTransaction): Promise<void>;
-  update(id: string, data: Partial<Appointment>, transaction?: IDBTransaction): Promise<void>;
-  incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: IDBTransaction): Promise<number>;
+  save(appointment: Appointment, transaction?: ITransaction): Promise<void>;
+  update(id: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void>;
+  incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number>;
   countByStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
   countByPharmacyStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
   findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Appointment[]>;
   findCompletedByPatientInClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
   delete(id: string): Promise<void>;
-  
+
   // Transaction & Locking
-  runTransaction<T>(action: (transaction: IDBTransaction) => Promise<T>): Promise<T>;
-  createSlotLock(lockId: string, data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number }, transaction: IDBTransaction): Promise<void>;
-  releaseSlotLock(lockId: string, transaction?: IDBTransaction): Promise<void>;
+  runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T>;
+  createSlotLock(lockId: string, data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number }, transaction: ITransaction): Promise<void>;
+  releaseSlotLock(lockId: string, transaction?: ITransaction): Promise<void>;
+
+  /**
+   * Atomically increments or decrements the session's booked-count counter.
+   * Must be called within the SAME transaction as the appointment write/update.
+   *
+   * @param delta  +1 for new bookings (including Force Book), -1 for Cancel/Skip/No-show.
+   */
+  updateBookedCount(clinicId: string, doctorId: string, date: string, sessionIndex: number, delta: 1 | -1, transaction: ITransaction): Promise<void>;
 }
 
 export interface IDoctorRepository {
@@ -73,8 +88,8 @@ export interface IPatientRepository {
   findLinkPending(clinicId: string): Promise<Patient[]>;
   findByClinicId(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Patient> | Patient[]>;
   countAll(): Promise<number>;
-  save(patient: Patient, transaction?: IDBTransaction): Promise<void>;
-  update(id: string, patient: Partial<Patient>, transaction?: IDBTransaction): Promise<void>;
+  save(patient: Patient, transaction?: ITransaction): Promise<void>;
+  update(id: string, patient: Partial<Patient>, transaction?: ITransaction): Promise<void>;
   delete(id: string, soft?: boolean): Promise<void>;
   unlinkRelative(primaryId: string, relativeId: string): Promise<void>;
 }

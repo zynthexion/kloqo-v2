@@ -4,6 +4,7 @@ import multer from 'multer';
 import { container } from '../../infrastructure/webserver/express/Container';
 import { createMiddleware } from '../../infrastructure/webserver/express/middleware';
 import { verifyWhatsAppSignature } from '../../infrastructure/webserver/middleware/VerifyWhatsAppSignature';
+import { cronAuthMiddleware } from '../../infrastructure/webserver/middleware/CronAuthMiddleware';
 import { KLOQO_ROLES } from '@kloqo/shared';
 
 const { CLINIC_ADMIN, DOCTOR, NURSE, PHARMACIST, SUPER_ADMIN } = KLOQO_ROLES;
@@ -14,7 +15,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const { prescriptionController, appointmentController, doctorController,
         notificationController, analyticsController, webhookController, whatsappWebhookController,
-        paymentController, storageController, sseController, fcmService } = container;
+        paymentController, storageController, sseController, fcmService,
+        processGracePeriodsUseCase } = container;
 
 // ── Breaks ────────────────────────────────────────────────────────────────
 router.post('/breaks/schedule', auth, (req, res) => doctorController.scheduleBreak(req, res));
@@ -53,6 +55,21 @@ router.post(
 // ── Notifications ─────────────────────────────────────────────────────────
 router.post('/notifications/batch', (req, res) => notificationController.processBatchNotifications(req, res));
 router.post('/notifications/send-link', (req, res) => notificationController.sendBookingLink(req, res));
+
+// ── Cron Jobs (protected by X-Cron-Secret header) ─────────────────────────
+// Frequency: Every 5 minutes (or gracePeriod / 2, floored at 5 min).
+// Body: { clinicId: string }
+router.post('/notifications/cron/grace-periods', cronAuthMiddleware, async (req: any, res: Response) => {
+  try {
+    const { clinicId } = req.body;
+    if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+    const result = await processGracePeriodsUseCase.execute(clinicId);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[Cron/GracePeriods]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── Error Logging (called by frontends, no auth required) ────────
 router.post('/log-error', (req, res) => analyticsController.logError(req, res));

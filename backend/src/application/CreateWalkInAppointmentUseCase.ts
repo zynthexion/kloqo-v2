@@ -3,7 +3,7 @@ import {
   IAppointmentRepository,
   IDoctorRepository,
   IClinicRepository,
-  IDBTransaction
+  ITransaction
 } from '../domain/repositories';
 import { ManagePatientUseCase } from './ManagePatientUseCase';
 import { format } from 'date-fns';
@@ -179,7 +179,7 @@ export class CreateWalkInAppointmentUseCase {
       'W',
       activeSessionIndex,
       tokenDistribution,
-      txn as unknown as IDBTransaction,
+      txn as unknown as ITransaction,
       totalSessionSlots // ← Dynamic Base-100 offset
     );
 
@@ -191,7 +191,7 @@ export class CreateWalkInAppointmentUseCase {
       date: firestoreDateStr,
       sessionIndex: activeSessionIndex,
       slotIndex: targetSlot.index
-    }, txn as unknown as IDBTransaction);
+    }, txn as unknown as ITransaction);
 
     const isClassic = tokenDistribution === 'classic';
     const appointmentId = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -217,7 +217,20 @@ export class CreateWalkInAppointmentUseCase {
       updatedAt: now
     };
 
-    await this.appointmentRepo.save(appointment, txn as unknown as IDBTransaction);
+    await this.appointmentRepo.save(appointment, txn as unknown as ITransaction);
+
+    // ── Atomically increment the session booked-count counter ──────────────
+    // This runs inside the same txn as the appointment write.
+    // Always increments — even for Force Bookings (allowing >100% load to be visible in the UI).
+    await this.appointmentRepo.updateBookedCount(
+      dto.clinicId,
+      dto.doctorId,
+      firestoreDateStr,
+      activeSessionIndex,
+      1,
+      txn as unknown as ITransaction
+    );
+
     return appointment;
   }
 }

@@ -1,5 +1,5 @@
 import { Patient, PaginationParams, PaginatedResponse } from '../../../../packages/shared/src/index';
-import { IPatientRepository, IDBTransaction } from '../../domain/repositories';
+import { IPatientRepository, ITransaction } from '../../domain/repositories';
 import * as admin from 'firebase-admin';
 import { db, paginate } from './config';
 
@@ -77,7 +77,7 @@ export class FirebasePatientRepository implements IPatientRepository {
     }
   }
 
-  async save(patient: Patient, transaction?: IDBTransaction): Promise<void> {
+  async save(patient: Patient, transaction?: ITransaction): Promise<void> {
     const { id, ...data } = patient;
     const docRef = this.collection.doc(id);
     const payload = {
@@ -93,7 +93,7 @@ export class FirebasePatientRepository implements IPatientRepository {
     }
   }
 
-  async update(id: string, patient: Partial<Patient>, transaction?: IDBTransaction): Promise<void> {
+  async update(id: string, patient: Partial<Patient>, transaction?: ITransaction): Promise<void> {
     const docRef = this.collection.doc(id);
     const payload = {
       ...patient,

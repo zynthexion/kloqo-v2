@@ -16,7 +16,7 @@
  * Architecture: Zero Firebase. Zero polling. Pure HTTP/SSE.
  */
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -29,7 +29,8 @@ export type SSEEventType =
   | 'session_started'
   | 'session_ended'
   | 'break_scheduled'
-  | 'break_cancelled';
+  | 'break_cancelled'
+  | 'appointment_reslotted'; // Fired by QueueBubblingService when a W-Token is moved
 
 export interface SSEPayload {
   type: SSEEventType;
@@ -47,10 +48,16 @@ interface UseSSEOptions {
   autoReconnect?: boolean;
 }
 
-export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOptions): void {
+export interface UseSSEResult {
+  /** Current EventSource.readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED */
+  readyState: number;
+}
+
+export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOptions): UseSSEResult {
   const esRef = useRef<EventSource | null>(null);
   const onEventRef = useRef(onEvent);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [readyState, setReadyState] = useState<number>(EventSource.CONNECTING);
 
   // Keep the callback ref up-to-date without triggering re-connects
   useEffect(() => {
@@ -98,9 +105,12 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
       });
     });
 
+    es.onopen = () => setReadyState(EventSource.OPEN);
+
     es.onerror = (err) => {
       console.error(`[useSSE] Connection lost for clinic ${clinicId}.`, err);
-      es.close(); // Kill the native auto-retry to prevent auth loops with expired tokens
+      setReadyState(EventSource.CLOSED);
+      es.close();
       esRef.current = null;
 
       if (autoReconnect) {
@@ -113,7 +123,6 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
 
   useEffect(() => {
     connect();
-
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (esRef.current) {
@@ -122,4 +131,6 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
       }
     };
   }, [connect]);
+
+  return { readyState };
 }

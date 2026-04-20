@@ -4,7 +4,7 @@ import { Appointment, compareAppointments, compareAppointmentsClassic } from '..
 import { format } from 'date-fns';
 import { NotificationService } from '../domain/services/NotificationService';
 import { sseService } from '../domain/services/SSEService';
-
+import { QueueBubblingService } from '../domain/services/QueueBubblingService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 
 export class UpdateAppointmentStatusUseCase {
@@ -14,7 +14,8 @@ export class UpdateAppointmentStatusUseCase {
     private clinicRepo: IClinicRepository,
     private notificationService: NotificationService,
     private counterRepo: IConsultationCounterRepository,
-    private tokenGenerator: TokenGeneratorService
+    private tokenGenerator: TokenGeneratorService,
+    private bubblingService?: QueueBubblingService
   ) {}
   async execute(params: { 
     appointmentId: string; 
@@ -96,21 +97,10 @@ export class UpdateAppointmentStatusUseCase {
 
     } else if (status === 'Skipped') {
       appointment.skippedAt = new Date();
-      
-      // Shift subsequent appointments (slotIndex - 1)
-      if (appointment.slotIndex !== undefined) {
-        const subsequentAppointments = await this.appointmentRepo.findByDoctorAndDate(appointment.doctorId, appointment.date);
-        for (const apt of subsequentAppointments) {
-          if (apt.slotIndex !== undefined && apt.slotIndex > appointment.slotIndex && (apt.status === 'Pending' || apt.status === 'Confirmed')) {
-            await this.appointmentRepo.update(apt.id, {
-              slotIndex: apt.slotIndex - 1,
-              updatedAt: new Date()
-            });
-          }
-        }
-      }
+      // ── Decrement booked count (inside transaction below) ──
     } else if (status === 'No-show') {
       appointment.noShowAt = new Date();
+      // ── Decrement booked count (inside transaction below) ──
     } else if (status === 'Cancelled') {
       if (appointment.patientId) {
         await this.notificationService.sendAppointmentCancelledNotification({
@@ -135,7 +125,27 @@ export class UpdateAppointmentStatusUseCase {
       }
     }
 
-    await this.appointmentRepo.update(appointmentId, appointment);
+    // ── ATOMIC WRITE: Appointment update + counter maintenance ─────────────
+    // Both operations must succeed together to prevent counter drift.
+    const isTerminalStatus = status === 'Skipped' || status === 'No-show' || status === 'Cancelled';
+    const hasSesssionInfo = appointment.sessionIndex !== undefined && appointment.slotIndex !== undefined;
+
+    await this.appointmentRepo.runTransaction(async (txn) => {
+      await this.appointmentRepo.update(appointmentId, appointment, txn);
+
+      // Decrement bookedCount for every terminal status transition.
+      // We do it here (not above) so it's always inside the same atomic block.
+      if (isTerminalStatus && hasSesssionInfo) {
+        await this.appointmentRepo.updateBookedCount(
+          appointment.clinicId,
+          appointment.doctorId,
+          appointment.date,
+          appointment.sessionIndex!,
+          -1,
+          txn
+        );
+      }
+    });
 
     // ── SSE: Broadcast real-time event to all connected clinic clients ──────
     sseService.emit('appointment_status_changed', appointment.clinicId, {
@@ -156,6 +166,21 @@ export class UpdateAppointmentStatusUseCase {
     // Buffer refill after terminal state transitions
     if (status === 'Completed' || status === 'Cancelled' || status === 'Skipped' || status === 'No-show') {
       await this.triggerBufferRefill(appointment.clinicId, appointment.doctorName);
+    }
+
+    // ── W-TOKEN BUBBLING: Move next W-Token into the vacated slot ──────────────
+    // Only trigger for statuses where a slot becomes genuinely vacant.
+    const shouldBubble = isTerminalStatus && hasSesssionInfo;
+    if (shouldBubble && this.bubblingService) {
+      this.bubblingService.reoptimize({
+        vacatedSlotIndex: appointment.slotIndex!,
+        sessionIndex: appointment.sessionIndex!,
+        doctorId: appointment.doctorId,
+        clinicId: appointment.clinicId,
+        date: appointment.date,
+      }).catch(err =>
+        console.warn('[UpdateStatus] QueueBubbling failed (non-fatal):', err.message)
+      );
     }
 
     return appointment;
