@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { prescriptionController, appointmentController, doctorController,
         notificationController, analyticsController, webhookController, whatsappWebhookController,
         paymentController, storageController, sseController, fcmService,
-        processGracePeriodsUseCase, endSessionCleanupUseCase } = container;
+        processGracePeriodsUseCase, endSessionCleanupUseCase, clinicRepo } = container;
 
 // ── Breaks ────────────────────────────────────────────────────────────────
 router.post('/breaks/schedule', auth, (req, res) => doctorController.scheduleBreak(req, res));
@@ -81,6 +81,54 @@ router.post('/notifications/cron/end-session-cleanup', cronAuthMiddleware, async
     res.json({ success: true, ...result });
   } catch (err: any) {
     console.error('[Cron/EndSessionCleanup]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Global Multi-Tenant Cron Patterns ─────────────────────────────────────
+
+// Global 5-Min Sweep (Grace Periods)
+router.post('/notifications/cron/grace-periods/global', cronAuthMiddleware, async (req: any, res: Response) => {
+  try {
+    const activeClinics = await clinicRepo.findAll() as any[];
+    
+    const sweepResults = await Promise.allSettled(
+      activeClinics.map(clinic => 
+        processGracePeriodsUseCase.execute(clinic.id)
+      )
+    );
+
+    const failedSweeps = sweepResults.filter(r => r.status === 'rejected');
+    if (failedSweeps.length > 0) {
+      console.error(`[Cron/Global] Grace Period Sweep failed for ${failedSweeps.length} clinics`, failedSweeps);
+    }
+
+    res.status(200).json({ processed: activeClinics.length, failed: failedSweeps.length });
+  } catch (err: any) {
+    console.error('[Cron/Global Grace Periods Failed]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Global Nightly Cleanup (End Session)
+router.post('/notifications/cron/end-session-cleanup/global', cronAuthMiddleware, async (req: any, res: Response) => {
+  try {
+    const activeClinics = await clinicRepo.findAll() as any[];
+    
+    const sweepResults = await Promise.allSettled(
+      activeClinics.map(clinic => 
+        endSessionCleanupUseCase.execute(clinic.id)
+      )
+    );
+
+    const failedSweeps = sweepResults.filter(r => r.status === 'rejected');
+    if (failedSweeps.length > 0) {
+      console.error(`[Cron/Global] End Session Cleanup failed for ${failedSweeps.length} clinics`, failedSweeps);
+    }
+
+    res.status(200).json({ processed: activeClinics.length, failed: failedSweeps.length });
+  } catch (err: any) {
+    console.error('[Cron/Global Nightly Cleanup Failed]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

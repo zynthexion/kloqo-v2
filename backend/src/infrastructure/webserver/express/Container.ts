@@ -479,6 +479,7 @@ export const container = {
   fcmService,
   subscriptionRepo,
   appointmentRepo,
+  clinicRepo,
   getPublicQueueStatusUseCase,
   processGracePeriodsUseCase,
   endSessionCleanupUseCase,
