@@ -100,14 +100,21 @@ export function useLiveTokenListeners({
     const { readyState } = useSSE({
         clinicId,
         onEvent: useCallback((event) => {
-            // All queue-mutating events trigger a re-fetch.
-            // appointment_reslotted specifically ensures EWT instantly reflects the new slot order.
+            // Anti-DDoS: Full Queue Sync for reoptimization pass
+            if (event.type === 'queue_reoptimized') {
+                const p = event.payload as { updatedQueue: Appointment[]; doctor?: Doctor };
+                setAllClinicAppointments(p.updatedQueue);
+                if (p.doctor) setLiveDoctor(p.doctor);
+                return;
+            }
+
+            // All other queue-mutating events trigger a re-fetch.
             const queueEvents = [
                 'appointment_status_changed',
                 'walk_in_created',
                 'queue_updated',
                 'token_called',
-                'appointment_reslotted', // EWT instant bind: slot moved → refresh queue → UI recalculates EWT
+                'appointment_reslotted', 
             ];
             if (queueEvents.includes(event.type)) {
                 fetchQueueStatus();

@@ -22,7 +22,9 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || errorData.message || `API Error: ${response.statusText}`);
+    const error = new Error(errorData.error || errorData.message || `API Error: ${response.status}`);
+    (error as any).status = response.status;
+    throw error;
   }
 
   // Handle 204 No Content

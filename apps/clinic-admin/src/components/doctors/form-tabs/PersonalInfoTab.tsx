@@ -340,20 +340,37 @@ export function PersonalInfoTab({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="walkInReserveRatio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Walk-in Buffer (%)</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" min="0" max="1" {...field} value={field.value} onChange={(e) => field.onChange(Number(e.target.value))} />
-                  </FormControl>
-                  <FormDescription className="text-[9px]">e.g. 0.15 = 15%</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {form.watch('tokenDistribution') === 'advanced' ? (
+              <FormField
+                control={form.control}
+                name="walkInReserveRatio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Walk-in Buffer (%)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" max="1" {...field} value={field.value} onChange={(e) => field.onChange(Number(e.target.value))} />
+                    </FormControl>
+                    <FormDescription className="text-[9px]">e.g. 0.15 = 15%</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormField
+                control={form.control}
+                name="walkInTokenAllotment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Walk-in Frequency (N)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="2" max="10" {...field} value={field.value || 5} onChange={(e) => field.onChange(Number(e.target.value))} />
+                    </FormControl>
+                    <FormDescription className="text-[9px]">1:N Zipper (e.g. 3 = 1 walk-in every 3 appts)</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

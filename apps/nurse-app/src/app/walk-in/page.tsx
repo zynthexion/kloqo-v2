@@ -7,9 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Loader2, CheckCircle2, UserPlus, Search, Phone } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle2, UserPlus, Search, Phone, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { apiRequest } from '@/lib/api-client';
 
@@ -25,6 +35,7 @@ export default function WalkInPage() {
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [patientData, setPatientData] = useState<any>(null);
+  const [showFullError, setShowFullError] = useState(false);
   
   const [formData, setFormData] = useState({
     patientName: '',
@@ -100,7 +111,11 @@ export default function WalkInPage() {
       toast({ title: 'Success', description: `Walk-in registered! Token: ${apt.tokenNumber}` });
       router.push('/dashboard');
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
+      if (error.status === 409) {
+        setShowFullError(true);
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -248,6 +263,33 @@ export default function WalkInPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={showFullError} onOpenChange={setShowFullError}>
+        <AlertDialogContent className="max-w-md rounded-2xl border-2 border-amber-100">
+          <AlertDialogHeader>
+            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-4">
+              <Star className="h-8 w-8 fill-amber-600" />
+            </div>
+            <AlertDialogTitle className="text-2xl font-black text-gray-900">Session Full</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-600 space-y-3 pt-2">
+              <p>
+                This doctor's current session has reached its clinical capacity for the day. No more walk-in slots are automatically available.
+              </p>
+              <p className="font-bold text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                Action: You can either inform the patient or consult the doctor for a "Force-Override" if it is an emergency.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-col gap-2">
+            <AlertDialogAction 
+              onClick={() => setShowFullError(false)}
+              className="w-full h-12 bg-gray-900 hover:bg-black rounded-xl font-bold"
+            >
+              Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

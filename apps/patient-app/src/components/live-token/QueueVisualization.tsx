@@ -2,6 +2,7 @@ import { Loader2, Users, Star, Clock } from 'lucide-react';
 import { useLiveToken } from '@/contexts/LiveTokenContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const QueueVisualization = () => {
     const {
@@ -25,19 +26,28 @@ export const QueueVisualization = () => {
     return (
         <div className="w-full space-y-6">
             {/* 🌌 ZONE 1: THE "NOW CONSULTING" BANNER (Wait-room Mirror) */}
-            <div className="relative overflow-hidden rounded-2xl bg-primary/5 p-6 border-2 border-primary/20 animate-pulse-subtle">
-                <div className="flex flex-col items-center text-center space-y-2">
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 animate-pulse">
-                        {t.liveToken.nowInside}
-                    </Badge>
-                    <h2 className="text-6xl font-black tracking-tighter text-primary">
-                        {currentTokenAppointment?.tokenNumber || '---'}
-                    </h2>
-                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
-                        {t.liveToken.consultationInProgress}
-                    </p>
-                </div>
-            </div>
+            <AnimatePresence mode="wait">
+                <motion.div
+                    key={currentTokenAppointment?.id || 'none'}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    className="relative overflow-hidden rounded-2xl bg-primary/5 p-6 border-2 border-primary/20 animate-pulse-subtle"
+                >
+                    <div className="flex flex-col items-center text-center space-y-2">
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                            {t.liveToken.nowInside}
+                        </Badge>
+                        <h2 className="text-6xl font-black tracking-tighter text-primary">
+                            {currentTokenAppointment?.tokenNumber || '---'}
+                        </h2>
+                        <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
+                            {t.liveToken.consultationInProgress}
+                        </p>
+                    </div>
+                </motion.div>
+            </AnimatePresence>
 
             {/* 👤 ZONE 2: PERSONAL STATUS (The Promise) */}
             <Card className="border-none shadow-xl bg-card">
@@ -79,15 +89,21 @@ export const QueueVisualization = () => {
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{t.liveToken.upNext}</span>
                     </div>
                     <div className="flex gap-2 w-full overflow-x-auto pb-2 no-scrollbar">
-                        {upNext.map((appt: any) => (
-                            <div 
-                                key={appt.id} 
-                                className="flex-shrink-0 bg-secondary/50 border rounded-lg px-4 py-2 flex items-center gap-2 min-w-[100px]"
-                            >
-                                <div className="h-2 w-2 rounded-full bg-primary/40" />
-                                <span className="text-sm font-bold">{appt.tokenNumber}</span>
-                            </div>
-                        ))}
+                        <AnimatePresence initial={false}>
+                            {upNext.map((appt: any) => (
+                                <motion.div 
+                                    key={appt.id} 
+                                    layout
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="flex-shrink-0 bg-secondary/50 border rounded-lg px-4 py-2 flex items-center gap-2 min-w-[100px]"
+                                >
+                                    <div className="h-2 w-2 rounded-full bg-primary/40" />
+                                    <span className="text-sm font-bold">{appt.tokenNumber}</span>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
                     </div>
                 </div>
             )}

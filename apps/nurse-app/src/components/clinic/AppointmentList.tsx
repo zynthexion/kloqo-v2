@@ -25,8 +25,10 @@ import {
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useRouter } from 'next/navigation';
 import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const SWIPE_COOLDOWN_MS = 30 * 1000;
+const ANIMATION_WINDOW = 8;
 
 type SwipeState = { id: string | null; startX: number; currentX: number; width: number };
 const createSwipeState = (): SwipeState => ({ id: null, startX: 0, currentX: 0, width: 0 });
@@ -430,7 +432,8 @@ export default function AppointmentList({
             {(() => {
               let appointmentCounter = 0;
               return mixedItems.length > 0 ? (
-                mixedItems.map((item, index) => {
+                <AnimatePresence initial={false}>
+                  {mixedItems.map((item, index) => {
                   if (item.type === 'break') {
                     const brk = item.data;
                     const now = currentTime.getTime();
@@ -474,12 +477,19 @@ export default function AppointmentList({
                   const isBuffer = isInBufferQueue && isInBufferQueue(appt);
                   const isModern = theme === 'modern';
 
+                  const isAnimated = appointmentCounter <= ANIMATION_WINDOW;
+                  const CardWrapper = isAnimated ? motion.div : 'div';
+
                   return (
-                    <div
+                    <CardWrapper
                       key={appt.id}
+                      layout={isAnimated ? "position" : undefined}
+                      initial={isAnimated ? { opacity: 0, y: 10 } : undefined}
+                      animate={isAnimated ? { opacity: 1, y: 0 } : undefined}
+                      exit={isAnimated ? { opacity: 0, x: -20 } : undefined}
                       ref={swipeState.id === appt.id ? swipedItemRef : null}
                       className={cn(
-                        "p-4 flex flex-col gap-3 border transition-all duration-200 relative",
+                        "p-4 flex flex-col gap-3 border transition-all duration-200 relative mb-3",
                         isModern ? "rounded-[2rem] border-white/50 bg-white shadow-premium" : "rounded-xl",
                         isSwiping && 'text-white',
                         !isModern && !isSwiping && "bg-white border-border shadow-md hover:shadow-lg",
@@ -715,9 +725,10 @@ export default function AppointmentList({
                           {/* removed edit/delete icons for nurse dashboard consistency */}
                         </div>
                       </div>
-                    </div>
+                    </CardWrapper>
                   );
-                })
+                  })}
+                </AnimatePresence>
               ) : (
                 <div className="h-24 flex items-center justify-center text-center text-muted-foreground">
                   <p>No appointments found for the selected criteria.</p>

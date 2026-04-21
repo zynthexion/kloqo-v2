@@ -113,10 +113,14 @@ export class QueueBubblingService {
 
       // 4. BATCHED BROADCAST: Fire once per transaction commit
       if (reslottedEvents.length > 0) {
+        // Fetch fresh state of session for the broadcast to ensure zero lag
+        const updatedAppointments = sessionAppointments.map(a => ({...a})); 
+
         sseService.emit('queue_reoptimized', clinicId, {
           doctorId,
           sessionIndex,
-          reslotted: reslottedEvents
+          reslottedCount: reslottedEvents.length,
+          updatedQueue: updatedAppointments
         });
       }
     });

@@ -141,9 +141,30 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         case 'break_cancelled':
         case 'session_started':
         case 'session_ended':
-          // These are structural changes — safer to do a full refresh
-          fetchData(true);
+        case 'queue_reoptimized': {
+          const p = event.payload as {
+            doctorId: string;
+            sessionIndex: number;
+            updatedQueue: Appointment[];
+          };
+          setData((prev) => {
+            if (!prev) return prev;
+            // 1. Filter out old appointments for ONLY this specific doctor & session
+            const untouchedApts = prev.appointments.filter(a => 
+              !(a.doctorId === p.doctorId && a.sessionIndex === p.sessionIndex)
+            );
+            // 2. Splice in the fresh state from the Vacuum pass
+            return {
+              ...prev,
+              appointments: [...untouchedApts, ...p.updatedQueue].sort((a, b) => {
+                // Keep the global list sorted for the UI
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+              })
+            };
+          });
           break;
+        }
 
         default:
           break;

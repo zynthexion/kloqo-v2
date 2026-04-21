@@ -176,7 +176,7 @@ const defaultFormData: SignUpFormData = {
 };
 
 const stepFields: (keyof SignUpFormData)[][] = [
-  ['clinicName', 'clinicType', 'numDoctors', 'walkInTokenAllotment', 'tokenDistribution'], // Step 1, latitude/longitude are special
+  ['clinicName', 'clinicType', 'numDoctors'], // Step 1: removed distribution fields
   ['ownerName', 'designation', 'mobileNumber', 'emailAddress', 'password'], // Step 2
   ['addressLine1', 'city', 'state', 'pincode'], // Step 3
   ['hours', 'avgPatientsPerDay'], // Step 4

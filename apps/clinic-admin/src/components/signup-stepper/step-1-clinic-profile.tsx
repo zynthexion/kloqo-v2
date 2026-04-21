@@ -197,42 +197,6 @@ export function Step1ClinicProfile() {
         />
         <FormField
           control={control}
-          name="walkInTokenAllotment"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Walk-in Token Allotment</FormLabel>
-              <FormControl>
-                <Input type="number" min="2" max="10" placeholder="e.g., 5" {...field} value={field.value ?? ''} />
-              </FormControl>
-              <p className="text-xs text-muted-foreground">Allot one walk-in token after every 'X' advanced tokens</p>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
-          name="tokenDistribution"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Token Distribution Method <span className="text-destructive">*</span></FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select distribution method" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="classic">Kloqo Classic (Best for Walk-ins)</SelectItem>
-                  <SelectItem value="advanced">Kloqo Advanced (Strict Slot Timing)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Classic: Arrived patients are served in order of arrival. Advanced: Optimized scheduling for minimum wait time.</p>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
           name="genderPreference"
           render={({ field }) => (
             <FormItem>
