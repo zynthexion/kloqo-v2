@@ -39,23 +39,25 @@ export class TokenGeneratorService {
 
     const result = await this.appointmentRepo.incrementTokenCounter(counterDocId, isClassic, transaction);
 
-    // Calculate numeric token with offset guards
+    // 🚑 PRIORITY TRIAGE: PW-Tokens MUST use an independent sequence (PW-001, PW-002)
+    // They never inherit session offsets to signal urgency to the waiting room.
     let numericToken: number;
     let prefix: string;
 
     if (isPriority) {
       prefix = 'PW-';
-      numericToken = result; // PW starts from 1, 2, 3 independently
+      numericToken = result; // Strictly sequential from 1
     } else if (type === 'W') {
       prefix = 'W-';
-      // W-Tokens start AFTER the session slots to prevent visual confusion
+      // W-Tokens start AFTER physical capacity to prevent visual confusion
       numericToken = Math.max(100, totalSessionSlots) + result;
     } else {
-      // Fallback for A-tokens if slotIndex was missing (safety only)
       prefix = 'A-';
       numericToken = result;
     }
     
+    // ⚠️ ARCHITECT'S MANDATE: "Dropping the hyphen" is forbidden.
+    // Unified Alphanumeric Base-100 Standard: [Prefix]-[XXX]
     const tokenNumber = `${prefix}${String(numericToken).padStart(3, '0')}`;
     return { tokenNumber, numericToken };
   }
