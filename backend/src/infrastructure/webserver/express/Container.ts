@@ -133,6 +133,7 @@ import { VerifySubscriptionUpgradeUseCase } from '../../../application/VerifySub
 import { ImpersonateClinicUseCase } from '../../../application/ImpersonateClinicUseCase';
 import { GetInvestorMetricsUseCase } from '../../../application/GetInvestorMetricsUseCase';
 import { ProcessGracePeriodsUseCase } from '../../../application/ProcessGracePeriodsUseCase';
+import { EndSessionCleanupUseCase } from '../../../application/EndSessionCleanupUseCase';
 
 // ── Interfaces: Controllers ────────────────────────────────────────────────
 import { AppointmentController } from '../../../interfaces/AppointmentController';
@@ -196,7 +197,7 @@ const batchNotificationService = new BatchNotificationService(
 );
 const tokenGeneratorService = new TokenGeneratorService(appointmentRepo);
 const sseService = new SSEService();
-const queueBubblingService = new QueueBubblingService(appointmentRepo);
+const queueBubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 3: Use Cases
@@ -304,6 +305,7 @@ const resetNotificationConfigsUseCase = new ResetNotificationConfigsUseCase(noti
 const processBatchNotificationsUseCase = new ProcessBatchNotificationsUseCase(batchNotificationService);
 const getInvestorMetricsUseCase = new GetInvestorMetricsUseCase(subscriptionRepo, appointmentRepo);
 const processGracePeriodsUseCase = new ProcessGracePeriodsUseCase(appointmentRepo, clinicRepo, doctorRepo, queueBubblingService);
+const endSessionCleanupUseCase = new EndSessionCleanupUseCase(appointmentRepo, doctorRepo);
 
 // Settings
 const getGlobalSettingsUseCase = new GetGlobalSettingsUseCase(globalSettingsRepo);
@@ -479,4 +481,5 @@ export const container = {
   appointmentRepo,
   getPublicQueueStatusUseCase,
   processGracePeriodsUseCase,
+  endSessionCleanupUseCase,
 };

@@ -100,10 +100,24 @@ export const AppointmentStatusCard = () => {
                         </div>
                     </div>
 
-                    {/* Check-in Logic */}
-                    <div className="w-full">
                         {renderArrivalStatus()}
                         
+                        {(isPending || isSkippedAppointment) && isAppointmentToday && (useLiveToken() as any).totalDelayMinutes > 5 && (
+                            <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
+                                <Clock className="w-5 h-5 text-amber-600 mt-0.5" />
+                                <div>
+                                    <p className="font-bold text-amber-800 text-sm">
+                                        {language === 'ml' ? 'ഡോക്ടർ അല്പം വൈകുന്നു' : 'Doctor is Running Behind'}
+                                    </p>
+                                    <p className="text-amber-700 text-xs mt-1 leading-relaxed">
+                                        {language === 'ml' 
+                                            ? `തിരക്ക് കാരണം ഡോക്ടർ ഏകദേശം ${(useLiveToken() as any).totalDelayMinutes} മിനിറ്റ് വൈകുന്നു. ദയവായി അല്പം കൂടി കാത്തിരിക്കുക.` 
+                                            : `Due to high patient volume, the doctor is running about ${(useLiveToken() as any).totalDelayMinutes} mins behind. Your arrival window has been shifted accordingly.`}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {isPending && isAppointmentToday && (
                             <div className="mt-6">
                                 <AlertDialog>

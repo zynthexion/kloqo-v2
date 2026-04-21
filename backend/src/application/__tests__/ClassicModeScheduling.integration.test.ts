@@ -9,6 +9,8 @@ import { format, parse, addMinutes } from 'date-fns';
 
 describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
   let appointmentRepo: InMemoryAppointmentRepository;
+  let doctorRepo: any;
+  let clinicRepo: any;
   let bubblingService: QueueBubblingService;
   let tokenGenerator: TokenGeneratorService;
   let createWalkInUseCase: CreateWalkInAppointmentUseCase;
@@ -50,10 +52,8 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
 
   beforeEach(() => {
     appointmentRepo = new InMemoryAppointmentRepository();
-    bubblingService = new QueueBubblingService(appointmentRepo);
-    tokenGenerator = new TokenGeneratorService(appointmentRepo);
-    
-    const doctorRepo = {
+
+    doctorRepo = {
       findById: jest.fn().mockResolvedValue(mockDoctor),
       save: jest.fn(),
       update: jest.fn(),
@@ -66,7 +66,7 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
       findByUserId: jest.fn()
     } as any;
 
-    const clinicRepo = {
+    clinicRepo = {
       findById: jest.fn().mockResolvedValue(mockClinic),
       save: jest.fn(),
       update: jest.fn(),
@@ -78,6 +78,9 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
       incrementDoctorCount: jest.fn(),
       upgradeSubscriptionWithTransaction: jest.fn()
     } as any;
+
+    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+    tokenGenerator = new TokenGeneratorService(appointmentRepo);
 
     createWalkInUseCase = new CreateWalkInAppointmentUseCase(
       appointmentRepo,
@@ -173,8 +176,13 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
 
     // 2. Action: Run Grace Period sweep at 9:16 AM
     // a2 (deadline 9:15) is late. a3 (deadline 9:20) is safe.
+    // Safety Valve: Doctor must be 'In' for auto-skipping to trigger.
     const now = new Date('2026-04-20T09:16:00');
     jest.useFakeTimers().setSystemTime(now);
+    
+    // Patch mock doctor for this specific run
+    const doctor = await doctorRepo.findById(doctorId);
+    doctor.consultationStatus = 'In'; 
 
     await gracePeriodUseCase.execute(clinicId);
 

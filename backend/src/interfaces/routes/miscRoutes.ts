@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { prescriptionController, appointmentController, doctorController,
         notificationController, analyticsController, webhookController, whatsappWebhookController,
         paymentController, storageController, sseController, fcmService,
-        processGracePeriodsUseCase } = container;
+        processGracePeriodsUseCase, endSessionCleanupUseCase } = container;
 
 // ── Breaks ────────────────────────────────────────────────────────────────
 router.post('/breaks/schedule', auth, (req, res) => doctorController.scheduleBreak(req, res));
@@ -67,6 +67,20 @@ router.post('/notifications/cron/grace-periods', cronAuthMiddleware, async (req:
     res.json({ success: true, ...result });
   } catch (err: any) {
     console.error('[Cron/GracePeriods]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Frequency: Nightly at 1:00 AM.
+// Body: { clinicId: string }
+router.post('/notifications/cron/end-session-cleanup', cronAuthMiddleware, async (req: any, res: Response) => {
+  try {
+    const { clinicId } = req.body;
+    if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+    const result = await endSessionCleanupUseCase.execute(clinicId);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[Cron/EndSessionCleanup]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

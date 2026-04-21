@@ -1,6 +1,7 @@
-import { Appointment } from '../../../../packages/shared/src/index';
-import { IAppointmentRepository, ITransaction } from '../../domain/repositories';
+import { Appointment, Doctor } from '../../../../packages/shared/src/index';
+import { IAppointmentRepository, IDoctorRepository, ITransaction } from '../../domain/repositories';
 import { sseService } from './SSEService';
+import { DelayCalculatorService } from './DelayCalculatorService';
 
 /**
  * QueueBubblingService
@@ -19,7 +20,10 @@ import { sseService } from './SSEService';
  * ensuring both gaps are filled without a double-assignment.
  */
 export class QueueBubblingService {
-  constructor(private appointmentRepo: IAppointmentRepository) {}
+  constructor(
+    private appointmentRepo: IAppointmentRepository,
+    private doctorRepo: IDoctorRepository
+  ) {}
 
   /**
    * Scans the entire session for vacant slots and pulls ALL eligible W-Tokens forward.
@@ -113,6 +117,18 @@ export class QueueBubblingService {
 
       // 4. BATCHED BROADCAST: Fire once per transaction commit
       if (reslottedEvents.length > 0) {
+        // Pulse Calculation: Add live delay to payload
+        let liveDelayMinutes = 0;
+        const doctor = await this.doctorRepo.findById(doctorId) as Doctor;
+        if (doctor) {
+          liveDelayMinutes = DelayCalculatorService.calculate({
+            doctor,
+            appointments: allAppointments,
+            now: new Date(),
+            sessionIndex
+          });
+        }
+
         // Fetch fresh state of session for the broadcast to ensure zero lag
         const updatedAppointments = sessionAppointments.map(a => ({...a})); 
 
@@ -120,7 +136,8 @@ export class QueueBubblingService {
           doctorId,
           sessionIndex,
           reslottedCount: reslottedEvents.length,
-          updatedQueue: updatedAppointments
+          updatedQueue: updatedAppointments,
+          liveDelayMinutes
         });
       }
     });

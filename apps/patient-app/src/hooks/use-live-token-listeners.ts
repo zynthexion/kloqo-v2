@@ -30,6 +30,7 @@ interface UseLiveTokenListenersResult {
     liveDoctor: Doctor | null;
     clinics: Clinic[];
     loading: boolean;
+    liveDelay: number;
 }
 
 export function useLiveTokenListeners({
@@ -43,6 +44,7 @@ export function useLiveTokenListeners({
     const [liveDoctor, setLiveDoctor] = useState<Doctor | null>(null);
     const [clinics, setClinics] = useState<Clinic[]>([]);
     const [loading, setLoading] = useState(true);
+    const [liveDelay, setLiveDelay] = useState(0);
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // 1. Fetch Clinics Metadata
@@ -64,6 +66,7 @@ export function useLiveTokenListeners({
             
             if (data) {
                 setLiveDoctor(data.doctor as Doctor);
+                setLiveDelay(data.doctor?.liveDelayMinutes || 0);
                 if (appointmentDateStr === todayStr) {
                     setAllClinicAppointments(data.masterQueue as Appointment[]);
                 } else {
@@ -102,9 +105,10 @@ export function useLiveTokenListeners({
         onEvent: useCallback((event) => {
             // Anti-DDoS: Full Queue Sync for reoptimization pass
             if (event.type === 'queue_reoptimized') {
-                const p = event.payload as { updatedQueue: Appointment[]; doctor?: Doctor };
+                const p = event.payload as { updatedQueue: Appointment[]; doctor?: Doctor; liveDelayMinutes?: number };
                 setAllClinicAppointments(p.updatedQueue);
                 if (p.doctor) setLiveDoctor(p.doctor);
+                if (p.liveDelayMinutes !== undefined) setLiveDelay(p.liveDelayMinutes);
                 return;
             }
 
@@ -166,7 +170,8 @@ export function useLiveTokenListeners({
         allRelevantAppointments,
         liveDoctor,
         clinics,
-        loading
+        loading,
+        liveDelay
     };
 }
 

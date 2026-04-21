@@ -1,8 +1,10 @@
-import { format } from 'date-fns';
-import { Appointment } from '../../../packages/shared/src/index';
+import { format, isAfter } from 'date-fns';
+import { Appointment, Doctor } from '../../../packages/shared/src/index';
 import { IAppointmentRepository, IClinicRepository, IDoctorRepository } from '../domain/repositories';
 import { QueueBubblingService } from '../domain/services/QueueBubblingService';
 import { getClinicNow } from '../domain/services/DateUtils';
+import { SlotCalculator } from '../domain/services/SlotCalculator';
+import { DelayCalculatorService } from '../domain/services/DelayCalculatorService';
 
 export interface ProcessGracePeriodsResult {
   processed: number;
@@ -50,18 +52,48 @@ export class ProcessGracePeriodsUseCase {
     const clinic = await this.clinicRepo.findById(clinicId);
     if (!clinic) return result;
 
+    // Cache doctors to avoid redundant DB reads
+    const doctorCache = new Map<string, Doctor>();
+
     // 1. Identify all eligible appointments across all doctors in this clinic
     const toSkip: Appointment[] = [];
     for (const appointment of confirmedAppointments) {
-      const doctor = await this.doctorRepo.findById(appointment.doctorId);
-      const gracePeriodMinutes = doctor?.gracePeriodMinutes ?? clinic.gracePeriodMinutes ?? this.DEFAULT_GRACE_PERIOD_MINUTES;
+      // EXEMPTION: Priority patients (PW tokens) are never auto-skipped
+      if (appointment.tokenNumber?.startsWith('PW-')) {
+        continue;
+      }
+
+      let doctor = doctorCache.get(appointment.doctorId);
+      if (!doctor) {
+        doctor = await this.doctorRepo.findById(appointment.doctorId) as Doctor;
+        if (doctor) doctorCache.set(appointment.doctorId, doctor);
+      }
+
+      if (!doctor) continue;
+
+      // SAFETY VALVE: If doctor is 'Out', no patient is ever auto-skipped
+      if (doctor.consultationStatus !== 'In') {
+        continue;
+      }
+
+      // PULSE CALCULATION: Determine if the doctor is running behind
+      const liveDelayMinutes = DelayCalculatorService.calculate({
+        doctor,
+        appointments: todaysAppointments,
+        now,
+        sessionIndex: appointment.sessionIndex || 0
+      });
+
+      const gracePeriodMinutes = doctor.gracePeriodMinutes ?? clinic.gracePeriodMinutes ?? this.DEFAULT_GRACE_PERIOD_MINUTES;
 
       const [hours, minutes] = appointment.time.split(':').map(Number);
       const scheduledTime = new Date(now);
       scheduledTime.setHours(hours, minutes, 0, 0);
 
-      const gracePeriodDeadline = new Date(scheduledTime.getTime() + gracePeriodMinutes * 60 * 1000);
-      if (now >= gracePeriodDeadline) {
+      // Effective Deadline = ScheduledTime + LiveDelay + GracePeriod
+      const effectiveDeadline = new Date(scheduledTime.getTime() + (liveDelayMinutes + gracePeriodMinutes) * 60 * 1000);
+      
+      if (now >= effectiveDeadline) {
         toSkip.push(appointment);
       }
     }

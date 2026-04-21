@@ -62,7 +62,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         allRelevantAppointments,
         liveDoctor,
         clinics,
-        loading: listenersLoading
+        loading: listenersLoading,
+        liveDelay
     } = useLiveTokenListeners({
         clinicIds,
         doctorId: activeDoctorId,
@@ -200,8 +201,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         appointmentDate: timingDate(yourAppointment),
         isDoctorIn,
         validBreaks: calculateValidBreaks(currentDoctor, yourAppointment, allRelevantAppointments),
-        totalDelayMinutes: 0, // Simplified or extracted if needed
-        estimatedDelay: 0, // Simplified or extracted if needed
+        totalDelayMinutes: liveDelay,
+        estimatedDelay: liveDelay,
         
         // Location & Actions
         locationStatus: 'idle', // Managed by useArrivalState in larger flow or here

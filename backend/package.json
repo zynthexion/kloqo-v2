@@ -9,7 +9,8 @@
     "dev:prod": "node dist/backend/src/infrastructure/webserver/express/index.js",
     "backup": "ts-node src/scripts/backup-firestore.ts",
     "build": "tsc",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "jest"
   },
   "dependencies": {
     "@kloqo/shared": "*",

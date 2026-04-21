@@ -10,6 +10,8 @@ import { SlotsFullError } from '../../domain/errors';
 
 describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
   let appointmentRepo: InMemoryAppointmentRepository;
+  let doctorRepo: any;
+  let clinicRepo: any;
   let bubblingService: QueueBubblingService;
   let tokenGenerator: TokenGeneratorService;
   let createWalkInUseCase: CreateWalkInAppointmentUseCase;
@@ -56,16 +58,17 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
 
   beforeEach(() => {
     appointmentRepo = new InMemoryAppointmentRepository();
-    bubblingService = new QueueBubblingService(appointmentRepo);
-    tokenGenerator = new TokenGeneratorService(appointmentRepo);
     
-    const doctorRepo = {
+    doctorRepo = {
       findById: jest.fn().mockResolvedValue(mockDoctor),
     } as any;
 
-    const clinicRepo = {
+    clinicRepo = {
       findById: jest.fn().mockResolvedValue(mockClinic),
     } as any;
+
+    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+    tokenGenerator = new TokenGeneratorService(appointmentRepo);
 
     createWalkInUseCase = new CreateWalkInAppointmentUseCase(
       appointmentRepo,
@@ -195,22 +198,26 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
    */
   test('🚨 Scenario 3: The Multiple Gap Vacuum', async () => {
     // 1. Setup: A1, A2, A3, A4, A5. Gaps at 0, 1, 2. (A, B, C skipped)
-    const a1 = { ...createAToken(0, '09:00'), status: 'Confirmed' as const };
-    const a2 = { ...createAToken(1, '09:05'), status: 'Confirmed' as const };
-    const a3 = { ...createAToken(2, '09:10'), status: 'Confirmed' as const };
+    const aCompleted = { ...createAToken(0, '08:50'), id: 'a-comp', status: 'Completed' as const };
+    const a1 = { ...createAToken(1, '09:00'), id: 'a1', status: 'Confirmed' as const };
+    const a2 = { ...createAToken(2, '09:05'), id: 'a2', status: 'Confirmed' as const };
+    const a3 = { ...createAToken(3, '09:10'), id: 'a3', status: 'Confirmed' as const };
     
-    const w1 = { ...createAToken(3, '09:15'), id: 'w1', tokenNumber: 'W-101', bookedVia: 'Walk-in' as const };
-    const w2 = { ...createAToken(4, '09:20'), id: 'w2', tokenNumber: 'W-102', bookedVia: 'Walk-in' as const };
-    const w3 = { ...createAToken(5, '09:25'), id: 'w3', tokenNumber: 'W-103', bookedVia: 'Walk-in' as const };
+    const w1 = { ...createAToken(4, '09:15'), id: 'w1', tokenNumber: 'W-101', bookedVia: 'Walk-in' as const };
+    const w2 = { ...createAToken(5, '09:20'), id: 'w2', tokenNumber: 'W-102', bookedVia: 'Walk-in' as const };
+    const w3 = { ...createAToken(6, '09:25'), id: 'w3', tokenNumber: 'W-103', bookedVia: 'Walk-in' as const };
     
-    appointmentRepo.setAppointments([a1, a2, a3, w1, w2, w3]);
+    appointmentRepo.setAppointments([aCompleted, a1, a2, a3, w1, w2, w3]);
 
     // 2. Action: Mass skip A1, A2, A3 at 9:21 AM (all past 10m grace)
     const now = new Date('2026-04-21T09:21:00');
     jest.useFakeTimers().setSystemTime(now);
 
     // Execute sweep (it will skip 3 and trigger reoptimize 3 times)
-    // Actually, calling reoptimize even once should now vacuum all 3 gaps.
+    // Safety Valve: Doctor must be 'In' for auto-skipping to trigger.
+    const doctor = await doctorRepo.findById(doctorId);
+    doctor.consultationStatus = 'In';
+
     await gracePeriodUseCase.execute(clinicId);
 
     // 3. Assertions
@@ -219,17 +226,17 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
     const resW3 = await appointmentRepo.findById('w3');
 
     // All should have moved forward to fill the vacuum
-    expect(resW1?.slotIndex).toBe(0);
-    expect(resW2?.slotIndex).toBe(1);
-    expect(resW3?.slotIndex).toBe(2);
+    expect(resW1?.slotIndex).toBe(1);
+    expect(resW2?.slotIndex).toBe(2);
+    expect(resW3?.slotIndex).toBe(3);
 
     // Verify SSE batched event was emitted
     expect(sseService.emit).toHaveBeenCalledWith('queue_reoptimized', clinicId, expect.objectContaining({
-        reslotted: expect.arrayContaining([
-            expect.objectContaining({ appointmentId: 'w1', newSlotIndex: 0 }),
-            expect.objectContaining({ appointmentId: 'w2', newSlotIndex: 1 }),
-            expect.objectContaining({ appointmentId: 'w3', newSlotIndex: 2 })
-        ])
+        doctorId,
+        sessionIndex: 0,
+        reslottedCount: 3,
+        updatedQueue: expect.any(Array),
+        liveDelayMinutes: expect.any(Number)
     }));
   });
 
