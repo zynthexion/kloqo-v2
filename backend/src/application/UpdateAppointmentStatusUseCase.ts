@@ -7,6 +7,7 @@ import { sseService } from '../domain/services/SSEService';
 import { QueueBubblingService } from '../domain/services/QueueBubblingService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { SlotsFullError } from '../domain/errors';
+import { getClinicISODateString, parseClinicDate, getClinicNow } from '../domain/services/DateUtils';
 
 export class UpdateAppointmentStatusUseCase {
   constructor(
@@ -160,16 +161,16 @@ export class UpdateAppointmentStatusUseCase {
           const effectiveDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
           
           if (doctor) {
-            const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, new Date(appointment.date));
+            const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, parseClinicDate(appointment.date));
             const sessionSlots = allSlots.filter((s: any) => s.sessionIndex === appointment.sessionIndex);
             const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
             
             const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
               sessionSlots,
               sessionAppts,
-              new Date(),
+              getClinicNow(),
               effectiveDistribution as any,
-              clinic?.walkInTokenAllotment || 0,
+              doctor.walkInTokenAllotment || clinic?.walkInTokenAllotment || 0,
               appointment.isPriority
             );
             
@@ -260,8 +261,9 @@ export class UpdateAppointmentStatusUseCase {
   }
 
   private async triggerBufferRefill(clinicId: string, doctorName: string) {
-    // Match Firestore date format 'd MMMM yyyy'
-    const today = format(new Date(), 'd MMMM yyyy');
+    // Uses the ISO standard for today's query.
+    // The repository's dual-format bridge will automatically check for both 'YYYY-MM-DD' and 'd MMMM yyyy'.
+    const today = getClinicISODateString(new Date());
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
     const doctorAppointments = appointments.filter(
       apt => apt.doctorName === doctorName && apt.status === 'Confirmed'

@@ -10,16 +10,21 @@ import {
   Calendar, 
   Edit, 
   Save, 
-  X, 
   Trash2, 
-  PlusCircle, 
   AlertTriangle, 
   Loader2, 
-  CirclePlus,
   Copy,
   CheckCircle2,
-  Plus
+  Plus,
+  Settings2
 } from "lucide-react";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Doctor, DoctorAvailability } from '@kloqo/shared';
 import { useForm, useFieldArray, Control } from "react-hook-form";
@@ -49,11 +54,12 @@ interface AvailabilityTabProps {
   doctor: Doctor;
   onUpdate: (updates: Partial<Doctor>) => Promise<void>;
   isPending: boolean;
+  refreshData?: () => Promise<void>;
 }
 
 const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTabProps) {
+export function AvailabilityTab({ doctor, onUpdate, isPending, refreshData }: AvailabilityTabProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingSettings, setIsEditingSettings] = useState(false);
   
@@ -64,6 +70,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
     freeFollowUpDays: doctor.freeFollowUpDays || 0,
     advanceBookingDays: doctor.advanceBookingDays || 7,
     walkInReserveRatio: doctor.walkInReserveRatio || 0.15,
+    walkInTokenAllotment: doctor.walkInTokenAllotment || 5,
+    tokenDistribution: doctor.tokenDistribution || 'advanced',
     gracePeriodMinutes: doctor.gracePeriodMinutes || 15
   });
 
@@ -96,6 +104,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
         freeFollowUpDays: doctor.freeFollowUpDays || 0,
         advanceBookingDays: doctor.advanceBookingDays || 7,
         walkInReserveRatio: doctor.walkInReserveRatio || 0.15,
+        walkInTokenAllotment: doctor.walkInTokenAllotment || 5,
+        tokenDistribution: doctor.tokenDistribution || 'advanced',
         gracePeriodMinutes: doctor.gracePeriodMinutes || 15
       });
     }
@@ -146,6 +156,8 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
         freeFollowUpDays: Number(settingsForm.freeFollowUpDays),
         advanceBookingDays: Number(settingsForm.advanceBookingDays),
         walkInReserveRatio: Number(settingsForm.walkInReserveRatio),
+        walkInTokenAllotment: Number(settingsForm.walkInTokenAllotment),
+        tokenDistribution: settingsForm.tokenDistribution,
         gracePeriodMinutes: Number(settingsForm.gracePeriodMinutes)
       });
       setIsEditingSettings(false);
@@ -184,34 +196,86 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
           )}
         </CardHeader>
         <CardContent className="p-8">
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-            {[
-              { label: "Avg Consulting Time", val: settingsForm.averageConsultingTime, key: "averageConsultingTime", unit: "min" },
-              { label: "Consultation Fee", val: settingsForm.consultationFee, key: "consultationFee", unit: "₹", prefix: true },
-              { label: "Free Follow-up", val: settingsForm.freeFollowUpDays, key: "freeFollowUpDays", unit: "days" },
-              { label: "Advance Window", val: settingsForm.advanceBookingDays, key: "advanceBookingDays", unit: "days" },
-              { label: "Walk-in Buffer", val: (settingsForm.walkInReserveRatio * 100).toFixed(0), key: "walkInReserveRatio", unit: "%", isRatio: true },
-              { label: "Skip Grace Period", val: settingsForm.gracePeriodMinutes, key: "gracePeriodMinutes", unit: "min" }
-            ].map((item) => (
-              <div key={item.key} className="space-y-4 p-6 bg-slate-50/50 rounded-3xl border-2 border-slate-100/50 transition-all hover:border-emerald-100 group">
-                 <Label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none block mb-1 group-hover:text-emerald-500 transition-colors">{item.label}</Label>
+           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              {/* Strategy Selection */}
+              <div className="md:col-span-2 xl:col-span-1 space-y-4 p-6 bg-emerald-50/30 rounded-3xl border-2 border-emerald-100/50 transition-all group">
+                <Label className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em] leading-none block mb-1">Queue Strategy</Label>
+                {isEditingSettings ? (
+                  <Select 
+                    value={settingsForm.tokenDistribution} 
+                    onValueChange={v => setSettingsForm({ ...settingsForm, tokenDistribution: v })}
+                  >
+                    <SelectTrigger className="rounded-xl border-2 border-emerald-100 bg-white font-black text-xs text-slate-800 h-12">
+                      <SelectValue placeholder="Strategy" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="advanced" className="font-bold">Advanced (Buffer)</SelectItem>
+                      <SelectItem value="classic" className="font-bold">Classic (Zipper)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="font-black text-lg text-slate-800 uppercase tracking-tight leading-none">
+                      {settingsForm.tokenDistribution === 'advanced' ? "Buffer Mode" : "Zipper Mode"}
+                    </p>
+                    <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest bg-emerald-100 px-2 py-0.5 rounded-full">Active</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Conditional Capacity Field */}
+              <div className="md:col-span-2 xl:col-span-1 space-y-4 p-6 bg-slate-50/50 rounded-3xl border-2 border-slate-100/50 transition-all hover:border-emerald-100 group">
+                 <Label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none block mb-1 group-hover:text-emerald-500 transition-colors">
+                   {settingsForm.tokenDistribution === 'advanced' ? "Walk-in Buffer" : "Walk-in Frequency"}
+                 </Label>
                  {isEditingSettings ? (
                     <Input 
                       type="number" 
-                      step={item.isRatio ? "0.01" : "1"}
-                      value={item.isRatio ? settingsForm.walkInReserveRatio : item.val} 
-                      onChange={e => setSettingsForm({ ...settingsForm, [item.key]: Number(e.target.value) })}
+                      step={settingsForm.tokenDistribution === 'advanced' ? "0.01" : "1"}
+                      value={settingsForm.tokenDistribution === 'advanced' ? settingsForm.walkInReserveRatio : settingsForm.walkInTokenAllotment} 
+                      onChange={e => setSettingsForm({ ...settingsForm, [settingsForm.tokenDistribution === 'advanced' ? 'walkInReserveRatio' : 'walkInTokenAllotment']: Number(e.target.value) })}
                       className="rounded-xl border-2 border-slate-100 bg-white font-black text-base text-slate-800 h-12 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-200" 
                     />
                  ) : (
                    <div className="flex items-baseline gap-1">
-                     {item.prefix && <span className="text-sm font-black text-slate-400">{item.unit}</span>}
-                     <p className="font-black text-2xl text-slate-800 tracking-tight leading-none">{item.val}</p>
-                     {!item.prefix && <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black ml-1">{item.unit}</span>}
+                     <p className="font-black text-2xl text-slate-800 tracking-tight leading-none">
+                       {settingsForm.tokenDistribution === 'advanced' 
+                         ? (settingsForm.walkInReserveRatio * 100).toFixed(0) 
+                         : settingsForm.walkInTokenAllotment}
+                     </p>
+                     <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black ml-1">
+                       {settingsForm.tokenDistribution === 'advanced' ? "%" : "patients"}
+                     </span>
                    </div>
                  )}
               </div>
-            ))}
+
+              {/* Other Static Fields */}
+              {[
+                { label: "Avg Consultation", val: settingsForm.averageConsultingTime, key: "averageConsultingTime", unit: "min" },
+                { label: "Consultation Fee", val: settingsForm.consultationFee, key: "consultationFee", unit: "₹", prefix: true },
+                { label: "Free Follow-up", val: settingsForm.freeFollowUpDays, key: "freeFollowUpDays", unit: "days" },
+                { label: "Advance Window", val: settingsForm.advanceBookingDays, key: "advanceBookingDays", unit: "days" },
+                { label: "Grace Period", val: settingsForm.gracePeriodMinutes, key: "gracePeriodMinutes", unit: "min" }
+              ].map((item) => (
+                <div key={item.key} className="space-y-4 p-6 bg-slate-50/50 rounded-3xl border-2 border-slate-100/50 transition-all hover:border-emerald-100 group">
+                   <Label className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none block mb-1 group-hover:text-emerald-500 transition-colors">{item.label}</Label>
+                   {isEditingSettings ? (
+                      <Input 
+                        type="number" 
+                        value={item.val} 
+                        onChange={e => setSettingsForm({ ...settingsForm, [item.key]: Number(e.target.value) })}
+                        className="rounded-xl border-2 border-slate-100 bg-white font-black text-base text-slate-800 h-12 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-200" 
+                      />
+                   ) : (
+                     <div className="flex items-baseline gap-1">
+                       {item.prefix && <span className="text-sm font-black text-slate-400">{item.unit}</span>}
+                       <p className="font-black text-2xl text-slate-800 tracking-tight leading-none">{item.val}</p>
+                       {!item.prefix && <span className="text-[10px] text-slate-400 uppercase tracking-widest font-black ml-1">{item.unit}</span>}
+                     </div>
+                   )}
+                </div>
+              ))}
            </div>
         </CardContent>
       </Card>
@@ -369,7 +433,7 @@ export function AvailabilityTab({ doctor, onUpdate, isPending }: AvailabilityTab
       </Card>
 
       {/* 🗓 DATE OVERRIDES (HOLIDAYS, SPECIFIC OFF-DAYS) */}
-      <DateOverrideManager doctor={doctor} onUpdate={() => onUpdate({ updatedAt: new Date() })} />
+      <DateOverrideManager doctor={doctor} onUpdate={refreshData || (async () => { await onUpdate({ updatedAt: new Date() }) })} />
     </div>
   );
 }

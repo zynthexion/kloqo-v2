@@ -108,7 +108,9 @@ export class RegisterClinicUseCase {
             state: '',
             pincode: ''
         },
-        walkInTokenAllotment: (clinicData as any).walkInTokenAllotment || 50,
+        walkInTokenAllotment: (clinicData as any).walkInTokenAllotment || 5,
+        walkInReserveRatio: (clinicData as any).walkInReserveRatio || 0.15,
+        gracePeriodMinutes: (clinicData as any).gracePeriodMinutes || 15,
         showEstimatedWaitTime: (clinicData as any).showEstimatedWaitTime !== undefined ? (clinicData as any).showEstimatedWaitTime : true,
         tokenDistribution: (clinicData as any).tokenDistribution || 'classic',
         trialEndDate: trialEndDate, // Saved strictly for proration and sync logic

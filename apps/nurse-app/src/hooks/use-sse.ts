@@ -23,7 +23,8 @@ export type SSEEventType =
   | 'session_started'
   | 'session_ended'
   | 'break_scheduled'
-  | 'break_cancelled';
+  | 'break_cancelled'
+  | 'queue_reoptimized';
 
 export interface SSEPayload {
   type: SSEEventType;
@@ -73,6 +74,7 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
       'session_ended',
       'break_scheduled',
       'break_cancelled',
+      'queue_reoptimized',
     ];
 
     eventTypes.forEach((type) => {

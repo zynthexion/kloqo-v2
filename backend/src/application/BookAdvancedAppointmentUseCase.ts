@@ -9,7 +9,7 @@ import { ITokenStrategy } from '../domain/services/token/ITokenStrategy';
 import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
 import { Appointment, Patient, User } from '../../../packages/shared/src/index';
 import { format, subMinutes, parse } from 'date-fns';
-import { parseClinicTime, parseClinicDate, getClinicDateString } from '../domain/services/DateUtils';
+import { parseClinicTime, parseClinicDate, getClinicISODateString } from '../domain/services/DateUtils';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
@@ -50,13 +50,13 @@ export class BookAdvancedAppointmentUseCase {
 
     console.log('[BookAdvancedAppointmentUseCase] START', { clinicId, doctorId, patientId, slotTime, slotIndex, sessionIndex });
 
-    // Normalize Date to legacy format "d MMMM yyyy" for repository parity
+    // Normalize Date to new ISO standard "YYYY-MM-DD"
     const incomingDate = request.date;
     const date = incomingDate.includes('-') 
       ? parseClinicDate(incomingDate) 
       : parse(incomingDate, 'd MMMM yyyy', new Date());
     
-    const firestoreDateStr = getClinicDateString(date);
+    const firestoreDateStr = getClinicISODateString(date);
 
     // --- FAIL FAST: Validate all inputs ---
     if (!doctorId) {

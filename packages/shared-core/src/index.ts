@@ -27,7 +27,7 @@ export * from './services/notification-config';
 
 export * from './utils/date-utils';
 export * from './utils/appointment-utils';
-export { getClinicDateString, getClinicNow } from './utils/date-utils';
+export { getClinicDateString, getClinicISODateString, getClinicNow } from './utils/date-utils';
 export * from './utils/reservation-utils';
 export * from './utils/errors';
 // export * from './utils/firebase-admin'; // Server-only: Import directly

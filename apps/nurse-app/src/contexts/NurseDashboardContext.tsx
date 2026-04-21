@@ -3,7 +3,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { format } from 'date-fns';
 import { Clinic, Doctor, Appointment, QueueState } from '@kloqo/shared';
+import { getClinicISODateString } from '@kloqo/shared-core';
 import { useAuth } from './AuthContext';
+
 import { apiRequest } from '@/lib/api-client';
 import { useSSE, SSEPayload } from '@/hooks/use-sse';
 
@@ -36,12 +38,14 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   // ── Core data fetch ─────────────────────────────────────────────────────
+
   const fetchData = useCallback(async (isAutoRefresh = false) => {
     if (!clinicId) return;
     try {
       if (!isAutoRefresh) setLoading(true);
 
-      const date = format(new Date(), 'yyyy-MM-dd');
+      const date = getClinicISODateString(new Date());
+      
       let dashData = await apiRequest<NurseDashboardData>(
         `/appointments/dashboard?clinicId=${clinicId}&date=${date}`
       );

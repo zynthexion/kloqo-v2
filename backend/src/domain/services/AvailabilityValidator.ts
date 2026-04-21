@@ -9,10 +9,14 @@ export class AvailabilityValidator {
   static isSlotBlocked(doctor: Doctor, slotTime: Date): boolean {
     if (!doctor || !doctor.breakPeriods) return false;
 
-    const dateStr = getClinicDateString(slotTime);
-    const breaks = doctor.breakPeriods[dateStr];
+    const dateStrLegacy = getClinicDateString(slotTime);
+    const dateStrIso = slotTime.toISOString().split('T')[0];
+    
+    const legacyBreaks = doctor.breakPeriods[dateStrLegacy] || [];
+    const isoBreaks = doctor.breakPeriods[dateStrIso] || [];
+    const breaks = [...(Array.isArray(legacyBreaks) ? legacyBreaks : []), ...(Array.isArray(isoBreaks) ? isoBreaks : [])];
 
-    if (!breaks || !Array.isArray(breaks)) return false;
+    if (breaks.length === 0) return false;
 
     return breaks.some(breakPeriod => {
       try {

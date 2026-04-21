@@ -59,8 +59,13 @@ export class SlotCalculator {
     let slotIndex = 0;
 
     // Availability extensions
-    const dateStr = format(date, 'd MMMM yyyy');
-    const extension = doctor.availabilityExtensions?.[dateStr];
+    // Availability extensions: check both legacy and ISO keys
+    const dateStrLegacy = format(date, 'd MMMM yyyy');
+    const legacyExtension = doctor.availabilityExtensions?.[dateStrLegacy];
+    const isoExtension = doctor.availabilityExtensions?.[dateStrIso];
+    
+    // ISO takes precedence if both exist, but we merge logic if needed (here we just need the sessions)
+    const extension = isoExtension || legacyExtension;
 
     availability.timeSlots.forEach((session, sessionIndex) => {
       let currentTime = parseClinicTime(session.from, date);

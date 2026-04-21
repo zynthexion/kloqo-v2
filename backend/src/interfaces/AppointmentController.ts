@@ -111,10 +111,14 @@ export class AppointmentController {
     try {
       const { clinicId, date } = req.query;
       if (!clinicId || !date) {
+        console.log('[DASHBOARD_DEBUG] Missing params:', { clinicId, date });
         return res.status(400).json({ message: 'clinicId and date are required' });
       }
       this.validateClinicAccess(req, clinicId as string);
-      const data = await this.getNurseDashboardUseCase.execute(clinicId as string, date as string);
+      const assignedDoctorIds = (req as any).user?.assignedDoctorIds;
+      console.log('[DASHBOARD_DEBUG] Executing for:', { clinicId, date, assignedDoctorIds });
+      const data = await this.getNurseDashboardUseCase.execute(clinicId as string, date as string, assignedDoctorIds);
+
       res.json(data);
     } catch (error: any) {
       if (error instanceof ClinicNotApprovedError) {
@@ -334,10 +338,12 @@ export class AppointmentController {
 
   async getAppointments(req: any, res: Response) {
     try {
+      console.log('[APPOINTMENTS_DEBUG] Incoming query:', req.query);
       const appointments = await this.filterAppointmentsUseCase.execute({
         ...req.query,
         user: req.user
       });
+      console.log('[APPOINTMENTS_DEBUG] Results count:', appointments?.length || 0);
       res.json({ appointments });
     } catch (error: any) {
       if (error.message.includes('Unauthorized') || error.message.includes('Access Denied')) {

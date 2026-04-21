@@ -64,7 +64,6 @@ export default function DashboardLayout({
 
       // Default fallback
       router.push('/');
-    }
   }, [user, loading, isSuperAdmin, router]);
 
   const handleLogout = async () => {

@@ -60,7 +60,7 @@ export class WalkInPlacementService {
     if (mode === 'advanced') {
       return this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now);
     } else {
-      return this._findClassicSlot(sessionSlots, appointments, occupiedSlotIndices, now, walkInSpacing);
+      return this._findClassicSlot(sessionSlots, occupiedSlotIndices, now, walkInSpacing);
     }
   }
 
@@ -72,8 +72,6 @@ export class WalkInPlacementService {
     now: Date
   ): DailySlot | null {
     // PHASE A: Smart Bubble (60-minute window)
-    // Scan for a cancelled/empty gap in the next 60 minutes.
-    // These are slots that exist in the schedule but have no active appointment.
     const oneHourFromNow = addMinutes(now, 60);
     const bubbleGap = sessionSlots.find(slot =>
       !occupiedSlotIndices.has(slot.index) &&
@@ -82,14 +80,12 @@ export class WalkInPlacementService {
     );
 
     if (bubbleGap) {
-      console.log(`[WalkInPlacement] PHASE A: Bubbling walk-in into gap at slot ${bubbleGap.index} (${bubbleGap.time.toISOString()})`);
+      console.log(`[WalkInPlacement] PHASE A: Bubbling walk-in into gap at slot ${bubbleGap.index}`);
       return bubbleGap;
     }
 
     // PHASE B: Buffer Slot Assignment
-    // Use the 15% reserved buffer. Find the first empty slot in the reserved set.
     const reservedSlotIndices = BookingSessionEngine.calculateReservedSlots(sessionSlots, now);
-
     const bufferSlot = sessionSlots.find(slot =>
       reservedSlotIndices.has(slot.index) &&
       !occupiedSlotIndices.has(slot.index) &&
@@ -97,81 +93,60 @@ export class WalkInPlacementService {
     );
 
     if (bufferSlot) {
-      console.log(`[WalkInPlacement] PHASE B: Assigning walk-in to buffer slot ${bufferSlot.index} (${bufferSlot.time.toISOString()})`);
+      console.log(`[WalkInPlacement] PHASE B: Assigning walk-in to buffer slot ${bufferSlot.index}`);
       return bufferSlot;
     }
 
-    console.warn('[WalkInPlacement] No advanced slots available: all buffer & gap slots occupied.');
     return null;
   }
 
-  // ── Classic Mode: Linear 1:N Interval ─────────────────────────────────────
+  // ── Classic Mode: Pure Greedy Placement (The Vacuum-Protected Strategy) ──
 
   private static _findClassicSlot(
     sessionSlots: DailySlot[],
-    appointments: Appointment[],
     occupiedSlotIndices: Set<number>,
     now: Date,
     walkInSpacing: number
   ): DailySlot | null {
-    const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Skipped', 'Completed']);
-
-    // PHASE A: Smart Bubble (The Zipper Bubble Gap Filling)
-    // Scan for any vacant gaps inside the existing schedule window (60-min lookahead).
-    // This allows Walk-ins to jump into gaps left by A-Token cancellations instantly.
-    const oneHourFromNow = addMinutes(now, 60);
-    const bubbleGap = sessionSlots.find(slot =>
-      !occupiedSlotIndices.has(slot.index) &&
-      !isAfter(slot.time, oneHourFromNow) &&
-      isAfter(slot.time, now)
-    );
-
-    if (bubbleGap) {
-      console.log(`[WalkInPlacement] CLASSIC PHASE A: Bubbling walk-in into zipper gap at slot ${bubbleGap.index}`);
-      return bubbleGap;
-    }
-
-    // PHASE B: Linear 1:N Interval Placement
-    // Find the next rhythmic spot if no gaps are found.
-    const activeAppts = appointments
-      .filter(a => ACTIVE_STATUSES.has(a.status) && typeof a.slotIndex === 'number')
-      .sort((a, b) => a.slotIndex! - b.slotIndex!);
-
-    const walkIns = activeAppts.filter(a => a.bookedVia === 'Walk-in');
-    const aTokens = activeAppts.filter(a => a.bookedVia !== 'Walk-in');
-
-    const lastWalkInIndex = walkIns.length > 0
-      ? Math.max(...walkIns.map(a => a.slotIndex!))
-      : -1;
-
-    // Find the Nth A-Token after the last walk-in anchor
-    let minTargetIndex = -1;
-    if (walkInSpacing > 0 && aTokens.length > 0) {
-      const aTokensAfterLastWalkIn = aTokens.filter(a => a.slotIndex! > lastWalkInIndex);
-
-      if (aTokensAfterLastWalkIn.length >= walkInSpacing) {
-        const nthAToken = aTokensAfterLastWalkIn[walkInSpacing - 1];
-        minTargetIndex = nthAToken.slotIndex!;
-      } else {
-        const lastActiveIndex = activeAppts[activeAppts.length - 1]?.slotIndex ?? -1;
-        minTargetIndex = Math.max(lastWalkInIndex, lastActiveIndex);
+    /**
+     * PURE GREED STRATEGY:
+     * Scan every slot chronologically after 'now'.
+     * Return the FIRST slot that is EITHER:
+     *  1. Completely vacant (unbooked gap).
+     *  2. OR a designated Zipper position (rhythmic fallback).
+     * 
+     * FIFO integrity is preserved emergentlly by QueueBubblingService (The Vacuum).
+     */
+    const zipperPositions = new Set<number>();
+    if (walkInSpacing > 0) {
+      // spacing=4 means every 5th slot is a zipper (indices 4, 9, 14...)
+      const modulus = walkInSpacing + 1;
+      for (let i = walkInSpacing; i < sessionSlots.length + 100; i += modulus) {
+        zipperPositions.add(i);
       }
-    } else {
-      minTargetIndex = lastWalkInIndex;
     }
 
-    const targetSlot = sessionSlots.find(slot =>
-      slot.index > minTargetIndex &&
-      !occupiedSlotIndices.has(slot.index) &&
-      isAfter(slot.time, now)
-    );
+    const targetSlot = sessionSlots.find(slot => {
+      // Must be in the future
+      if (!isAfter(slot.time, now)) return false;
+
+      // Must not be occupied by an active appointment
+      if (occupiedSlotIndices.has(slot.index)) return false;
+
+      // Rule A: It's a reserved Zipper spot
+      if (zipperPositions.has(slot.index)) return true;
+
+      // Rule B: It's an unbooked empty gap (Greedy Front-Fill)
+      // Since it's not occupied (checked above), it's a valid target.
+      return true;
+    });
 
     if (targetSlot) {
-      console.log(`[WalkInPlacement] CLASSIC PHASE B: Placing walk-in at slot ${targetSlot.index} (Zipper N=${walkInSpacing})`);
+      console.log(`[WalkInPlacement] CLASSIC: Greedy placement at slot ${targetSlot.index} (Zipper N=${walkInSpacing})`);
       return targetSlot;
     }
 
-    console.warn('[WalkInPlacement] No classic slots available after spacing constraint.');
+    console.warn('[WalkInPlacement] No classic slots available (Session full).');
     return null;
   }
 }

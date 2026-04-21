@@ -12,7 +12,7 @@ import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { WalkInPlacementService } from '../domain/services/WalkInPlacementService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { sseService } from '../domain/services/SSEService';
-import { getClinicNow, getClinicDateString } from '../domain/services/DateUtils';
+import { getClinicNow, getClinicDateString, getClinicISODateString } from '../domain/services/DateUtils';
 import { parse } from 'date-fns';
 
 export interface CreateWalkInAppointmentDTO {
@@ -51,14 +51,15 @@ export class CreateWalkInAppointmentUseCase {
     // ── PER-DOCTOR DISTRIBUTION LOGIC ─────────────────────────────────────────
     // Individual doctor's logic (Classic vs Advanced) takes precedence over clinic defaults.
     const tokenDistribution = (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
-    const walkInSpacing = clinic.walkInTokenAllotment || 0;
+    const walkInSpacing = doctor.walkInTokenAllotment || clinic.walkInTokenAllotment || 0;
 
     // Parse the date string to a Date object for slot generation
     const requestedDate = dto.date.includes('-')
       ? parse(dto.date, 'yyyy-MM-dd', new Date())
       : parse(dto.date, 'd MMMM yyyy', new Date());
-
-    const firestoreDateStr = getClinicDateString(requestedDate);
+    
+    // Normalize Date to new ISO standard "YYYY-MM-DD"
+    const firestoreDateStr = getClinicISODateString(requestedDate);
 
     // Pre-compute all slots (pure, no I/O) — safe to do outside the transaction
     const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);

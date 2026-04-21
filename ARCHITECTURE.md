@@ -124,7 +124,7 @@ Kloqo enforces a strict **"24-Hour Native"** architecture to prevent "Off-by-12"
 ### 8.1. Data Storage & Logic Standard
 | Context | Format | Rule |
 |---------|--------|------|
-| **Firestore Date** | `'d MMMM yyyy'` | e.g., `22 March 2026` |
+| **Firestore Date** | `'YYYY-MM-DD'` | **ISO 8601 Standard**. (Legacy: `'d MMMM yyyy'` supported for reads only). |
 | **Firestore Time** | `'HH:mm'` | **STRICT 24h**. Never store AM/PM strings. |
 | **Business Logic** | `HH:mm` | All sorting and comparisons must use 24h strings or Dates. |
 | **View Layer** | `hh:mm a` | e.g., `02:30 PM`. Relegated **only** to the final render. |

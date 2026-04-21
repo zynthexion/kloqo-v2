@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Clock, Trash2, PlusCircle, AlertCircle, Loader2, Users } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Trash2, Edit3, PlusCircle, AlertCircle, Loader2, Users } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useDateOverrides } from '@/hooks/useDateOverrides';
 import { displayTime12h } from '@kloqo/shared-core';
 import type { Doctor, DoctorOverride } from '@kloqo/shared';
+import { useToast } from "@/hooks/use-toast";
 
 interface DateOverrideManagerProps {
   doctor: Doctor;
@@ -23,6 +24,7 @@ interface DateOverrideManagerProps {
 }
 
 export function DateOverrideManager({ doctor, onUpdate }: DateOverrideManagerProps) {
+  const { toast } = useToast();
   const { isPending, addOverride, removeOverride, markLeave } = useDateOverrides(doctor, onUpdate);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: undefined });
@@ -56,6 +58,36 @@ export function DateOverrideManager({ doctor, onUpdate }: DateOverrideManagerPro
       if (err.message?.includes('ORPHANED_TOKENS_DETECTED')) {
         setConflictError(err.message);
       }
+    }
+  };
+
+  const handleEdit = (dateKey: string, override: DoctorOverride) => {
+    try {
+      let parsedDate = new Date();
+      if (dateKey.includes('-')) {
+        const [y, m, d] = dateKey.split('-').map(Number);
+        if (y && m && d) parsedDate = new Date(y, m - 1, d);
+      } else {
+        parsedDate = new Date(dateKey);
+      }
+      setSelectedDate(parsedDate);
+      
+      setIsOff(override.isOff);
+      if (override.slots && override.slots.length > 0) {
+        setSessions(override.slots);
+      } else if (!override.isOff) {
+        setSessions([{ from: '09:00', to: '17:00' }]);
+      }
+      
+      // Smooth scroll to top of the card where the form is
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      toast({
+        title: "Editing Override",
+        description: `Loaded settings for ${dateKey}. Adjust and click 'Apply'.`
+      });
+    } catch (e) {
+      console.error("Failed to parse dateKey", dateKey);
     }
   };
 
@@ -209,9 +241,14 @@ export function DateOverrideManager({ doctor, onUpdate }: DateOverrideManagerPro
                         )}
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => removeOverride(dateKey)} disabled={isPending} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all rounded-xl">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(dateKey, override)} disabled={isPending} className="text-slate-300 hover:text-theme-blue hover:bg-theme-blue/5 rounded-xl">
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => removeOverride(dateKey)} disabled={isPending} className="text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))
               ) : (

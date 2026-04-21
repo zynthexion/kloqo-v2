@@ -5,6 +5,10 @@ module.exports = {
   moduleNameMapper: {
     '^@kloqo/shared$': '<rootDir>/../packages/shared/src/index',
     '^@kloqo/shared-core$': '<rootDir>/../packages/shared-core/src/index',
+    '^@domain/(.*)$': '<rootDir>/src/domain/$1',
+    '^@application/(.*)$': '<rootDir>/src/application/$1',
+    '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
+    '^@interfaces/(.*)$': '<rootDir>/src/interfaces/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts'],

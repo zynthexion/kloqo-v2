@@ -37,7 +37,10 @@ export class SyncClinicStatusesUseCase {
             let newStatus = 'Out';
             
             // 1. Check for manual overrides or leaves first
-            const breakPeriods = doctor.breakPeriods?.[dateStr] || [];
+            const breakPeriodsLegacy = doctor.breakPeriods?.[dateStr] || [];
+            const breakPeriodsIso = doctor.breakPeriods?.[isoDate] || [];
+            const breakPeriods = [...breakPeriodsLegacy, ...breakPeriodsIso];
+
             const activeBreak = breakPeriods.find((b: any) => {
                 const start = new Date(b.startTime);
                 const end = new Date(b.endTime);
@@ -56,8 +59,11 @@ export class SyncClinicStatusesUseCase {
                         let startTime = parseClinicTime(session.from, now);
                         let endTime = parseClinicTime(session.to, now);
 
-                        // Consider extensions
-                        const extension = doctor.availabilityExtensions?.[dateStr]?.sessions?.find((s: any) => s.sessionIndex === index);
+                        // Consider extensions: check both legacy and ISO
+                        const extLegacy = doctor.availabilityExtensions?.[dateStr]?.sessions?.find((s: any) => s.sessionIndex === index);
+                        const extIso = doctor.availabilityExtensions?.[isoDate]?.sessions?.find((s: any) => s.sessionIndex === index);
+                        const extension = extIso || extLegacy;
+
                         if (extension?.newEndTime) {
                             endTime = parseClinicTime(extension.newEndTime, now);
                         }
@@ -91,7 +97,10 @@ export class SyncClinicStatusesUseCase {
 
         let newStatus = 'Out';
         
-        const breakPeriods = doctor.breakPeriods?.[dateStr] || [];
+        const breakPeriodsLegacy = doctor.breakPeriods?.[dateStr] || [];
+        const breakPeriodsIso = doctor.breakPeriods?.[isoDate] || [];
+        const breakPeriods = [...breakPeriodsLegacy, ...breakPeriodsIso];
+
         const activeBreak = breakPeriods.find((b: any) => {
             const start = new Date(b.startTime);
             const end = new Date(b.endTime);
@@ -109,7 +118,10 @@ export class SyncClinicStatusesUseCase {
                     let startTime = parseClinicTime(session.from, now);
                     let endTime = parseClinicTime(session.to, now);
 
-                    const extension = doctor.availabilityExtensions?.[dateStr]?.sessions?.find((s: any) => s.sessionIndex === index);
+                    const extLegacy = doctor.availabilityExtensions?.[dateStr]?.sessions?.find((s: any) => s.sessionIndex === index);
+                    const extIso = doctor.availabilityExtensions?.[isoDate]?.sessions?.find((s: any) => s.sessionIndex === index);
+                    const extension = extIso || extLegacy;
+
                     if (extension?.newEndTime) {
                         endTime = parseClinicTime(extension.newEndTime, now);
                     }

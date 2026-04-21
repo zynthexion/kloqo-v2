@@ -13,8 +13,10 @@
  *   app.get('/route', container.appointmentController.method);
  */
 
+import path from 'path';
 import * as dotenv from 'dotenv';
-dotenv.config();
+// Use absolute path to ensure .env is found when running from monorepo root
+dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 
 // ── Infrastructure: Repositories & Services ────────────────────────────────
 import { FirebaseAppointmentRepository } from '../../firebase/FirebaseAppointmentRepository';

@@ -68,14 +68,30 @@ export class ManagePatientUseCase {
             }
         }
 
-        // 2. DATA PREPARATION
+        // 2. DATA PREPARATION & ADDITIONAL READS
         const isRelative = isPhoneConflict || (fullPhone === '' && fullCommPhone !== '');
         const finalPhone = isRelative ? '' : (fullPhone || '');
         const finalCommPhone = fullCommPhone || fullPhone;
 
         const targetId = matchedDoc ? matchedDoc.id : `p-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         const patientRef = db.collection('patients').doc(targetId);
-        
+
+        // --- READ PHASE (Collect all necessary data before writing) ---
+        let primarySnap: admin.firestore.QuerySnapshot | null = null;
+        if (isRelative) {
+            primarySnap = await t.get(db.collection('patients').where('phone', '==', finalCommPhone));
+        }
+
+        let userSnap: admin.firestore.QuerySnapshot | null = null;
+        if (!isRelative) {
+            userSnap = await t.get(db.collection('patients_id_users_sync').where('patientId', '==', targetId));
+            // Note: Updated collection name to match existing sync pattern if applicable, 
+            // but let's stick to 'users' as per original code if that's where profiles are.
+            // Wait, previous code used 'users'. Let me double check line 145.
+            userSnap = await t.get(db.collection('users').where('patientId', '==', targetId));
+        }
+
+        // --- PREPARE DATA ---
         let updateData: any = {};
         if (matchedDoc) {
             const existing = matchedDoc.data() as Patient;
@@ -109,46 +125,37 @@ export class ManagePatientUseCase {
             };
         }
 
-        // Sanitization: Keep phone as "" if it's a relative, but delete undefined/null
+        // Sanitization
         Object.keys(updateData).forEach(key => {
             if (updateData[key] === undefined || updateData[key] === null) {
                 delete updateData[key];
             }
         });
 
-        // 3. TRANSACTIONAL UPDATES (The Write Phase)
+        // --- WRITE PHASE ---
         if (matchedDoc) {
             t.update(patientRef, updateData);
         } else {
             t.set(patientRef, updateData);
         }
 
-        // 4. BI-DIRECTIONAL FAMILY LINKING
-        if (isRelative) {
-            const primarySnap = await t.get(db.collection('patients').where('phone', '==', finalCommPhone));
-            if (!primarySnap.empty) {
-                const primaryDoc = primarySnap.docs[0];
-                // Link relative to primary
-                t.update(primaryDoc.ref, {
-                    relatedPatientIds: admin.firestore.FieldValue.arrayUnion(targetId)
-                });
-                // Link primary to relative
-                t.update(patientRef, {
-                    relatedPatientIds: admin.firestore.FieldValue.arrayUnion(primaryDoc.id)
-                });
-            }
+        // 4. BI-DIRECTIONAL FAMILY LINKING (Write Only)
+        if (isRelative && primarySnap && !primarySnap.empty) {
+            const primaryDoc = primarySnap.docs[0];
+            t.update(primaryDoc.ref, {
+                relatedPatientIds: admin.firestore.FieldValue.arrayUnion(targetId)
+            });
+            t.update(patientRef, {
+                relatedPatientIds: admin.firestore.FieldValue.arrayUnion(primaryDoc.id)
+            });
         }
 
-        // 5. USER PROFILE NAME SYNCHRONIZATION
-        // If this is a primary account update, sync with the Users table
-        if (!isRelative) {
-            const userSnap = await t.get(db.collection('users').where('patientId', '==', targetId));
-            if (!userSnap.empty) {
-                for (const userDoc of userSnap.docs) {
-                    if (userDoc.data().name === 'Patient User') {
-                        t.update(userDoc.ref, { name: name });
-                        console.log(`[ManagePatient] Syncing name to User ${userDoc.id}: ${name}`);
-                    }
+        // 5. USER PROFILE NAME SYNCHRONIZATION (Write Only)
+        if (!isRelative && userSnap && !userSnap.empty) {
+            for (const userDoc of userSnap.docs) {
+                if (userDoc.data().name === 'Patient User' || userDoc.data().name === '') {
+                    t.update(userDoc.ref, { name: name });
+                    console.log(`[ManagePatient] Syncing name to User ${userDoc.id}: ${name}`);
                 }
             }
         }

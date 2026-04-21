@@ -20,9 +20,9 @@ export class GetNurseDashboardUseCase {
     private syncStatusUseCase: SyncClinicStatusesUseCase
   ) {}
 
-  async execute(clinicId: string, date: string): Promise<NurseDashboardData> {
+  async execute(clinicId: string, date: string, assignedDoctorIds?: string[]): Promise<NurseDashboardData> {
     // Sync statuses first to ensure fresh data
-    await this.syncStatusUseCase.execute(clinicId);
+    await this.syncStatusUseCase.execute(clinicId).catch(e => {});
 
     const [clinic, doctors, appointments] = await Promise.all([
       this.clinicRepo.findById(clinicId),
@@ -35,19 +35,24 @@ export class GetNurseDashboardUseCase {
     }
 
     // 🔒 SECURITY: BKP-01 Staff Blinding
-    // Hide 'Pending' appointments that haven't been paid for yet.
-    // ANALYTICS GUARDRAIL: Also strip system-generated ghost break-blocker records
-    // (isSystemBlocker === true). They are inserted by ScheduleBreakUseCase to
-    // hard-block break slots — they must never appear in queues or counts.
-    const filteredAppointments = (appointments || []).filter(apt => {
+    let filteredAppointments = (appointments || []).filter(apt => {
       if (apt.isSystemBlocker) return false;
       const isUnpaidPending = apt.status === 'Pending' && (apt.paymentStatus === 'Unpaid' || !apt.paymentStatus);
       
-      // Allow Advanced Bookings even if unpaid/pending so staff can see the full day's schedule
       if (apt.bookedVia === 'Advanced Booking') return true;
       
       return !isUnpaidPending;
     });
+
+    let doctorsList = Array.isArray(doctors) ? doctors : (doctors as any).data;
+
+    // 🛡️ SECURITY: Nurse/Staff Blinding (assignedDoctorIds)
+    if (assignedDoctorIds && assignedDoctorIds.length > 0) {
+      const assignedSet = new Set(assignedDoctorIds);
+      doctorsList = doctorsList.filter((d: Doctor) => assignedSet.has(d.id));
+      filteredAppointments = filteredAppointments.filter((a: Appointment) => assignedSet.has(a.doctorId));
+    }
+
 
     if (clinic.registrationStatus !== 'Approved') {
       throw new ClinicNotApprovedError();
@@ -57,12 +62,12 @@ export class GetNurseDashboardUseCase {
       throw new OnboardingIncompleteError();
     }
 
-    const doctorsList = Array.isArray(doctors) ? doctors : doctors.data;
     // Compute queues for each doctor
     const queues: Record<string, QueueState> = {};
 
-    doctorsList.forEach(doctor => {
-      const doctorAppointments = filteredAppointments.filter(apt => apt.doctorName === doctor.name);
+    doctorsList.forEach((doctor: Doctor) => {
+      const doctorAppointments = filteredAppointments.filter((apt: Appointment) => apt.doctorId === doctor.id);
+
       const docDistribution = doctor.tokenDistribution || clinic.tokenDistribution || 'advanced';
       
       const arrivedQueue = doctorAppointments

@@ -367,7 +367,7 @@ export default function SignupPage() {
         uploadFormData.append('documentType', documentType);
 
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${backendUrl}/storage/upload`, {
+        const response = await fetch(`${backendUrl}/storage/upload/public`, {
           method: 'POST',
           body: uploadFormData,
         });

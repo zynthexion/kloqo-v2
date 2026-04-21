@@ -33,7 +33,7 @@ export class GetWalkInPreviewUseCase {
     const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.date);
     const slots = SlotCalculator.generateSlots(doctor, now);
     const activeSessionIndex = SlotCalculator.findActiveSessionIndex(
-      doctor, slots, now, clinic.tokenDistribution || 'advanced'
+      doctor, slots, now, doctor.tokenDistribution || clinic.tokenDistribution || 'advanced'
     );
 
     if (activeSessionIndex === null) {
@@ -47,7 +47,7 @@ export class GetWalkInPreviewUseCase {
       dto.date,
       'W',
       activeSessionIndex,
-      clinic.tokenDistribution
+      doctor.tokenDistribution || clinic.tokenDistribution
     );
 
     const sessionSlots = slots.filter(s => s.sessionIndex === activeSessionIndex);
@@ -74,7 +74,7 @@ export class GetWalkInPreviewUseCase {
     const { assignments } = computeWalkInSchedule({
       slots: sessionSlots,
       now,
-      walkInTokenAllotment: clinic.walkInTokenAllotment || 0,
+      walkInTokenAllotment: doctor.walkInTokenAllotment || clinic.walkInTokenAllotment || 0,
       advanceAppointments: advanceApps,
       walkInCandidates: [...existingWalkIns, newWalkInCandidate]
     });

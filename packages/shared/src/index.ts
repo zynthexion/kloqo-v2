@@ -156,6 +156,8 @@ export interface Doctor {
   walkInReserveRatio?: number;
   /** Minutes after scheduled time before a Confirmed patient is auto-Skipped by the Sweep Engine. Default 15. */
   gracePeriodMinutes?: number;
+  /** The frequency of walk-ins in Classic Mode (1 walk-in every N appointments). Default 5. */
+  walkInTokenAllotment?: number;
 }
 
 

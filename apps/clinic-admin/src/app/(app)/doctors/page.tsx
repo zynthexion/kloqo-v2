@@ -170,8 +170,9 @@ export default function DoctorsPage() {
                     <TabsContent value="details" className="m-0 mt-0">
                       <ProfileTab doctor={selectedDoctor} departments={clinicDepartments} onUpdate={updateDoctorFields} isPending={isPending} />
                     </TabsContent>
+
                     <TabsContent value="availability" className="m-0 mt-0">
-                      <AvailabilityTab doctor={selectedDoctor} onUpdate={updateDoctorFields} isPending={isPending} />
+                      <AvailabilityTab doctor={selectedDoctor} onUpdate={updateDoctorFields} isPending={isPending} refreshData={fetchAllData} />
                     </TabsContent>
                     <TabsContent value="roles" className="m-0 mt-0">
                       <RoleTab 

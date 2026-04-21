@@ -11,14 +11,15 @@
  * All middleware logic lives in:    ./middleware.ts
  * All route definitions live in:    src/interfaces/routes/
  */
-
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import * as dotenv from 'dotenv';
 
-dotenv.config();
+// Use absolute path to ensure .env is found when running from monorepo root
+dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 
 // ── Route Modules ──────────────────────────────────────────────────────────
 import authRoutes from '../../../interfaces/routes/authRoutes';

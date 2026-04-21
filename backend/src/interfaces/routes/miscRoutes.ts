@@ -32,6 +32,14 @@ router.patch('/prescriptions/:appointmentId/abandon', auth, checkRole(PHARMACIST
 // ── Storage ────────────────────────────────────────────────────────────────
 router.post('/storage/upload', auth, checkRole(NURSE, DOCTOR, PHARMACIST, CLINIC_ADMIN, SUPER_ADMIN), upload.single('file'), (req, res) => storageController.upload(req, res));
 
+// Public upload endpoint exclusively for the public signup page
+router.post('/storage/upload/public', upload.single('file'), (req, res) => {
+  if (req.body.userId !== 'pending_registration') {
+    return res.status(403).json({ error: 'Public uploads are restricted to pending registrations only.' });
+  }
+  return storageController.upload(req, res);
+});
+
 // ── Payments (unauthenticated — secured by Razorpay signature) ────────────
 router.post('/payments/create-order', (req, res) => paymentController.createOrder(req, res));
 router.post('/payments/verify', (req, res) => paymentController.verifyPayment(req, res));

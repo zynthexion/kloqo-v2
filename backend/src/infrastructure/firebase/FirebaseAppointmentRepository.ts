@@ -2,6 +2,7 @@ import { Appointment, PaginationParams, PaginatedResponse } from '../../../../pa
 import * as admin from 'firebase-admin';
 import { IAppointmentRepository, ITransaction } from '../../domain/repositories';
 import { db, paginate } from './config';
+import { getClinicDateString, getClinicISODateString, parseClinicDate } from '../../domain/services/DateUtils';
 
 export class FirebaseAppointmentRepository implements IAppointmentRepository {
   private collection = db.collection('appointments');
@@ -40,20 +41,30 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return { id: doc.id, ...doc.data() } as Appointment;
   }
 
-  async findByDoctorAndDate(doctorId: string, date: string): Promise<Appointment[]> {
+  async findByDoctorAndDate(doctorId: string, dateStr: string): Promise<Appointment[]> {
+    const date = parseClinicDate(dateStr);
+    const variations = [getClinicISODateString(date), getClinicDateString(date)];
+    
+    console.log('[REPOSITORY_DEBUG] findByDoctorAndDate variations:', variations);
+
     const snapshot = await this.collection
       .where('doctorId', '==', doctorId)
-      .where('date', '==', date)
+      .where('date', 'in', variations)
       .get();
 
     const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
     return docs.filter(doc => !doc.isDeleted);
   }
 
-  async findByClinicAndDate(clinicId: string, date: string): Promise<Appointment[]> {
+  async findByClinicAndDate(clinicId: string, dateStr: string): Promise<Appointment[]> {
+    const date = parseClinicDate(dateStr);
+    const variations = [getClinicISODateString(date), getClinicDateString(date)];
+
+    console.log('[REPOSITORY_DEBUG] findByClinicAndDate variations:', variations);
+
     const snapshot = await this.collection
       .where('clinicId', '==', clinicId)
-      .where('date', '==', date)
+      .where('date', 'in', variations)
       .get();
 
     const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));

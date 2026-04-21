@@ -160,7 +160,7 @@ function ScheduleContent() {
                     <div className="lg:col-span-8">
                        {selectedDoctor.availabilitySlots && selectedDoctor.availabilitySlots.length > 0 ? (
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           {selectedDoctor.availabilitySlots.map(slot => (
+                           {selectedDoctor.availabilitySlots.map((slot) => (
                              <div key={slot.day} className="p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-premium relative overflow-hidden group hover:border-primary/20 transition-all duration-500">
                                <div className="absolute top-0 right-0 w-2 h-full bg-slate-50 group-hover:bg-primary/5 transition-colors" />
                                <div className="flex items-center gap-3 mb-6">
@@ -170,7 +170,7 @@ function ScheduleContent() {
                                   <h4 className="font-black text-sm text-slate-800 uppercase tracking-widest">{slot.day}</h4>
                                </div>
                                <div className="space-y-3">
-                                  {slot.timeSlots.map((ts, i) => (
+                                  {slot.timeSlots.map((ts, i: number) => (
                                     <div key={i} className="flex items-center gap-3 text-xs font-black text-slate-600 bg-slate-50 py-3 px-4 rounded-2xl border border-slate-100/50">
                                       <Clock className="h-4 w-4 text-primary/40" />
                                       <span>{ts.from} – {ts.to}</span>
