@@ -241,11 +241,15 @@ export class BookingSessionEngine {
     walkInTokenAllotment: number = 5
   ): DecoratedSlot[] {
     const isToday    = getClinicISOString(now) === (allSlots[0] ? getClinicISOString(allSlots[0].time) : '');
+    const isClassic = tokenDistribution === 'classic';
     const bufferMins = this.getBookingBuffer(source);
     const cutoff    = addMinutes(now, bufferMins);
-    const reserved  = this.calculateReservedSlots(allSlots, now, reserveRatio);
 
-    const isClassic = tokenDistribution === 'classic';
+    // Rule: Classic mode already provides walk-in capacity via interleaving gaps.
+    // We disable the 15% end-of-session reserve for Classic doctors to prevent over-blocking.
+    const reserved = isClassic 
+      ? new Set<number>() 
+      : this.calculateReservedSlots(allSlots, now, reserveRatio);
 
     // Pre-pass: find the first truly available slot per session
     const firstAvailablePerSession = new Map<number, number>(); // sessionIndex → slotIndex
