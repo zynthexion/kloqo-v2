@@ -1,21 +1,22 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Suspense } from 'react';
-import AppFrameLayout from '@/components/layout/AppFrameLayout';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, CalendarIcon, Check, Trash2, AlertTriangle } from 'lucide-react';
-import { format, addMinutes, differenceInMinutes, startOfDay, parseISO, eachMinuteOfInterval, isWithinInterval } from 'date-fns';
+import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
+import { Loader2, ArrowLeft, CalendarIcon, Check, Trash2, AlertTriangle } from 'lucide-react';
+import { format, startOfDay, parseISO, isWithinInterval } from 'date-fns';
 import { cn, parseTime, formatTime12Hour } from '@/lib/utils';
 import Link from 'next/link';
-import { Appointment, Doctor } from '@kloqo/shared';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiRequest } from '@/lib/api-client';
+import { Appointment, Doctor } from '@kloqo/shared';
+import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
+import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 
 type TimeSession = { from: string; to: string; };
 
@@ -24,6 +25,7 @@ function MarkLeaveContent() {
     const searchParams = useSearchParams();
     const { toast } = useToast();
     const { user } = useAuth();
+    const { activeRole } = useActiveIdentity();
 
     const doctorIdFromParams = searchParams.get('doctor');
 
@@ -57,8 +59,6 @@ function MarkLeaveContent() {
         setLoading(true);
         try {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
-
-            // Fetch dashboard data which includes doctors and appointments
             const dashData = await apiRequest<any>(
                 `/appointments/dashboard?clinicId=${clinicId}&date=${dateStr}`
             );
@@ -84,16 +84,9 @@ function MarkLeaveContent() {
         fetchData();
     }, [fetchData]);
 
-    const dailyBreaks = useMemo(() => {
-        if (!doctor?.breakPeriods) return [];
-        // The doctor.breakPeriods key in V2 is usually "YYYY-MM-DD"
-        const dateKey = format(selectedDate, 'yyyy-MM-dd');
-        return doctor.breakPeriods[dateKey] || [];
-    }, [doctor, selectedDate]);
-
     const workSessionsForDay = useMemo((): TimeSession[] => {
         if (!doctor) return [];
-        const dayOfWeek = selectedDate.getDay(); // 0-6
+        const dayOfWeek = selectedDate.getDay();
         const doctorAvailabilityForDay = (doctor.availabilitySlots || []).find(slot => Number(slot.day) === dayOfWeek);
         return doctorAvailabilityForDay?.timeSlots || [];
     }, [doctor, selectedDate]);
@@ -147,28 +140,16 @@ function MarkLeaveContent() {
         setIsSubmitting(true);
         try {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            
             const sessionsToProcess = selectedSessions.map(session => {
                 const dayOfWeek = selectedDate.getDay();
                 const availabilityForDay = doctor.availabilitySlots?.find(s => Number(s.day) === dayOfWeek);
                 const sessionIndex = availabilityForDay?.timeSlots.findIndex(s => s.from === session.from && s.to === session.to) ?? -1;
-                
-                return {
-                    from: session.from,
-                    to: session.to,
-                    sessionIndex
-                };
+                return { from: session.from, to: session.to, sessionIndex };
             }).filter(s => s.sessionIndex !== -1);
 
             await apiRequest('/doctors/leave', {
                 method: 'POST',
-                body: JSON.stringify({
-                    clinicId,
-                    doctorId: doctor.id,
-                    date: dateStr,
-                    sessions: sessionsToProcess,
-                    action
-                })
+                body: JSON.stringify({ clinicId, doctorId: doctor.id, date: dateStr, sessions: sessionsToProcess, action })
             });
 
             toast({
@@ -178,9 +159,7 @@ function MarkLeaveContent() {
 
             await fetchData();
             setSelectedSessions([]);
-
         } catch (error: any) {
-            console.error("Error updating leave:", error);
             toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to update leave.' });
         } finally {
             setIsSubmitting(false);
@@ -206,63 +185,11 @@ function MarkLeaveContent() {
         return availableWorkDays.map(d => Number(d)).includes(numericDay);
     }, [doctor]);
 
-
-    if (loading) {
-        return (
-            <AppFrameLayout>
-                <div className="w-full h-full flex flex-col items-center justify-center">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                    <p className="mt-4 text-muted-foreground">Loading Schedule...</p>
-                </div>
-            </AppFrameLayout>
-        );
-    }
-
-    if (!doctor) {
-        return (
-            <AppFrameLayout>
-                <div className="w-full h-full flex flex-col items-center justify-center text-center p-8">
-                    <h2 className="text-xl font-semibold">Doctor not found</h2>
-                    <Link href="/" passHref className="mt-6">
-                        <Button>
-                            <ArrowLeft className="mr-2" />
-                            Back to Home
-                        </Button>
-                    </Link>
-                </div>
-            </AppFrameLayout>
-        );
-    }
+    if (loading) return <div className="w-full h-full flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
 
     const sessionsToCancel = selectedSessions.filter(s => isSessionOnLeave(s)).length;
     const sessionsToMark = selectedSessions.filter(s => !isSessionOnLeave(s)).length;
 
-    return (
-        <AppFrameLayout>
-            <div className="flex flex-col h-full">
-                <header className="flex items-center gap-4 p-4 border-b">
-                    <Link href="/">
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft />
-                        </Button>
-                    </Link>
-                    <div>
-                        <h1 className="text-xl font-bold">Mark Leave</h1>
-                        <p className="text-sm text-muted-foreground">For Dr. {doctor.name}</p>
-                    </div>
-                </header>
-                <div className="p-6 overflow-y-auto flex-1">
-                    <section className="mb-6">
-                        <h2 className="text-lg font-semibold mb-2">Select Date</h2>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <button className={cn("w-full text-left p-4 rounded-xl bg-muted/50 border", !selectedDate && "text-muted-foreground")}>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-center">
-                                                <p className="text-4xl font-bold text-destructive/80">{format(selectedDate, 'dd')}</p>
-                                                <p className="text-sm font-semibold">{format(selectedDate, 'MMM')}</p>
-                                            </div>
                                             <div>
                                                 <p className="font-semibold">{format(selectedDate, 'EEEE, yyyy')}</p>
                                                 <p className="text-sm text-muted-foreground">

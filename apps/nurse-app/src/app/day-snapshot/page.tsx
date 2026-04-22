@@ -16,6 +16,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
+import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
+import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { Appointment, Doctor } from '@kloqo/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -31,6 +35,7 @@ export default function DaySnapshotPage() {
 
   const clinicId = user?.clinicId;
   const { data, loading: dashLoading } = useNurseDashboard(clinicId);
+  const { activeRole } = useActiveIdentity();
 
   // Auth guard
   useEffect(() => {
@@ -122,17 +127,7 @@ export default function DaySnapshotPage() {
     return Array.from({ length: 22 }, (_, i) => addDays(subDays(today, 7), i));
   }, []);
 
-  if (authLoading || dashLoading) {
-    return (
-      <AppFrameLayout>
-        <div className="flex h-full w-full items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-theme-blue" />
-        </div>
-      </AppFrameLayout>
-    );
-  }
-
-  return (
+  const mobileView = (
     <AppFrameLayout showBottomNav>
       <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
         <ClinicHeader
@@ -329,5 +324,35 @@ export default function DaySnapshotPage() {
         </main>
       </div>
     </AppFrameLayout>
+  );
+
+  const tabletView = (
+    <TabletDashboardLayout 
+      hideSidebar={activeRole === 'nurse'}
+      hideRightPanel={activeRole === 'nurse'}
+    >
+       <div className="flex flex-col h-full bg-slate-50 overflow-hidden py-8">
+          <header className="mb-8">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Day Snapshot</h1>
+              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-2 px-1">Clinic performance and break schedule</p>
+          </header>
+          <div className="flex-1 overflow-y-auto">
+             {mobileView}
+          </div>
+       </div>
+    </TabletDashboardLayout>
+  );
+
+  return (
+    <ResponsiveAppLayout 
+      mobile={mobileView} 
+      tablet={
+        activeRole === 'nurse' ? (
+          <NurseDesktopShell>
+             {tabletView}
+          </NurseDesktopShell>
+        ) : tabletView
+      } 
+    />
   );
 }

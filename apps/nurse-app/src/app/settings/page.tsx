@@ -13,6 +13,7 @@ import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
 import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { RoleSwitcher } from '@/components/layout/RoleSwitcher';
+import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -174,7 +175,10 @@ export default function SettingsPage() {
   );
 
   const tabletView = (
-    <TabletDashboardLayout>
+    <TabletDashboardLayout 
+      hideSidebar={activeRole === 'nurse'}
+      hideRightPanel={activeRole === 'nurse'}
+    >
       <div className="space-y-12 py-8 animate-in fade-in duration-700">
         <header>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">System Settings</h1>
@@ -226,7 +230,13 @@ export default function SettingsPage() {
   return (
     <ResponsiveAppLayout 
       mobile={mobileView} 
-      tablet={tabletView} 
+      tablet={
+        activeRole === 'nurse' ? (
+          <NurseDesktopShell>
+            {tabletView}
+          </NurseDesktopShell>
+        ) : tabletView
+      } 
     />
   );
 }

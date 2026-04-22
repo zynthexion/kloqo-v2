@@ -15,6 +15,7 @@ export function useAppointments(patientId?: string) {
 
     useEffect(() => {
         if (!patientId) {
+            console.warn('[useAppointments] No patientId provided. Skipping fetch.');
             setLoading(false);
             return;
         }
@@ -22,9 +23,12 @@ export function useAppointments(patientId?: string) {
         const fetchAppointments = async () => {
             setLoading(true);
             try {
+                console.log(`[useAppointments] Fetching for patientId: ${patientId}`);
                 const res = await apiRequest(`/appointments?patientId=${patientId}`);
+                console.log('[useAppointments] Raw response:', res);
                 // Handle V2 response { appointments: [...] } or direct array
                 const data = res.appointments || (Array.isArray(res) ? res : (res.data || []));
+                console.log(`[useAppointments] Resolved ${data.length} appointments`);
                 setAppointments(data);
                 setError(null);
             } catch (err: any) {

@@ -69,7 +69,8 @@ export function ResponsiveAppLayout({ mobile, tablet }: ResponsiveAppLayoutProps
   if ((isTablet || isDesktop) && !forceMobile) {
     // 1. Gating Logic
     // Even if viewport is allowed, we check for specific clinical UI permissions
-    if (!RBACUtils.hasAnyRole(user, ['doctor', 'clinicAdmin', 'superAdmin'])) {
+    // REVISED: Allowing 'nurse' to view tablet/desktop layout
+    if (!RBACUtils.hasAnyRole(user, ['doctor', 'clinicAdmin', 'superAdmin', 'nurse'])) {
       return <>{mobile}</>;
     }
 

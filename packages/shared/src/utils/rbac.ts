@@ -104,7 +104,7 @@ export const RBACUtils = {
       case 'doctor':
         return ['desktop', 'tablet'];
       case 'nurse':
-        return ['tablet', 'mobile'];
+        return ['desktop', 'tablet', 'mobile'];
       case 'receptionist':
         return ['mobile'];
       default:

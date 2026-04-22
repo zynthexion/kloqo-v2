@@ -39,8 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         const data = await res.json();
+        console.log('[AuthContext] Session checked. User:', data.user);
         setUser(data.user);
       } else {
+        console.warn('[AuthContext] Session check failed. Status:', res.status);
         localStorage.removeItem('token');
         setUser(null);
       }
@@ -79,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     localStorage.setItem('token', token);
+    console.log('[AuthContext] Login success. UserData:', userData);
     setUser(userData);
 
     // Register FCM push token with backend — fire-and-forget, non-critical

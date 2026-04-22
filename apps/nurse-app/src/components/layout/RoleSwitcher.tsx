@@ -44,12 +44,7 @@ export function RoleSwitcher() {
   }, []);
 
   // Rule 1: Return null if no switching is possible (1 or fewer roles)
-  // Rule 2: SECURITY CLEANUP: Hide on Desktop for Pharmacists as no other role is authorized for large screens
-  if (
-    availableRoles.length <= 1 || 
-    !activeRole || 
-    (activeRole === 'pharmacist' && isDesktop)
-  ) {
+  if (availableRoles.length <= 1 || !activeRole) {
     return null;
   }
 
@@ -64,12 +59,12 @@ export function RoleSwitcher() {
   };
 
   return (
-    <div className="px-2 py-3 space-y-2 border-t border-slate-100/50 bg-slate-50/5">
+    <div className="w-full px-2 py-3 space-y-2 bg-white/40 backdrop-blur-md rounded-2xl border border-white/50 shadow-sm">
       <div className="flex items-center justify-between px-1">
-        <label className="text-[9px] font-black uppercase tracking-tight text-slate-400 flex items-center gap-1 shrink-0">
-           <ShieldCheck className="h-3 w-3" /> <span className="hidden lg:inline">Identity</span>
+        <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1 shrink-0">
+           <ShieldCheck className="h-3 w-3 text-primary" /> <span className="opacity-60">Identity</span>
         </label>
-        <RefreshCw className="h-2 w-2 text-theme-blue animate-pulse-slow shrink-0" />
+        <RefreshCw className="h-2 w-2 text-primary animate-pulse-slow shrink-0" />
       </div>
 
       <Select
@@ -78,39 +73,46 @@ export function RoleSwitcher() {
       >
         <SelectTrigger 
           className={cn(
-            "h-8 w-full rounded-xl border-none shadow-sm transition-all duration-300 font-bold text-[10px] uppercase tracking-tighter",
+            "h-9 w-full rounded-xl border-none shadow-premium transition-all duration-300 font-black text-[10px] uppercase tracking-widest",
             "bg-white hover:bg-slate-50 focus:ring-0 px-2",
-            activeRole === "nurse" && "text-emerald-600 ring-1 ring-emerald-100",
-            activeRole === "pharmacist" && "text-theme-blue ring-1 ring-theme-blue/10",
-            activeRole === "clinicAdmin" && "text-blue-600 ring-1 ring-blue-100"
+            activeRole === "nurse" && "text-emerald-600 ring-1 ring-emerald-500/20",
+            activeRole === "pharmacist" && "text-primary ring-1 ring-primary/20",
+            activeRole === "clinicAdmin" && "text-blue-600 ring-1 ring-blue-500/20",
+            activeRole === "receptionist" && "text-amber-600 ring-1 ring-amber-500/20"
           )}
         >
-          <div className="flex items-center gap-1.5 overflow-hidden">
-            <UserCog className="h-3 w-3 opacity-50 shrink-0" strokeWidth={3} />
-            <div className="truncate">
+          <div className="flex items-center gap-2 overflow-hidden w-full">
+            <div className="p-1 bg-slate-100 rounded-md shrink-0">
+               <UserCog className="h-3 w-3 text-slate-600" strokeWidth={3} />
+            </div>
+            <div className="truncate flex-1 text-left">
               <SelectValue placeholder="..." />
             </div>
           </div>
         </SelectTrigger>
         <SelectContent 
-          className="rounded-2xl border-none shadow-2xl animate-in zoom-in-95 duration-200"
+          className="rounded-[2rem] border-none shadow-2xl animate-in zoom-in-95 duration-200 bg-white/90 backdrop-blur-xl"
           align="start"
         >
           {availableRoles.map((role) => (
             <SelectItem 
               key={role} 
               value={role}
-              className="font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 cursor-pointer py-2.5"
+              className="font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 cursor-pointer py-3"
             >
-              {formatRoleLabel(role)}
+              <div className="flex items-center gap-2">
+                 <div className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    role === 'nurse' ? "bg-emerald-500" :
+                    role === 'pharmacist' ? "bg-primary" :
+                    role === 'receptionist' ? "bg-amber-500" : "bg-blue-500"
+                 )} />
+                 {formatRoleLabel(role)}
+              </div>
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
-
-      <p className="text-[9px] font-bold text-slate-300 leading-tight px-1">
-        Your UI permissions update instantly based on selection.
-      </p>
     </div>
   );
 }

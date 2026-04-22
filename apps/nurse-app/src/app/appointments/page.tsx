@@ -6,6 +6,8 @@ import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import ClinicHeader from '@/components/clinic/ClinicHeader';
 import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
+import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 
 // Refactored Hooks & Components
 import { useAppointmentManagement } from '@/hooks/useAppointmentManagement';
@@ -18,6 +20,7 @@ export default function AppointmentsPage() {
     setSelectedDate, searchTerm, setSearchTerm, dateLoading, handleDoctorChange,
     currentDoctor, filteredAppointments, dates, updateAppointmentStatus
   } = useAppointmentManagement();
+  const { activeRole } = useActiveIdentity();
 
   if (authLoading || (user && dashLoading)) {
     return (
@@ -60,7 +63,10 @@ export default function AppointmentsPage() {
   );
 
   const tabletView = (
-    <TabletDashboardLayout>
+    <TabletDashboardLayout
+      hideSidebar={activeRole === 'nurse'}
+      hideRightPanel={activeRole === 'nurse'}
+    >
       <div className="space-y-8 py-4 animate-in fade-in duration-700 font-pt-sans">
         <header className="flex justify-between items-end">
           <div>
@@ -93,5 +99,16 @@ export default function AppointmentsPage() {
     </TabletDashboardLayout>
   );
 
-  return <ResponsiveAppLayout mobile={mobileView} tablet={tabletView} />;
+  return (
+    <ResponsiveAppLayout 
+      mobile={mobileView} 
+      tablet={
+        activeRole === 'nurse' ? (
+          <NurseDesktopShell>
+            {tabletView}
+          </NurseDesktopShell>
+        ) : tabletView
+      } 
+    />
+  );
 }

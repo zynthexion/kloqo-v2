@@ -25,6 +25,8 @@ interface NurseDashboardContextType {
   updateDoctorStatus: (doctorId: string, status: 'In' | 'Out', sessionIndex?: number) => Promise<void>;
   updateAppointmentStatus: (appointmentId: string, status: string) => Promise<void>;
   completeWithPrescription: (appointmentId: string, patientId: string, imageBlob: Blob) => Promise<void>;
+  selectedDoctorId: string | null;
+  setSelectedDoctorId: (id: string) => void;
 }
 
 const NurseDashboardContext = createContext<NurseDashboardContextType | undefined>(undefined);
@@ -36,6 +38,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<NurseDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
 
   // ── Core data fetch ─────────────────────────────────────────────────────
 
@@ -79,8 +82,21 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
     } else {
       setData(null);
       setLoading(false);
+      setSelectedDoctorId(null);
     }
   }, [clinicId, fetchData]);
+
+  // Auto-select first doctor if none selected and data loaded
+  useEffect(() => {
+    if (data?.doctors.length && !selectedDoctorId) {
+      setSelectedDoctorId(data.doctors[0].id);
+    } else if (data?.doctors.length && selectedDoctorId) {
+       // Ensure selected doctor still exists in the list (assigned doctors check)
+       if (!data.doctors.find(d => d.id === selectedDoctorId)) {
+         setSelectedDoctorId(data.doctors[0].id);
+       }
+    }
+  }, [data, selectedDoctorId]);
 
   // ── SSE: Real-time updates (replaces the old 30s setInterval poll) ───────
   // On any relevant SSE event from this clinic, we do a targeted state merge
@@ -250,6 +266,8 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         updateDoctorStatus,
         updateAppointmentStatus,
         completeWithPrescription,
+        selectedDoctorId,
+        setSelectedDoctorId,
       }}
     >
       {children}

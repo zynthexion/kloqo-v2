@@ -13,6 +13,9 @@ import { PatientHistoryOverlay } from '@/components/prescription/PatientHistoryO
 import { Button } from '@/components/ui/button';
 import LiveDashboard from '@/components/clinic/LiveDashboard';
 import AppFrameLayout from '@/components/layout/AppFrameLayout';
+import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
+import { NurseDesktopDashboard } from '@/components/dashboard/NurseDesktopDashboard';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { Loader2, Sparkles, Users } from 'lucide-react';
 import { Appointment } from '@kloqo/shared';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +27,7 @@ export default function DashboardPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const { activeRole } = useActiveIdentity();
   const { toast } = useToast();
 
   const arrivedQueue = React.useMemo(() => {
@@ -178,7 +182,13 @@ export default function DashboardPage() {
   return (
     <ResponsiveAppLayout 
       mobile={mobileView} 
-      tablet={tabletView} 
+      tablet={
+        activeRole === 'nurse' ? (
+          <NurseDesktopShell>
+            <NurseDesktopDashboard />
+          </NurseDesktopShell>
+        ) : tabletView
+      } 
     />
   );
 }

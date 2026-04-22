@@ -21,7 +21,7 @@ export function DeviceRestrictionBlocker({
     switch (role) {
       case 'doctor': return 'Desktop or Tablet';
       case 'receptionist': return 'Mobile Phone';
-      case 'nurse': return 'Mobile or Tablet';
+      case 'nurse': return 'Desktop, Tablet, or Mobile';
       default: return 'Authorized Hardware';
     }
   };

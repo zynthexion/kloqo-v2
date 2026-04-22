@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,16 @@ function AppointmentsPageContent() {
         userLoading,
         handleAppointmentCancelled
     } = useAppointmentsState();
+
+    useEffect(() => {
+        console.log('[AppointmentsPage] Render. State:', {
+            patientId: (user as any)?.patientId,
+            upcomingCount: upcomingAppointments.length,
+            pastCount: pastAppointments.length,
+            userLoading,
+            appointmentsLoading
+        });
+    }, [user, upcomingAppointments, pastAppointments, userLoading, appointmentsLoading]);
 
     if (userLoading && !user) {
         return (

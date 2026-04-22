@@ -20,6 +20,15 @@ export function useAppointmentsState() {
     const [cachedAppointments, setCachedAppointments] = useState<Appointment[]>([]);
     const [clinics, setClinics] = useState<Record<string, Clinic>>({});
 
+    useEffect(() => {
+        console.log('[useAppointmentsState] State:', { 
+            patientId: (user as any)?.patientId, 
+            appointmentsCount: appointments.length, 
+            appointmentsLoading,
+            userLoading
+        });
+    }, [user, appointments, appointmentsLoading, userLoading]);
+
     const appointmentsCacheKey = (user as any)?.patientId ? `appointments-cache-${(user as any).patientId}` : null;
 
     // 1. Initial Cache Load

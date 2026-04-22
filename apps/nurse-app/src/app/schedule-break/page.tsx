@@ -4,6 +4,10 @@ import { Suspense } from 'react';
 import { format } from 'date-fns';
 import { Loader2, ArrowRight, CheckCircle2, Coffee } from 'lucide-react';
 import AppFrameLayout from '@/components/layout/AppFrameLayout';
+import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
+import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
+import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { Button } from '@/components/ui/button';
 
 // Refactored Hooks & Components
@@ -21,6 +25,7 @@ function Content() {
     previewResult, isLoadingPreview, isConfirming, compensationMode,
     setCompensationMode, dates, handleSlotClick, handlePreview, handleConfirm
   } = useScheduleBreak();
+  const { activeRole } = useActiveIdentity();
 
   if (!doctorId) {
     return (
@@ -38,7 +43,7 @@ function Content() {
     );
   }
 
-  return (
+  const mobileView = (
     <AppFrameLayout>
       <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
         <BreakHeader stage={stage} onBack={() => stage === 'PREVIEW' ? setStage('SELECT') : router.back()} />
@@ -97,6 +102,34 @@ function Content() {
       </div>
     </AppFrameLayout>
   );
+
+  const tabletView = (
+    <TabletDashboardLayout>
+       <div className="h-full bg-slate-50 flex flex-col py-8">
+          <header className="mb-8">
+             <h1 className="text-4xl font-black text-slate-900 tracking-tight">Schedule Break</h1>
+             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-2 px-1">Define temporary clinical downtime</p>
+          </header>
+          <div className="flex-1 bg-white rounded-[3rem] shadow-premium overflow-hidden relative">
+             {mobileView}
+          </div>
+       </div>
+    </TabletDashboardLayout>
+  );
+
+  return (
+    <ResponsiveAppLayout 
+      mobile={mobileView} 
+      tablet={
+        activeRole === 'nurse' ? (
+          <NurseDesktopShell>
+            {tabletView}
+          </NurseDesktopShell>
+        ) : tabletView
+      } 
+    />
+  );
+}
 }
 
 export default function ScheduleBreakPage() {
