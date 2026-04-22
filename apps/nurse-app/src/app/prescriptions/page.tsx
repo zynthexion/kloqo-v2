@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Loader2, Check, Download } from 'lucide-react';
+import { Search, Loader2, Check, Download, FileText, ExternalLink } from 'lucide-react';
 import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -112,13 +112,53 @@ export default function PharmacistPrescriptionsPage() {
       <LogOutDialog isOpen={showLogoutConfirm} setIsOpen={setShowLogoutConfirm} onLogout={logout} />
       
       {viewerUrl && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col p-4" onClick={() => setViewerUrl(null)}>
-          <div className="flex-1 flex items-center justify-center">
-            <img src={viewerUrl} alt="Rx" className="max-w-full max-h-full object-contain rounded-xl" />
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={() => setViewerUrl(null)}>
+          <div className="flex items-center justify-between p-4 bg-black/40 backdrop-blur-md shrink-0">
+            <button onClick={() => setViewerUrl(null)} className="text-white font-black text-sm uppercase tracking-widest">✕ Close Preview</button>
+            <div className="flex gap-3">
+              <a 
+                href={viewerUrl} download target="_blank" rel="noreferrer" 
+                className="flex items-center gap-1.5 text-white bg-white/20 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest" 
+                onClick={e => e.stopPropagation()}
+              >
+                <Download className="h-3.5 w-3.5" /> Download PDF
+              </a>
+            </div>
           </div>
-          <button className="absolute top-4 right-4 text-white font-black" onClick={() => setViewerUrl(null)}>CLOSE</button>
+          
+          <div className="flex-1 overflow-hidden flex items-center justify-center p-4" onClick={e => e.stopPropagation()}>
+            {/iPhone|iPad|Android/i.test(navigator.userAgent) ? (
+              <div className="flex flex-col items-center justify-center gap-6 p-8 text-center">
+                <div className="h-24 w-24 rounded-full bg-theme-blue/10 flex items-center justify-center border border-theme-blue/20">
+                  <FileText className="h-12 w-12 text-theme-blue" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white uppercase tracking-tight">Prescription Ready</h3>
+                  <p className="text-xs text-slate-400 font-bold mt-2 uppercase tracking-widest max-w-xs">
+                    Tap below to view the full prescription with letterhead
+                  </p>
+                </div>
+                <a
+                  href={viewerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 h-14 px-8 bg-theme-blue text-white font-black rounded-2xl shadow-xl shadow-theme-blue/30 transition-all active:scale-95"
+                >
+                  <ExternalLink className="h-5 w-5" />
+                  Open PDF
+                </a>
+              </div>
+            ) : (
+              <iframe
+                src={`${viewerUrl}#toolbar=0&view=FitH`}
+                className="w-full h-full border-none rounded-xl"
+                title="Prescription PDF"
+              />
+            )}
+          </div>
         </div>
       )}
+
       <iframe ref={printIframeRef} style={{ display: 'none' }} title="Print" />
     </AppFrameLayout>
   );
