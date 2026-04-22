@@ -52,7 +52,7 @@ export function usePrescriptionDrawing({
 
   // Pressure to dot radius — Apple Pencil range
   const pressureToRadius = (pressure: number) =>
-    0.6 + (pressure || 0.5) * 1.8;
+    0.4 + (pressure || 0.5) * 1.0;
 
   // REDRAW PAGE — reads from refs, has zero React dependencies
   // Safe to call anytime without triggering re-render chains
@@ -250,7 +250,7 @@ export function usePrescriptionDrawing({
                 { 
                   points, 
                   color: '#1e1b4b', 
-                  width: 2.0,
+                  width: 1.2,
                   canvasWidth: rect.width,
                   canvasHeight: rect.height
                 },
@@ -392,7 +392,7 @@ export function usePrescriptionDrawing({
     if (!fctx) return null;
 
     const exportOptions = {
-      size: 2.0,
+      size: 1.2,
       thinning: 0.6,
       smoothing: 0.5,
       streamline: 0.85,
