@@ -12,7 +12,7 @@ import { usePatientForm } from './use-patient-form';
 import { useBooking } from './use-booking';
 import { PatientSelector } from './PatientSelector';
 import { DetailsForm } from './DetailsForm';
-import { getClinicTimeString } from '@kloqo/shared-core';
+import { getClinic12hTimeString } from '@kloqo/shared-core';
 
 export function PatientForm({ selectedDoctor, appointmentType, renderLoadingOverlay }: PatientFormProps) {
     const { user } = useAuth();
@@ -172,7 +172,7 @@ export function PatientForm({ selectedDoctor, appointmentType, renderLoadingOver
                                 <p className="text-xl font-bold text-slate-800 flex items-center justify-center">
                                     <Clock className="w-5 h-5 mr-2 text-theme-blue" />
                                     {walkInData?.estimatedDetails?.estimatedTime 
-                                        ? getClinicTimeString(walkInData.estimatedDetails.estimatedTime) 
+                                        ? getClinic12hTimeString(walkInData.estimatedDetails.estimatedTime) 
                                         : 'Calculating...'}
                                 </p>
                             </div>

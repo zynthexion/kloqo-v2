@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/language-context';
 import { getDoctorFromCache, saveDoctorToCache } from '@/lib/doctor-cache';
 import { getPatientFromCache, savePatientToCache } from '@/lib/patient-cache';
-import { getClinicTimeString, getClinicDayOfWeek, parseTime } from '@kloqo/shared-core';
+import { getClinic12hTimeString, getClinicDayOfWeek, parseTime, getClinicDateString, getClinicISOString } from '@kloqo/shared-core';
 import type { Doctor, Patient, Appointment } from '@kloqo/shared';
 
 /**
@@ -148,13 +148,13 @@ export function useBookingSummaryState() {
                     method: 'POST',
                     body: JSON.stringify({
                         ...bookingPayload,
-                        date: format(new Date(), 'd MMMM yyyy') // Use date-utils format eventually
+                        date: getClinicDateString() // Use date-utils format eventually
                     }),
                 });
             } else {
                 if (!selectedSlot) throw new Error("Slot selection missing");
-                const appointmentDateStr = format(selectedSlot, "d MMMM yyyy");
-                const slotTimeStr = getClinicTimeString(selectedSlot);
+                const appointmentDateStr = getClinicDateString(selectedSlot);
+                const slotTimeStr = getClinic12hTimeString(selectedSlot);
 
                 response = await apiRequest('/appointments/advanced', {
                     method: 'POST',
@@ -185,7 +185,7 @@ export function useBookingSummaryState() {
             if (error.status === 409 && selectedSlot) {
                 // AUTO-FIX CONFLICT: Find next available slot
                 try {
-                    const dateStr = format(selectedSlot, 'yyyy-MM-dd');
+                    const dateStr = getClinicISOString(selectedSlot);
                     const clinicId = (effectiveDoctor as any).clinicId;
                     const slots = await apiRequest<any[]>(`/public-booking/doctors/${effectiveDoctor.id}/slots?clinicId=${clinicId}&date=${dateStr}`);
                     

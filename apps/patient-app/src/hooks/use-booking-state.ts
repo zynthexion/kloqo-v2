@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { addDays, format } from 'date-fns';
 import { apiRequest } from '@/lib/api-client';
@@ -124,7 +124,7 @@ export function useBookingState() {
                 const availableDates = futureDates.filter(d => availableDays.includes(d.getDay()));
                 
                 console.log('[DEBUG] useBookingState - Advance Window:', advanceBookingDays);
-                console.log('[DEBUG] useBookingState - Filtered (Available) Dates:', availableDates.map(d => format(d, 'yyyy-MM-dd')));
+                console.log('[DEBUG] useBookingState - Filtered (Available) Dates:', availableDates.map(d => getClinicISOString(d)));
 
                 setDates(availableDates);
                 if (!userSelectedDateRef.current) {
@@ -157,7 +157,7 @@ export function useBookingState() {
 
         setSlotsLoading(true);
         try {
-            const dateStr = format(selectedDate, 'yyyy-MM-dd');
+            const dateStr = getClinicISOString(selectedDate);
             const data = await apiRequest<any>(
               `/public-booking/doctors/${effectiveDoctorId}/slots?clinicId=${effectiveClinicId}&date=${encodeURIComponent(dateStr)}`
             );
@@ -190,22 +190,22 @@ export function useBookingState() {
     });
 
     // 7. Handlers
-    const handleDateSelect = (date: Date) => {
+    const handleDateSelect = useCallback((date: Date) => {
         userSelectedDateRef.current = true;
         setSelectedDate(date);
         setSelectedSlot(null);
         setCurrentMonth(formatMonthYear(date, language));
-    };
+    }, [language]);
 
-    const handleSlotSelect = (slot: any) => {
+    const handleSlotSelect = useCallback((slot: any) => {
         // Buffer enforcement is already done by the backend (30-min patient buffer).
         // Toggle by slotIndex so the full slot object (with slotIndex/sessionIndex) is persisted.
         setSelectedSlot((prev: any) =>
             prev?.slotIndex === slot.slotIndex ? null : slot
         );
-    };
+    }, []);
 
-    const handleProceed = () => {
+    const handleProceed = useCallback(() => {
         if (isAdvanceCapacityReached) return;
         if (!selectedSlot || !doctor) return;
 
@@ -242,9 +242,9 @@ export function useBookingState() {
         }
 
         router.push(nextPath);
-    };
+    }, [isAdvanceCapacityReached, selectedSlot, doctor, isEditMode, appointmentId, patientIdFromParams, clinicIdFromParams, isPhoneBooking, user, userLoading, toast, router]);
 
-    return {
+    return useMemo(() => ({
         doctor, loading,
         selectedDate, dates, currentMonth, handleDateSelect,
         selectedSlot, handleSlotSelect, slotsLoading,
@@ -253,5 +253,10 @@ export function useBookingState() {
         doctorId, isPhoneBooking, patientIdFromParams, clinicIdFromParams,
         dateCarouselApi, setDateCarouselApi,
         language, t, router
-    };
+    }), [
+        doctor, loading, selectedDate, dates, currentMonth, handleDateSelect,
+        selectedSlot, handleSlotSelect, slotsLoading, backendSlots,
+        isAdvanceCapacityReached, handleProceed, doctorId, isPhoneBooking,
+        patientIdFromParams, clinicIdFromParams, dateCarouselApi, language, t, router
+    ]);
 }

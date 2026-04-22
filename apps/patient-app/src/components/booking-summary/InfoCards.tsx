@@ -7,7 +7,7 @@ import { Calendar, Clock, User, Phone, MapPin } from 'lucide-react';
 import { getLocalizedDepartmentName } from '@/lib/department-utils';
 import { formatDate, formatDayOfWeek } from '@/lib/date-utils';
 import { subMinutes, format } from 'date-fns';
-import { getClinicTimeString } from '@kloqo/shared-core';
+import { getClinic12hTimeString } from '@kloqo/shared-core';
 import { ConvenienceFeeDisplay } from '@/components/convenience-fee-display';
 
 export function DoctorInfoCard({ doctor, selectedSlot, language, departments, t, isPulsating }: { doctor: any; selectedSlot: Date | null; language: string; departments: any[]; t: any; isPulsating?: boolean }) {
@@ -36,7 +36,7 @@ export function DoctorInfoCard({ doctor, selectedSlot, language, departments, t,
                             <Clock className="w-5 h-5 text-primary" />
                             <div>
                                 <span className="text-xs text-muted-foreground block">Arrive By</span>
-                                <span className="font-semibold">{getClinicTimeString(subMinutes(selectedSlot, 15))}</span>
+                                <span className="font-semibold">{getClinic12hTimeString(subMinutes(selectedSlot, 15))}</span>
                             </div>
                         </div>
                         {doctor.consultationFee && (

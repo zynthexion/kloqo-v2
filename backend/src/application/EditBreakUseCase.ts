@@ -75,8 +75,8 @@ export class EditBreakUseCase {
             }
 
             await this.appointmentRepo.update(appt.id, {
-                time: format(apptTime, 'HH:mm'),
-                arriveByTime: format(subMinutes(apptTime, 15), 'HH:mm'),
+                time: getClinicTimeString(apptTime),
+                arriveByTime: getClinicTimeString(subMinutes(apptTime, 15)),
                 cancelledByBreak: apptTime >= newBreakStart && apptTime < newBreakEnd,
                 updatedAt: new Date()
             });

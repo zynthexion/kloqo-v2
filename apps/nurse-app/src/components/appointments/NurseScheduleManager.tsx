@@ -42,10 +42,10 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
 
       // Fetch slots for adding new breaks
       const slotDateStr = format(selectedDate, 'yyyy-MM-dd'); // API prefers ISO format
-      const slots = await apiRequest<any[]>(
+      const response = await apiRequest<any>(
         `/appointments/available-slots?doctorId=${doctor.id}&clinicId=${clinicId}&date=${encodeURIComponent(slotDateStr)}`
       );
-      setAvailableSlots(slots);
+      setAvailableSlots(response.slots || []);
     } catch (error: any) {
       console.error("[ScheduleManager] Fetch error:", error);
       toast({ variant: 'destructive', title: 'Fetch Failed', description: error.message });

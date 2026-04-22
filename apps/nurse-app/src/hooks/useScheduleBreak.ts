@@ -4,6 +4,7 @@ import { format, addDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';
+import { getClinicTimeString } from '@kloqo/shared-core';
 
 export type Stage = 'SELECT' | 'PREVIEW' | 'DONE';
 
@@ -55,10 +56,10 @@ export function useScheduleBreak() {
     setPreviewResult(null);
     try {
       const dateStr = format(selectedDate, 'd MMMM yyyy');
-      const data = await apiRequest<any[]>(
+      const response = await apiRequest<any>(
         `/appointments/available-slots?doctorId=${doctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
       );
-      setSlots(data);
+      setSlots(response.slots || []);
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load schedule.' });
     } finally {
@@ -103,8 +104,8 @@ export function useScheduleBreak() {
       doctorId,
       clinicId,
       date:         format(selectedDate, 'd MMMM yyyy'),
-      startTime:    format(new Date(startSlot.time), 'HH:mm'),
-      endTime:      format(new Date(endSlot.time), 'HH:mm'),
+      startTime:    getClinicTimeString(new Date(startSlot.time)),
+      endTime:      getClinicTimeString(new Date(endSlot.time)),
       sessionIndex: startSlot.sessionIndex,
       isDryRun:     dry,
       compensationMode

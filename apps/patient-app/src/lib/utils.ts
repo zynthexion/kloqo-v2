@@ -2,16 +2,7 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { set, parse, isWithinInterval, isAfter, isBefore, format, subMinutes, addMinutes, differenceInMinutes, parseISO, isSameDay } from "date-fns";
 import type { Doctor, Appointment } from '@kloqo/shared';
-
-// Redundant break logic removed. Shared-core handles breaks.
-import {
-  getClinicNow,
-  getClinicDayOfWeek,
-  getClinicTimeString,
-  buildBreakIntervalsFromPeriods,
-  applyBreakOffsets as applySharedBreakOffsets,
-  getSessionEnd
-} from "@kloqo/shared-core";
+import { getClinicNow, getClinicDayOfWeek, getClinic12hTimeString, buildBreakIntervalsFromPeriods, applyBreakOffsets as applySharedBreakOffsets, getSessionEnd } from "@kloqo/shared-core";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -76,7 +67,7 @@ export const getActualAppointmentTime = (appointmentTime: string, appointmentDat
  */
 export const getActualAppointmentTimeString = (appointmentTime: string, appointmentDate: Date, delay?: number): string => {
   const actualTime = getActualAppointmentTime(appointmentTime, appointmentDate, delay);
-  return getClinicTimeString(actualTime);
+  return getClinic12hTimeString(actualTime);
 };
 
 /**
@@ -89,7 +80,7 @@ export const getActualAppointmentTimeString = (appointmentTime: string, appointm
 export const getArriveByTime = (appointmentTime: string, appointmentDate: Date, delay?: number): string => {
   const actualAppointmentDateTime = getActualAppointmentTime(appointmentTime, appointmentDate, delay);
   const arriveByDateTime = subMinutes(actualAppointmentDateTime, 15);
-  return getClinicTimeString(arriveByDateTime);
+  return getClinic12hTimeString(arriveByDateTime);
 };
 
 /**
@@ -109,7 +100,7 @@ export const getArriveByTimeFromAppointment = (appointment: Appointment, doctor?
       // Advance appointments ('A') show reporting time (Slot - 15m).
       // Walk-in appointments ('W') show the actual predicted time (no deduction).
       const displayTime = isWalkIn ? arriveTime : subMinutes(arriveTime, 15);
-      return getClinicTimeString(displayTime);
+      return getClinic12hTimeString(displayTime);
     }
 
     const appointmentTime = parseTime(appointment.time, appointmentDate);
@@ -117,7 +108,7 @@ export const getArriveByTimeFromAppointment = (appointment: Appointment, doctor?
     // Advance appointments ('A') show reporting time (Slot - 15m).
     // Walk-in appointments ('W') show the actual predicted time (no deduction).
     const displayTime = isWalkIn ? appointmentTime : subMinutes(appointmentTime, 15);
-    return getClinicTimeString(displayTime);
+    return getClinic12hTimeString(displayTime);
   } catch {
     if (appointment.arriveByTime) {
       return appointment.arriveByTime;

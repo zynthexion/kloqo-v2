@@ -9,6 +9,7 @@ import { useAppointments } from '@/hooks/use-appointments';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { format, subMinutes, isBefore, isAfter } from 'date-fns';
+import { getClinicNow, getClinicISOString, getClinicDateString, getClinicDayOfWeek } from '@kloqo/shared-core';
 import { parseTime } from '@/lib/utils';
 import type { Doctor, Patient } from '@kloqo/shared';
 
@@ -41,7 +42,7 @@ export function useWalkInRegistration() {
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('manual');
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState(getClinicNow());
   const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
@@ -90,7 +91,7 @@ export function useWalkInRegistration() {
   const isDoctorConsultingNow = useMemo(() => {
     if (!doctor?.availabilitySlots) return false;
 
-    const todayDay = format(currentTime, 'EEEE');
+    const todayDay = getClinicDayOfWeek(currentTime);
     const todaysAvailability = doctor.availabilitySlots.find(s => s.day === todayDay);
     if (!todaysAvailability || !todaysAvailability.timeSlots) return false;
 
@@ -116,7 +117,7 @@ export function useWalkInRegistration() {
     const url = `${baseUrl}/patient-form?clinicId=${currentUser.clinicId}`;
     setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`);
 
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    const timer = setInterval(() => setCurrentTime(getClinicNow()), 60000);
     return () => clearInterval(timer);
   }, [router, currentUser]);
 
@@ -199,7 +200,7 @@ export function useWalkInRegistration() {
     setIsSubmitting(true);
 
     try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = getClinicISOString();
       const estimate = await getWalkInEstimate(doctor.id, todayStr);
       
       if (estimate.unavailable) {
@@ -218,11 +219,11 @@ export function useWalkInRegistration() {
         numericToken: estimate.numericToken,
         tokenNumber: estimate.tokenNumber,
         time: estimate.time,
-        date: format(new Date(), 'd MMMM yyyy'),
+        date: getClinicDateString(),
         status: 'Confirmed',
         bookedVia: 'Walk-in',
         clinicId: currentUser?.clinicId || '',
-        createdAt: new Date(),
+        createdAt: getClinicNow(),
       });
 
       setGeneratedToken(estimate.tokenNumber);
@@ -247,7 +248,7 @@ export function useWalkInRegistration() {
     setShowForceBookDialog(false);
 
     try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayStr = getClinicISOString();
       const estimate = await getWalkInEstimate(doctor.id, todayStr, true);
       
       if (estimate.unavailable) {
@@ -264,11 +265,11 @@ export function useWalkInRegistration() {
         numericToken: estimate.numericToken,
         tokenNumber: estimate.tokenNumber,
         time: estimate.time,
-        date: format(new Date(), 'd MMMM yyyy'),
+        date: getClinicDateString(),
         status: 'Confirmed',
         bookedVia: 'Walk-in',
         clinicId: currentUser?.clinicId || '',
-        createdAt: new Date(),
+        createdAt: getClinicNow(),
       });
 
       setGeneratedToken(estimate.tokenNumber);
@@ -329,7 +330,7 @@ export function useWalkInRegistration() {
 
   const isWithin15MinutesOfClosing = useCallback((doc: Doctor, time: Date) => {
     if (!doc?.availabilitySlots) return false;
-    const todayDay = format(time, 'EEEE');
+    const todayDay = getClinicDayOfWeek(time);
     const todaysAvailability = doc.availabilitySlots.find(s => s.day === todayDay);
     if (!todaysAvailability || !todaysAvailability.timeSlots) return false;
 

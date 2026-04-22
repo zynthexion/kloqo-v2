@@ -13,6 +13,7 @@ import { format, isSameDay, addDays } from "date-fns";
 import { Calendar as CalendarComp } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/api-client";
+import { getClinicTimeString, getClinic12hTimeString } from '@kloqo/shared-core';
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -90,7 +91,7 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
     const [h, m] = sessionSlot.to.split(':').map(Number);
     const d = new Date(leaveDate);
     d.setHours(h, m, 0, 0);
-    return format(new Date(d.getTime() + previewResult.delayMinutes * 60000), 'hh:mm a');
+    return getClinic12hTimeString(new Date(d.getTime() + previewResult.delayMinutes * 60000));
   }, [previewResult, doctor.availabilitySlots, leaveDate, slots, startSlotId]);
 
   // ── Fetch Slots ──
@@ -103,10 +104,10 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
     setPreviewResult(null);
     try {
       const dateStr = format(leaveDate, 'yyyy-MM-dd');
-      const data = await apiRequest<any[]>(
+      const response = await apiRequest<any>(
         `/appointments/available-slots?doctorId=${doctor.id}&clinicId=${doctor.clinicId}&date=${encodeURIComponent(dateStr)}`
       );
-      setSlots(data);
+      setSlots(response.slots || []);
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load slots.' });
     } finally {
@@ -157,8 +158,8 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
           doctorId: doctor.id,
           clinicId: doctor.clinicId,
           date: dateStrForDisplay,
-          startTime: format(new Date(startSlot.time), 'HH:mm'),
-          endTime: format(new Date(endSlot.time), 'HH:mm'),
+          startTime: getClinicTimeString(new Date(startSlot.time)),
+          endTime: getClinicTimeString(new Date(endSlot.time)),
           sessionIndex: startSlot.sessionIndex,
           isDryRun: true,
           compensationMode
@@ -185,8 +186,8 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
           doctorId: doctor.id,
           clinicId: doctor.clinicId,
           date: dateStrForDisplay,
-          startTime: format(new Date(startSlot.time), 'HH:mm'),
-          endTime: format(new Date(endSlot.time), 'HH:mm'),
+          startTime: getClinicTimeString(new Date(startSlot.time)),
+          endTime: getClinicTimeString(new Date(endSlot.time)),
           sessionIndex: startSlot.sessionIndex,
           isDryRun: false,
           compensationMode

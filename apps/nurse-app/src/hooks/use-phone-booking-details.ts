@@ -85,9 +85,10 @@ export function usePhoneBookingDetails() {
         const today = new Date();
         for (let i = 0; i < 7; i++) {
           const dateStr = format(addDays(today, i), 'yyyy-MM-dd');
-          const slots = await apiRequest<any[]>(
+          const response = await apiRequest<any>(
             `/appointments/available-slots?doctorId=${doctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
           );
+          const slots = response.slots || [];
           const firstAvailable = slots.find((s: any) => s.status === 'available');
           if (firstAvailable) {
             const slotTime = new Date(firstAvailable.time);

@@ -1,22 +1,23 @@
 'use client';
 
+import { format, subMinutes } from 'date-fns';
 import { CalendarDays, Clock, Phone, Loader2 } from 'lucide-react';
-import { getClinic12hTimeString } from '@kloqo/shared-core';
-import { subMinutes, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
+import { getClinic12hTimeString } from '@kloqo/shared-core';
 
-interface BookingSummaryProps {
+interface BookingSummaryViewProps {
   selectedDate: Date;
   selectedSlot: any;
   patient: any;
-  onBook: () => void;
-  onBack: () => void;
   booking: boolean;
+  handleBook: (onSuccess: () => void) => void;
+  onBack: () => void;
+  onSuccess: () => void;
 }
 
-export function BookingSummary({ selectedDate, selectedSlot, patient, onBook, onBack, booking }: BookingSummaryProps) {
-  if (!selectedSlot) return null;
-
+export function BookingSummaryView({ 
+  selectedDate, selectedSlot, patient, booking, handleBook, onBack, onSuccess 
+}: BookingSummaryViewProps) {
   return (
     <main className="flex-1 p-6 space-y-6 overflow-y-auto animate-in fade-in slide-in-from-right-4">
       <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 space-y-8 relative overflow-hidden">
@@ -83,9 +84,9 @@ export function BookingSummary({ selectedDate, selectedSlot, patient, onBook, on
         </div>
       </div>
 
-      <div className="space-y-4 pt-4 pb-12">
+      <div className="space-y-4 pt-4">
         <Button
-          onClick={onBook}
+          onClick={() => handleBook(onSuccess)}
           disabled={booking}
           className="w-full h-16 rounded-[2rem] bg-theme-blue hover:bg-theme-blue/90 text-white font-black text-xl shadow-2xl shadow-theme-blue/20 transition-all active:scale-95"
         >

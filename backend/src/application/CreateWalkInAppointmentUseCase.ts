@@ -12,7 +12,7 @@ import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { WalkInPlacementService } from '../domain/services/WalkInPlacementService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { sseService } from '../domain/services/SSEService';
-import { getClinicNow, getClinicDateString, getClinicISODateString, parseClinicDate } from '../domain/services/DateUtils';
+import { getClinicNow, getClinicDateString, getClinicISODateString, parseClinicDate, getClinicTimeString } from '../domain/services/DateUtils';
 
 export interface CreateWalkInAppointmentDTO {
   clinicId: string;
@@ -231,7 +231,7 @@ export class CreateWalkInAppointmentUseCase {
       doctorName: doctor.name,
       clinicId: dto.clinicId,
       date: firestoreDateStr,
-      time: format(targetSlot.time, 'HH:mm'),
+      time: getClinicTimeString(targetSlot.time),
       status: 'Confirmed',
       tokenNumber,
       classicTokenNumber: isClassic ? tokenNumber : undefined,
@@ -239,7 +239,7 @@ export class CreateWalkInAppointmentUseCase {
       bookedVia: 'Walk-in',
       slotIndex: targetSlot.index,
       sessionIndex: activeSessionIndex,
-      arriveByTime: format(targetSlot.time, 'HH:mm'),
+      arriveByTime: getClinicTimeString(targetSlot.time),
       isPriority: dto.isPriority,
       createdAt: now,
       updatedAt: now

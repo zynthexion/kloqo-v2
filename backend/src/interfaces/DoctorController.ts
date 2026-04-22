@@ -122,7 +122,7 @@ export class DoctorController {
       }
 
       // 🛡️ RBAC Guard: Only Admin or Self can update doctor meta-data (fees, avg time, etc)
-      const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(user.role);
+      const isAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN]);
       const isSelf = user.id === docData.userId || user.id === docData.id;
 
       if (!isAdmin && !isSelf) {
@@ -189,7 +189,7 @@ export class DoctorController {
       this.validateClinicAccess(req, doctor.clinicId);
 
       // 🛡️ IDOR GUARD: Doctors can only manage themselves
-      if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
+      if (RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR) && (user.id !== doctorId && user.userId !== doctorId)) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to modify another doctor's schedule." });
       }
 
@@ -201,7 +201,7 @@ export class DoctorController {
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
+          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         }
       });
       res.status(204).send();
@@ -219,7 +219,7 @@ export class DoctorController {
       this.validateClinicAccess(req, clinicId);
       
       // 🛡️ IDOR GUARD
-      if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
+      if (RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR) && (user.id !== doctorId && user.userId !== doctorId)) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to modify another doctor's leave." });
       }
 
@@ -232,7 +232,7 @@ export class DoctorController {
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
+          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         }
       });
       res.status(204).send();
@@ -261,7 +261,7 @@ export class DoctorController {
         performedBy: {
           id:   user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
+          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         }
       });
       res.status(200).json({
@@ -296,7 +296,7 @@ export class DoctorController {
         performedBy: {
           id:   user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
+          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         }
       });
       res.status(200).json({
@@ -326,7 +326,7 @@ export class DoctorController {
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
+          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         }
       });
       res.status(204).send();
@@ -346,7 +346,7 @@ export class DoctorController {
       if (doctor) this.validateClinicAccess(req, doctor.clinicId);
 
       // 🛡️ IDOR GUARD
-      if (user.role === KLOQO_ROLES.DOCTOR && (user.id !== doctorId && user.userId !== doctorId)) {
+      if (RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR) && (user.id !== doctorId && user.userId !== doctorId)) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to mark leave for another doctor." });
       }
 
@@ -357,7 +357,7 @@ export class DoctorController {
         {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
-          role: user.role || (user.roles && user.roles[0]) || 'staff' as KloqoRole
+          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         },
         forceCancelConflicts
       );

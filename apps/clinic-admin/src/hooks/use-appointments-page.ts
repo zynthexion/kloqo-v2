@@ -22,6 +22,8 @@ import {
 import { 
   getClinicNow,
   getClinicISOString,
+  getClinic12hTimeString,
+  parseClinicDate,
   isSlotBlockedByLeave,
   isDoctorAdvanceCapacityReachedOnDate,
   computeQueues
@@ -200,18 +202,19 @@ export function useAppointmentsPage() {
           let url = `/api/doctors/${watchedDoctorId}/slots?date=${dateStr}`;
           if (clinicId) url += `&clinicId=${clinicId}`;
           
-          const response = await apiRequest<any[]>(url);
+          const response = await apiRequest<any>(url);
+          const slots = response.slots || [];
           
           // ENFORCE STRICT SINGLE SLOT POLICY:
           // Find the absolute FIRST available slot for the entire day.
           // Discard all other future sessions to maximize booking density.
-          const firstAvailable = response.find(s => s.status === 'available' && s.isAvailable);
+          const firstAvailable = slots.find((s: any) => s.status === 'available' && s.isAvailable);
           
           if (firstAvailable) {
             setSessionSlots([{
               title: `Session ${firstAvailable.sessionIndex + 1}`,
               slots: [{
-                time: format(subMinutes(new Date(firstAvailable.time), 15), 'hh:mm a'),
+                time: getClinic12hTimeString(subMinutes(new Date(firstAvailable.time), 15)),
                 status: firstAvailable.status,
                 tokenNumber: firstAvailable.tokenNumber,
                 slotIndex: firstAvailable.slotIndex,
@@ -342,7 +345,7 @@ export function useAppointmentsPage() {
     return () => clearTimeout(timer);
   }, [patientSearchTerm, sse.getPatientProfile, sse.searchPatients, toast, editingAppointment]);
 
-  const state = {
+  const state = useMemo(() => ({
     ...sse, ...queue, ...mutations,
     drawerSearchTerm, selectedDrawerDoctor, patientSearchTerm, patientSearchResults,
     isPatientPopoverOpen, selectedPatient, primaryPatient, hasSelectedOption,
@@ -355,9 +358,102 @@ export function useAppointmentsPage() {
     isBookingButtonDisabled, todayDateStr: queue.todayDateStr, swipeCooldownUntil,
     sessionSlots, layoutMode, isSlotsLoading,
     isPending: sse.loading || mutations.isPending || isSearchingPatients // Aggregated pending state
-  };
+  }), [
+    sse, queue, mutations, drawerSearchTerm, selectedDrawerDoctor, patientSearchTerm, 
+    patientSearchResults, isPatientPopoverOpen, selectedPatient, primaryPatient, 
+    hasSelectedOption, activeTab, currentTime, walkInEstimate, isCalculatingEstimate, 
+    isForceBookedState, isDrawerExpanded, bookingFor, relatives, isAddRelativeDialogOpen, 
+    isTokenModalOpen, generatedToken, appointmentToCancel, appointmentToAddToQueue, 
+    appointmentToComplete, appointmentToPrioritize, editingAppointment, showVisualView, 
+    walkInEstimateUnavailable, isSendingLink, drawerDateRange, selectedDoctor, 
+    appointmentType, watchedPatientName, isDateDisabled, availableDaysOfWeek, 
+    leaveDates, isAdvanceCapacityReached, isBookingButtonDisabled, swipeCooldownUntil, 
+    sessionSlots, layoutMode, isSlotsLoading, isSearchingPatients
+  ]);
 
-  const actions = {
+  const handleComplete = useCallback((apt: Appointment) => { 
+    mutations.handleComplete(apt, () => setSwipeCooldownUntil(Date.now() + SWIPE_COOLDOWN_MS)); 
+    setAppointmentToComplete(null); 
+  }, [mutations]);
+
+  const handleAddToQueue = useCallback((apt: Appointment) => { 
+    mutations.handleAddToQueue(apt); 
+    setAppointmentToAddToQueue(null); 
+  }, [mutations]);
+
+  const onSubmit = useCallback((v: any) => {
+    const payload = {
+      ...v,
+      date: v.date ? getClinicISOString(v.date) : undefined,
+      patientId: selectedPatient?.id
+    };
+    mutations.onMutationSubmit(payload, resetForm);
+  }, [mutations, selectedPatient, resetForm]);
+
+  const handleRelativeSelect = useCallback((p: Patient) => { 
+    setBookingFor('relative'); 
+    setSelectedPatient(p); 
+    form.setValue('patientName', p.name); 
+  }, [form]);
+
+  const handlePatientSearchChange = useCallback((e: any) => {
+    const val = e.target.value.replace(/\D/g, '');
+    setPatientSearchTerm(val);
+    if (val.length > 0 && !isPatientPopoverOpen) setIsPatientPopoverOpen(true);
+  }, [isPatientPopoverOpen]);
+
+  const handleSendLink = useCallback(async () => { 
+    setIsSendingLink(true); 
+    try { 
+      await sse.sendBookingLink(patientSearchTerm); 
+      toast({ title: "Link Sent" }); 
+    } catch (e) {} finally { 
+      setIsSendingLink(false); 
+    } 
+  }, [sse, patientSearchTerm, toast]);
+
+  const handleForceBookEstimate = useCallback(async () => { 
+    setIsForceBookedState(true); 
+  }, []);
+
+  const isAppointmentOnLeave = useCallback((apt: Appointment) => { 
+    const doc = sse.doctors.find(d => d.name === apt.doctor); 
+    if (!doc) return false; 
+    return isSlotBlockedByLeave(doc, parseClinicDate(apt.date)); 
+  }, [sse.doctors]);
+
+  const handleRejoinQueue = useCallback(async (apt: Appointment) => { 
+    try { 
+      await sse.updateStatus(apt.id, 'Confirmed'); 
+      toast({ title: "Rejoined Queue" }); 
+    } catch (e) {} 
+  }, [sse, toast]);
+
+  const onDoctorChange = useCallback((id: string) => { 
+    const d = sse.doctors.find(doc => doc.id === id); 
+    if (d) { 
+      form.setValue('doctorId', d.id); 
+      form.setValue('department', d.department || ""); 
+    } 
+  }, [sse.doctors, form]);
+
+  const handlePrioritize = useCallback(async () => { 
+    if (appointmentToPrioritize) { 
+      try { 
+        await sse.updateStatus(appointmentToPrioritize.id, appointmentToPrioritize.status, undefined, !appointmentToPrioritize.isPriority); 
+        toast({ title: "Updated Priority" }); 
+      } finally { 
+        setAppointmentToPrioritize(null); 
+      } 
+    } 
+  }, [sse, appointmentToPrioritize, toast]);
+
+  const handleNewRelativeAdded = useCallback((p: Patient) => { 
+    setRelatives(prev => [...prev, p]); 
+    handlePatientSelect(p); 
+  }, [handlePatientSelect]);
+
+  const actions = useMemo(() => ({
     setDrawerSearchTerm, setSelectedDrawerDoctor, setPatientSearchTerm, setIsPatientPopoverOpen,
     setSelectedPatient, setPrimaryPatient, setHasSelectedOption, setActiveTab, setIsDrawerExpanded,
     setBookingFor, setIsAddRelativeDialogOpen, setIsTokenModalOpen, setAppointmentToCancel,
@@ -365,36 +461,29 @@ export function useAppointmentsPage() {
     setEditingAppointment, setShowVisualView, setDrawerDateRange, resetForm,
     setLayoutMode,
     handleCancel: mutations.handleCancel,
-    handleComplete: (apt: Appointment) => { mutations.handleComplete(apt, () => setSwipeCooldownUntil(Date.now() + SWIPE_COOLDOWN_MS)); setAppointmentToComplete(null); },
-    handleAddToQueue: (apt: Appointment) => { mutations.handleAddToQueue(apt); setAppointmentToAddToQueue(null); },
-    onSubmit: (v: any) => {
-      // Rule 8.3: Standardize date to yyyy-MM-dd using IST-enforced utility
-      const payload = {
-        ...v,
-        date: v.date ? getClinicISOString(v.date) : undefined,
-        patientId: selectedPatient?.id
-      };
-      mutations.onMutationSubmit(payload, resetForm);
-    },
+    handleComplete,
+    handleAddToQueue,
+    onSubmit,
     handlePatientSelect,
-    handleRelativeSelect: (p: Patient) => { setBookingFor('relative'); setSelectedPatient(p); form.setValue('patientName', p.name); },
-    handlePatientSearchChange: (e: any) => {
-      const val = e.target.value.replace(/\D/g, '');
-      setPatientSearchTerm(val);
-      // Auto-open popover when typing starts
-      if (val.length > 0 && !isPatientPopoverOpen) setIsPatientPopoverOpen(true);
-    },
-    handleSendLink: async () => { setIsSendingLink(true); try { await sse.sendBookingLink(patientSearchTerm); toast({ title: "Link Sent" }); } catch (e) {} finally { setIsSendingLink(false); } },
+    handleRelativeSelect,
+    handlePatientSearchChange,
+    handleSendLink,
     handlePatientSearch: sse.searchPatients,
-    handleForceBookEstimate: async () => { setIsForceBookedState(true); },
-    isAppointmentOnLeave: (apt: Appointment) => { const doc = sse.doctors.find(d => d.name === apt.doctor); if (!doc) return false; return isSlotBlockedByLeave(doc, parse(apt.date, "d MMMM yyyy", new Date())); },
+    handleForceBookEstimate,
+    isAppointmentOnLeave,
     getDisplayTimeForAppointment: (apt: Appointment) => apt.time || "",
-    handleRejoinQueue: async (apt: Appointment) => { try { await sse.updateStatus(apt.id, 'Confirmed'); toast({ title: "Rejoined Queue" }); } catch (e) {} },
-    onDoctorChange: (id: string) => { const d = sse.doctors.find(doc => doc.id === id); if (d) { form.setValue('doctorId', d.id); form.setValue('department', d.department || ""); } },
-    handleSkip: (apt: Appointment) => mutations.handleSkip(apt),
-    handlePrioritize: async () => { if (appointmentToPrioritize) { try { await sse.updateStatus(appointmentToPrioritize.id, appointmentToPrioritize.status, undefined, !appointmentToPrioritize.isPriority); toast({ title: "Updated Priority" }); } finally { setAppointmentToPrioritize(null); } } },
-    handleNewRelativeAdded: (p: Patient) => { setRelatives(prev => [...prev, p]); handlePatientSelect(p); }
-  };
+    handleRejoinQueue,
+    onDoctorChange,
+    handleSkip: mutations.handleSkip,
+    handlePrioritize,
+    handleNewRelativeAdded
+  }), [
+    resetForm, mutations.handleCancel, mutations.handleSkip, handleComplete, 
+    handleAddToQueue, onSubmit, handlePatientSelect, handleRelativeSelect, 
+    handlePatientSearchChange, handleSendLink, sse.searchPatients, 
+    handleForceBookEstimate, isAppointmentOnLeave, handleRejoinQueue, 
+    onDoctorChange, handlePrioritize, handleNewRelativeAdded
+  ]);
 
-  return { state, actions, form, patientInputRef };
+  return useMemo(() => ({ state, actions, form, patientInputRef }), [state, actions, form]);
 }

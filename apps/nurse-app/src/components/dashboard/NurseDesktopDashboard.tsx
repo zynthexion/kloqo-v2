@@ -81,10 +81,10 @@ export function NurseDesktopDashboard() {
     setLoadingSlots(true);
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
-      const slotsData = await apiRequest<any[]>(
+      const response = await apiRequest<any>(
         `/appointments/available-slots?doctorId=${selectedDoctorId}&clinicId=${data.clinic.id}&date=${encodeURIComponent(dateStr)}`
       );
-      setSlots(slotsData);
+      setSlots(response.slots || []);
       setSelectedSlot(null);
     } catch (error) {
       console.error("Error fetching slots:", error);
@@ -516,7 +516,7 @@ export function NurseDesktopDashboard() {
                             <Loader2 className="h-10 w-10 animate-spin text-primary" />
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scanning slots...</p>
                          </div>
-                      ) : slots.length === 0 ? (
+                      ) : !Array.isArray(slots) || slots.length === 0 ? (
                          <div className="text-center py-20 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-100">
                              <Calendar className="h-10 w-10 text-slate-200 mx-auto mb-4" />
                              <p className="text-sm font-bold text-slate-400">No availability for this date.</p>

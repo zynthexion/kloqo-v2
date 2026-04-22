@@ -160,8 +160,8 @@ export class CancelBreakUseCase {
                 if (differenceInMinutes(currentTime, pulledTime) < PULL_BACK_MINIMUM_MINUTES) continue;
 
                 await this.appointmentRepo.update(appt.id, {
-                    time:         format(pulledTime, 'HH:mm'),
-                    arriveByTime: format(subMinutes(pulledTime, 15), 'HH:mm'),
+                    time:         getClinicTimeString(pulledTime),
+                    arriveByTime: getClinicTimeString(subMinutes(pulledTime, 15)),
                     updatedAt:    new Date()
                 });
                 appointmentsPulledBack++;

@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Clock, ChevronRight, Loader2 } from 'lucide-react';
 import type { Doctor } from '@kloqo/shared';
-import { getClinicNow } from '@kloqo/shared-core';
+import { getClinicNow, getClinic12hTimeString } from '@kloqo/shared-core';
 
 interface DoctorAvailabilityPreviewProps {
     doctor: Doctor;
@@ -43,10 +43,11 @@ export function DoctorAvailabilityPreview({ doctor }: DoctorAvailabilityPreviewP
         setLoading(true);
         try {
             const dateStr = format(date, 'yyyy-MM-dd');
-            const data = await apiRequest<any[]>(
+            const response = await apiRequest<any>(
                 `/public-booking/doctors/${doctor.id}/slots?clinicId=${doctor.clinicId}&date=${encodeURIComponent(dateStr)}`
             );
-            setBackendSlots(Array.isArray(data) ? data : []);
+            const slots = response.slots || [];
+            setBackendSlots(slots);
         } catch (err) {
             console.error('Preview fetch error:', err);
             setBackendSlots([]);
@@ -111,8 +112,7 @@ export function DoctorAvailabilityPreview({ doctor }: DoctorAvailabilityPreviewP
                                 className="group p-4 bg-slate-50 rounded-2xl border-2 border-transparent hover:border-theme-blue/30 hover:bg-white hover:shadow-xl transition-all"
                             >
                                 <p className="text-lg font-black text-slate-800 group-hover:text-theme-blue transition-colors">
-                                    {format(new Date(slot.time), 'hh:mm')}
-                                    <span className="text-[10px] ml-1 uppercase opacity-50">{format(new Date(slot.time), 'a')}</span>
+                                    {getClinic12hTimeString(new Date(slot.time))}
                                 </p>
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Session {slot.sessionIndex + 1}</p>
                             </Link>

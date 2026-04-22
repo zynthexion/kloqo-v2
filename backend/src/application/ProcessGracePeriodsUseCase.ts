@@ -2,7 +2,7 @@ import { format, isAfter } from 'date-fns';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
 import { IAppointmentRepository, IClinicRepository, IDoctorRepository } from '../domain/repositories';
 import { QueueBubblingService } from '../domain/services/QueueBubblingService';
-import { getClinicNow } from '../domain/services/DateUtils';
+import { getClinicNow, getClinicISODateString } from '../domain/services/DateUtils';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { DelayCalculatorService } from '../domain/services/DelayCalculatorService';
 
@@ -36,7 +36,7 @@ export class ProcessGracePeriodsUseCase {
 
   async execute(clinicId: string): Promise<ProcessGracePeriodsResult> {
     const now = getClinicNow();
-    const today = format(now, 'd MMMM yyyy');
+    const today = getClinicISODateString(now);
     const result: ProcessGracePeriodsResult = {
       processed: 0,
       skippedAppointmentIds: [],

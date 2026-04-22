@@ -1,7 +1,8 @@
 'use client';
 
-import { format, subMinutes } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getClinic12hTimeString } from '@kloqo/shared-core';
+import { subMinutes } from 'date-fns';
 import { CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -94,12 +95,12 @@ export function SessionSlotList({
                 // Session time range from first/last slot
                 const firstSlotTime = new Date(slots[0].time);
                 const lastSlotTime  = new Date(slots[slots.length - 1].time);
-                const sessionStart  = format(firstSlotTime, 'hh:mm a');
-                const sessionEnd    = format(lastSlotTime, 'hh:mm a');
+                const sessionStart  = getClinic12hTimeString(firstSlotTime);
+                const sessionEnd    = getClinic12hTimeString(lastSlotTime);
 
                 // Reporting time = first available slot - 15m
                 const reportingTime = firstAvailable
-                    ? format(subMinutes(new Date(firstAvailable.time), 15), 'hh:mm a')
+                    ? getClinic12hTimeString(subMinutes(new Date(firstAvailable.time), 15))
                     : null;
 
                 const isSelected = firstAvailable
@@ -144,7 +145,7 @@ export function SessionSlotList({
                                         isSelected ? "text-primary-foreground" : "text-primary"
                                     )}>
                                         <Clock className="h-3.5 w-3.5" />
-                                        First slot at {format(new Date(firstAvailable.time), 'hh:mm a')}
+                                        First slot at {getClinic12hTimeString(new Date(firstAvailable.time))}
                                     </p>
                                 )} */}
 

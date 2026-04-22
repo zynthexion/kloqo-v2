@@ -182,8 +182,8 @@ export class ScheduleBreakUseCase {
             // DRY RUN: skip DB write, math is still executed for the preview
             if (!isDryRun) {
                 await this.appointmentRepo.update(appt.id, {
-                    time:           format(newTime, 'HH:mm'),
-                    arriveByTime:   format(subMinutes(newTime, 15), 'HH:mm'),
+                    time:           getClinicTimeString(newTime),
+                    arriveByTime:   getClinicTimeString(subMinutes(newTime, 15)),
                     cancelledByBreak: false, // NOT cancelled — they are just moved
                     updatedAt:      new Date()
                 });
@@ -194,8 +194,8 @@ export class ScheduleBreakUseCase {
             if (deltaMinutes >= NOTIFICATION_THRESHOLD_MINUTES) {
                 preview.push({
                     tokenNumber: appt.tokenNumber,
-                    oldTime:  format(oldTime, 'HH:mm'),
-                    newTime:  format(newTime, 'HH:mm'),
+                    oldTime:  getClinicTimeString(oldTime),
+                    newTime:  getClinicTimeString(newTime),
                     deltaMinutes
                 });
             }
@@ -211,8 +211,8 @@ export class ScheduleBreakUseCase {
                 // DRY RUN: skip DB write
                 if (!isDryRun) {
                     await this.appointmentRepo.update(appt.id, {
-                        time:         format(newTime, 'HH:mm'),
-                        arriveByTime: format(subMinutes(newTime, 15), 'HH:mm'),
+                        time:         getClinicTimeString(newTime),
+                        arriveByTime: getClinicTimeString(subMinutes(newTime, 15)),
                         updatedAt:    new Date()
                     });
                 }
@@ -220,8 +220,8 @@ export class ScheduleBreakUseCase {
                 if (deltaMin >= NOTIFICATION_THRESHOLD_MINUTES) {
                     preview.push({
                         tokenNumber: appt.tokenNumber,
-                        oldTime:  format(oldTime, 'HH:mm'),
-                        newTime:  format(newTime, 'HH:mm'),
+                        oldTime:  getClinicTimeString(oldTime),
+                        newTime:  getClinicTimeString(newTime),
                         deltaMinutes: deltaMin
                     });
                 }
@@ -246,7 +246,7 @@ export class ScheduleBreakUseCase {
         let ghostsCreated = 0;
         for (let i = 0; i < totalBreakSlots; i++) {
             const slotTime    = addMinutes(breakStart, i * slotDuration);
-            const slotTimeStr = format(slotTime, 'HH:mm');
+            const slotTimeStr = getClinicTimeString(slotTime);
 
             if (alreadyOccupiedSlotTimes.has(slotTimeStr)) continue; // already covered by real appt move
 

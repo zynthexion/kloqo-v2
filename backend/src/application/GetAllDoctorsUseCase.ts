@@ -37,7 +37,7 @@ export class GetAllDoctorsUseCase {
           const user = userMap.get(doctor.email);
           if (user) {
             doctor.roles = user.roles || (user.role ? [user.role] as any : [KLOQO_ROLES.DOCTOR]);
-            doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || KLOQO_ROLES.DOCTOR;
+            doctor.role = (doctor.roles?.[0] as any) || KLOQO_ROLES.DOCTOR;
           } else {
             doctor.roles = [KLOQO_ROLES.DOCTOR];
             doctor.role = KLOQO_ROLES.DOCTOR;

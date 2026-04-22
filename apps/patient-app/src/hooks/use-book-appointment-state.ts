@@ -7,7 +7,7 @@ import { apiRequest } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
-import { getClinicNow } from '@kloqo/shared-core';
+import { getClinicNow, getClinicTimeString } from '@kloqo/shared-core';
 
 /**
  * useBookAppointmentState
@@ -119,7 +119,8 @@ export function useBookAppointmentState() {
         query.append('userLon', userLocation.lng.toString());
       }
 
-      const data = await apiRequest<any[]>(`/appointments/available-slots?${query.toString()}`);
+      const response = await apiRequest<any>(`/appointments/available-slots?${query.toString()}`);
+      const data = response.slots || [];
       setSlots(data);
 
       // Check if the backend promoted us to 'walkin' (which happens if distance <= 150m)
@@ -180,8 +181,8 @@ export function useBookAppointmentState() {
             clinicId,
             patientId,
             date: format(selectedDate, 'd MMMM yyyy'),
-            slotTime: format(new Date(selectedSlot.time), 'HH:mm'),
-            time: format(new Date(selectedSlot.time), 'HH:mm'),
+            slotTime: getClinicTimeString(new Date(selectedSlot.time)),
+            time: getClinicTimeString(new Date(selectedSlot.time)),
             slotIndex: selectedSlot.slotIndex,
             sessionIndex: selectedSlot.sessionIndex,
             source: 'Patient App'

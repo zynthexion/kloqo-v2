@@ -7,13 +7,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import Link from "next/link";
 import { format } from "date-fns";
+import { getClinicFullDateString } from "@kloqo/shared-core";
 
 export function DashboardHeader() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 bg-background/80 backdrop-blur-sm px-6">
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">{format(new Date(), "eeee, dd MMMM yyyy")}</p>
+        <p className="text-sm text-muted-foreground">{getClinicFullDateString()}</p>
       </div>
        <Button size="sm" className="gap-1 rounded-full">
           <CalendarIcon className="h-4 w-4" />

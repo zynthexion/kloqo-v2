@@ -4,7 +4,7 @@
 
 import { logger } from '@/lib/logger';
 import { parse, subMinutes, format } from 'date-fns';
-import { getClinicTimeString } from '@kloqo/shared-core';
+import { getClinic12hTimeString } from '@kloqo/shared-core';
 import { apiRequest } from '@/lib/api-client';
 
 export interface NotificationData {
@@ -109,7 +109,7 @@ export async function sendAppointmentConfirmedNotification(params: {
   try {
     const appointmentDate = parse(date, 'd MMMM yyyy', new Date());
     const baseTime = parse(time, 'hh:mm a', appointmentDate);
-    displayTime = getClinicTimeString(subMinutes(baseTime, 15));
+    displayTime = getClinic12hTimeString(subMinutes(baseTime, 15));
   } catch (error) {
     console.error('Error calculating display time for confirmed notification:', error);
   }
@@ -178,7 +178,7 @@ export async function sendAppointmentReminderNotification(params: {
   try {
     // Note: No date provided here, using today as reference
     const baseTime = parse(time, 'hh:mm a', new Date());
-    displayTime = getClinicTimeString(subMinutes(baseTime, 15));
+    displayTime = getClinic12hTimeString(subMinutes(baseTime, 15));
   } catch (error) {
     console.error('Error calculating display time for reminder:', error);
   }
@@ -233,7 +233,7 @@ export async function sendAppointmentCancelledNotification(params: {
   try {
     const appointmentDate = parse(date, 'd MMMM yyyy', new Date());
     const baseTime = parse(time, 'hh:mm a', appointmentDate);
-    displayTime = getClinicTimeString(subMinutes(baseTime, 15));
+    displayTime = getClinic12hTimeString(subMinutes(baseTime, 15));
   } catch (error) {
     console.error('Error calculating display time for cancellation:', error);
   }
@@ -335,7 +335,7 @@ export async function sendAppointmentRescheduledNotification(params: {
   try {
     const appointmentDate = parse(newDate, 'd MMMM yyyy', new Date());
     const baseTime = parse(time, 'hh:mm a', appointmentDate);
-    displayTime = getClinicTimeString(subMinutes(baseTime, 15));
+    displayTime = getClinic12hTimeString(subMinutes(baseTime, 15));
   } catch (error) {
     console.error('Error calculating display time for reschedule:', error);
   }

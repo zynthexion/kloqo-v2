@@ -9,7 +9,7 @@ import { ITokenStrategy } from '../domain/services/token/ITokenStrategy';
 import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
 import { Appointment, Patient, User } from '../../../packages/shared/src/index';
 import { format, subMinutes, parse } from 'date-fns';
-import { parseClinicTime, parseClinicDate, getClinicISODateString } from '../domain/services/DateUtils';
+import { parseClinicTime, parseClinicDate, getClinicISODateString, getClinicTimeString } from '../domain/services/DateUtils';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
@@ -167,8 +167,8 @@ export class BookAdvancedAppointmentUseCase {
           doctorName: doctor.name,
           clinicId,
           date: firestoreDateStr,
-          time: format(appointmentTime, 'HH:mm'),
-          arriveByTime: format(arriveByTime, 'HH:mm'),
+          time: getClinicTimeString(appointmentTime),
+          arriveByTime: getClinicTimeString(arriveByTime),
           slotIndex,
           sessionIndex,
           status: 'Pending',

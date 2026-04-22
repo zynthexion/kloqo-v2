@@ -53,6 +53,19 @@ export function getClinicDateString(date: Date = new Date()): string {
 }
 
 /**
+ * Returns the full date string (e.g., "Monday, 19 March 2026") in the Asia/Kolkata timezone.
+ */
+export function getClinicFullDateString(date: Date = new Date()): string {
+    return new Intl.DateTimeFormat('en-GB', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata'
+    }).format(date);
+}
+
+/**
  * Returns the time string in 24-hour HH:mm format (e.g., "14:30") in the Asia/Kolkata timezone.
  * Golden Standard: All logic and storage use HH:mm.
  */
