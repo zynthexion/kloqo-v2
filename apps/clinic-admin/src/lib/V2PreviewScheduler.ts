@@ -34,7 +34,28 @@ export class V2PreviewScheduler {
     // 2. Generate Nominal Slots for the session
     const dayName = format(date, 'EEEE');
     const availability = doctor.availabilitySlots?.find(s => s.day === dayName);
-    const session = availability?.timeSlots?.[sessionIndex];
+    if (!availability) return [];
+
+    // Calculate the sequential index offset for this session
+    // Rule: Sequential indices are continuous across all sessions for a day (0, 1, 2...)
+    let slotOffset = 0;
+    for (let i = 0; i < sessionIndex; i++) {
+        const prevSession = availability.timeSlots?.[i];
+        if (prevSession) {
+            const [pStartH, pStartM] = prevSession.from.split(':').map(Number);
+            const [pEndH, pEndM] = prevSession.to.split(':').map(Number);
+            const pStart = new Date(date).setHours(pStartH, pStartM, 0, 0);
+            const pEnd = new Date(date).setHours(pEndH, pEndM, 0, 0);
+            
+            let pCurr = pStart;
+            while (pCurr < pEnd) {
+                slotOffset++;
+                pCurr += slotDuration * 60000;
+            }
+        }
+    }
+
+    const session = availability.timeSlots?.[sessionIndex];
     if (!session) return [];
 
     const startTime = new Date(date);
@@ -51,7 +72,7 @@ export class V2PreviewScheduler {
 
     while (isBefore(current, endTime)) {
       nominalSlots.push({
-        slotIndex: (sessionIndex * 1000) + idx,
+        slotIndex: slotOffset + idx,
         time: new Date(current),
         sessionIndex,
         type: 'A', // Default to Advanced

@@ -85,11 +85,21 @@ export function useDoctorsPageState() {
       setDoctors(doctorsList);
       setAppointments(appointmentsList);
 
-      if (!selectedDoctor && doctorsList.length > 0) {
-        if (doctorIdFromUrl) {
-          setSelectedDoctor(doctorsList.find(d => d.id === doctorIdFromUrl) || doctorsList[0]);
+      if (doctorsList.length > 0) {
+        if (!selectedDoctor) {
+          if (doctorIdFromUrl) {
+            setSelectedDoctor(doctorsList.find(d => d.id === doctorIdFromUrl) || doctorsList[0]);
+          } else {
+            setSelectedDoctor(doctorsList[0]);
+          }
         } else {
-          setSelectedDoctor(doctorsList[0]);
+          // 🏥 STATE SYNC FIX: Re-sync selectedDoctor with fresh data from server
+          // This ensures that updates to dateOverrides, accessibleMenus, etc. 
+          // are immediately reflected in the current view.
+          const freshSelected = doctorsList.find(d => d.id === selectedDoctor.id);
+          if (freshSelected) {
+            setSelectedDoctor(freshSelected);
+          }
         }
       }
     } catch (e) {

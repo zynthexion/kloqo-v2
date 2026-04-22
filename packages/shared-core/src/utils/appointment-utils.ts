@@ -30,13 +30,17 @@ export const isDoctorAdvanceCapacityReachedOnDate = (
 
   const slotDuration = doctor.averageConsultingTime || 15;
   const now = getClinicNow();
-  const dateKey = format(date, 'd MMMM yyyy');
+  const dateKeyLegacy = format(date, 'd MMMM yyyy');
+  const dateKeyIso = format(date, 'yyyy-MM-dd');
+  const dateKeys = [dateKeyLegacy, dateKeyIso];
   let maximumAdvanceTokens = 0;
 
   availabilityForDay.timeSlots.forEach((session: any, sessionIndex: number) => {
     let currentTime = parseTime(session.from, date);
     let sessionEnd = parseTime(session.to, date);
-    const extensions = doctor.availabilityExtensions?.[dateKey];
+    
+    // Extensions could be under legacy or ISO key
+    const extensions = doctor.availabilityExtensions?.[dateKeyIso] || doctor.availabilityExtensions?.[dateKeyLegacy];
 
     if (extensions?.sessions && Array.isArray(extensions.sessions)) {
       const sessionExtension = extensions.sessions.find((s: any) => s.sessionIndex === sessionIndex);
@@ -61,13 +65,13 @@ export const isDoctorAdvanceCapacityReachedOnDate = (
   let activeAdvanceCount = appointments.filter(apt => (
     apt.doctor === doctor.name &&
     apt.bookedVia !== 'Walk-in' &&
-    apt.date === dateKey &&
+    dateKeys.includes(apt.date) &&
     (apt.status === 'Pending' || apt.status === 'Confirmed' || apt.status === 'Completed') &&
     !apt.cancelledByBreak
   )).length;
 
   const { isEditing, editingAppointment } = options;
-  if (isEditing && editingAppointment?.date === dateKey && editingAppointment?.doctor === doctor.name && editingAppointment?.bookedVia !== 'Walk-in') {
+  if (isEditing && dateKeys.includes(editingAppointment?.date || "") && editingAppointment?.doctor === doctor.name && editingAppointment?.bookedVia !== 'Walk-in') {
     activeAdvanceCount = Math.max(0, activeAdvanceCount - 1);
   }
 

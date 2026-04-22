@@ -12,8 +12,7 @@ import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { WalkInPlacementService } from '../domain/services/WalkInPlacementService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { sseService } from '../domain/services/SSEService';
-import { getClinicNow, getClinicDateString, getClinicISODateString } from '../domain/services/DateUtils';
-import { parse } from 'date-fns';
+import { getClinicNow, getClinicDateString, getClinicISODateString, parseClinicDate } from '../domain/services/DateUtils';
 
 export interface CreateWalkInAppointmentDTO {
   clinicId: string;
@@ -54,9 +53,7 @@ export class CreateWalkInAppointmentUseCase {
     const walkInSpacing = doctor.walkInTokenAllotment || clinic.walkInTokenAllotment || 0;
 
     // Parse the date string to a Date object for slot generation
-    const requestedDate = dto.date.includes('-')
-      ? parse(dto.date, 'yyyy-MM-dd', new Date())
-      : parse(dto.date, 'd MMMM yyyy', new Date());
+    const requestedDate = parseClinicDate(dto.date);
     
     // Normalize Date to new ISO standard "YYYY-MM-DD"
     const firestoreDateStr = getClinicISODateString(requestedDate);

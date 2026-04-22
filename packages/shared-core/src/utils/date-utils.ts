@@ -193,29 +193,34 @@ export function getClinicShortDateString(date: Date = new Date()): string {
     return `${day} ${month} ${year}`;
 }
 
-/**
- * Parses a time string (e.g., "02:30 PM", "14:30") and a base date, 
- * interpreting the time specifically in the Asia/Kolkata timezone.
- */
 export function parseClinicTime(timeStr: string, baseDate: Date): Date {
-    let localDate: Date;
+    // 1. Resolve exactly which day this is in the target timezone (IST)
+    const dateStr = getClinicISODateString(baseDate); 
+    
+    let time24 = timeStr.trim();
 
-    // Check if it's the legacy format (hh:mm a)
-    if (timeStr.toUpperCase().includes('AM') || timeStr.toUpperCase().includes('PM')) {
-        console.warn(`[DEPRECATION] Received legacy time format: "${timeStr}". Logic should use HH:mm.`);
-        localDate = parse(timeStr, 'hh:mm a', baseDate);
-    } else if (timeStr.includes(':')) {
-        const [h, m] = timeStr.split(':').map(Number);
-        localDate = new Date(baseDate);
-        localDate.setHours(h, m, 0, 0);
+    // 2. Handle legacy AM/PM format by converting to HH:mm natively
+    if (time24.toUpperCase().includes('AM') || time24.toUpperCase().includes('PM')) {
+        const [timePart, modifier] = time24.split(' ');
+        let [hours, minutes] = timePart.split(':');
+        let h = parseInt(hours, 10);
+        
+        if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
+        if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
+        
+        time24 = `${h.toString().padStart(2, '0')}:${minutes.padStart(2, '0')}`;
     } else {
-        localDate = parse(timeStr, 'hh:mm a', baseDate);
+        // Ensure standard HH:mm formatting even if input provides seconds
+        const parts = time24.split(':');
+        time24 = `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
     }
 
-    const IST_OFFSET = 330;
-    const systemOffset = -localDate.getTimezoneOffset();
-    const diff = systemOffset - IST_OFFSET;
-    return addMinutes(localDate, diff);
+    // 3. Construct an absolute time string explicitly bound to the IST timezone
+    // The engine parses this perfectly regardless of local system timezone
+    // Example: "2026-04-21T22:00:00.000+05:30"
+    const strictIsoStr = `${dateStr}T${time24}:00.000+05:30`;
+    
+    return new Date(strictIsoStr);
 }
 
 /**
@@ -224,31 +229,35 @@ export function parseClinicTime(timeStr: string, baseDate: Date): Date {
  * Returns an "Invalid Date" object if parsing fails.
  */
 export function parseClinicDate(dateStr: string): Date {
-    let localDate: Date;
+    let y: number, m: number, d: number;
 
-    // Try YYYY-MM-DD (ISO style) first
+    // 1. Try YYYY-MM-DD (ISO style)
     if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        localDate = new Date(dateStr);
-    }
-    // Try "d MMMM yyyy"
+        [y, m, d] = dateStr.split('-').map(Number);
+    } 
+    // 2. Try "d MMMM yyyy"
     else {
-        localDate = parse(dateStr, 'd MMMM yyyy', new Date());
+        try {
+            const parsed = parse(dateStr, 'd MMMM yyyy', new Date());
+            if (isNaN(parsed.getTime())) throw new Error();
+            y = parsed.getFullYear();
+            m = parsed.getMonth() + 1;
+            d = parsed.getDate();
+        } catch {
+            // Fallback to native parsing
+            const native = new Date(dateStr);
+            if (isNaN(native.getTime())) return native;
+            y = native.getFullYear();
+            m = native.getMonth() + 1;
+            d = native.getDate();
+        }
     }
 
-    // Fallback to native parsing
-    if (isNaN(localDate.getTime())) {
-        localDate = new Date(dateStr);
-    }
-
-    if (isNaN(localDate.getTime())) {
-        return localDate; // Return Invalid Date
-    }
-
-    localDate.setHours(0, 0, 0, 0);
-    const IST_OFFSET = 330;
-    const systemOffset = -localDate.getTimezoneOffset();
-    const diff = systemOffset - IST_OFFSET;
-    return addMinutes(localDate, diff);
+    // 3. Construct an absolute time string explicitly bound to the IST timezone midnight
+    // Example: "2026-04-21T00:00:00.000+05:30"
+    const isoMidnight = `${y}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}T00:00:00.000+05:30`;
+    
+    return new Date(isoMidnight);
 }
 
 

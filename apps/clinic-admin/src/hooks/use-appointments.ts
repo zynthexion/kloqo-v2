@@ -54,7 +54,7 @@ export function useAppointments() {
 
   // SSE: Listen for real-time updates from the backend
   const handleSSEEvent = useCallback((event: any) => {
-    if (['appointment_status_changed', 'walk_in_created', 'queue_updated'].includes(event.type)) {
+    if (['appointment_status_changed', 'walk_in_created', 'queue_updated', 'doctor_status_changed'].includes(event.type)) {
       fetchData(true); // Silent refresh when underlying data changes
     }
   }, [fetchData]);

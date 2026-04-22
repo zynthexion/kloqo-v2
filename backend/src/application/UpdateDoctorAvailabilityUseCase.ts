@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { IDoctorRepository, IActivityRepository, IAppointmentRepository } from '../domain/repositories';
 import { DoctorAvailability, DoctorOverride, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { SSEService } from '../domain/services/SSEService';
 import { parseClinicTime, getClinicDayOfWeek, parseClinicDate } from '../domain/services/DateUtils';
 import { NotificationService } from '../domain/services/NotificationService';
 import { db } from '../infrastructure/firebase/config';
@@ -19,7 +20,8 @@ export class UpdateDoctorAvailabilityUseCase {
         private doctorRepo: IDoctorRepository,
         private appointmentRepo: IAppointmentRepository,
         private activityRepo: IActivityRepository,
-        private notificationService: NotificationService
+        private notificationService: NotificationService,
+        private sseService: SSEService
     ) {}
 
     async execute(request: UpdateDoctorAvailabilityRequest): Promise<void> {
@@ -115,6 +117,14 @@ export class UpdateDoctorAvailabilityUseCase {
 
         // 3. Commit Everything
         await batch.commit();
+
+        // 3.1 Emit SSE event for real-time dashboard refresh
+        // We use 'walk_in_created' as a global refresh trigger as frontend apps 
+        // are already wired to re-fetch on this event.
+        this.sseService.emit('walk_in_created', doctor.clinicId, {
+            doctorId,
+            type: 'DOCTOR_AVAILABILITY_CHANGED'
+        });
 
         // 4. POST-COMMIT: Notifications (Non-atomic, triggered only on success)
         if (forceCancelConflicts && conflicts.length > 0) {

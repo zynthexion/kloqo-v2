@@ -163,6 +163,8 @@ export function useAppointmentsPage() {
     if (appointmentType === 'Walk-in') return !isSameDay(date, baseline);
     
     const isPastDate = isBefore(date, todayAtMidnight);
+    const isTodaySelected = isSameDay(date, baseline);
+    
     const isNotAvailableDay = !availableDaysOfWeek.includes(getDay(date));
     const isOnLeave = leaveDates.some(ld => isSameDay(date, ld));
     
@@ -170,6 +172,9 @@ export function useAppointmentsPage() {
     const advanceBookingDays = (selectedDoctor as any).advanceBookingDays ?? 7;
     const cutoffDate = addDays(todayAtMidnight, advanceBookingDays);
     const isBeyondLimit = isAfter(date, cutoffDate);
+
+    // FIX: Allow Today even if getClinicNow() is slightly ahead of local midnight
+    if (isTodaySelected) return isNotAvailableDay || isOnLeave;
 
     return isPastDate || isNotAvailableDay || isOnLeave || isBeyondLimit;
   }, [selectedDoctor, appointmentType, availableDaysOfWeek, leaveDates]);
@@ -260,7 +265,8 @@ export function useAppointmentsPage() {
   useEffect(() => {
     if (appointmentType === 'Walk-in' && selectedDoctor && selectedDate) {
       setIsCalculatingEstimate(true);
-      sse.getWalkInEstimate(selectedDoctor.id, format(selectedDate, 'yyyy-MM-dd'), isForceBookedState)
+      const dateStr = `${selectedDate.getFullYear()}-${(selectedDate.getMonth() + 1).toString().padStart(2, '0')}-${selectedDate.getDate().toString().padStart(2, '0')}`;
+      sse.getWalkInEstimate(selectedDoctor.id, dateStr, isForceBookedState)
         .then(details => setWalkInEstimate(details))
         .catch(() => setWalkInEstimateUnavailable(true))
         .finally(() => setIsCalculatingEstimate(false));

@@ -13,6 +13,7 @@ import { parseClinicTime, parseClinicDate, getClinicISODateString } from '../dom
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
+import { sseService } from '../domain/services/SSEService';
 
 export interface BookAdvancedAppointmentRequest {
   clinicId: string;
@@ -52,9 +53,7 @@ export class BookAdvancedAppointmentUseCase {
 
     // Normalize Date to new ISO standard "YYYY-MM-DD"
     const incomingDate = request.date;
-    const date = incomingDate.includes('-') 
-      ? parseClinicDate(incomingDate) 
-      : parse(incomingDate, 'd MMMM yyyy', new Date());
+    const date = parseClinicDate(incomingDate);
     
     const firestoreDateStr = getClinicISODateString(date);
 
@@ -188,6 +187,19 @@ export class BookAdvancedAppointmentUseCase {
         // 4. Save Appointment within transaction
         await this.appointmentRepo.save(appt, transaction);
         return appt;
+      });
+
+      // ── SSE: Push real-time update to nurse dashboard ─────────────────────────
+      // We emit 'walk_in_created' specifically because it triggers a silent 
+      // refresh in the Nurse App dashboard, ensuring real-time visibility.
+      sseService.emit('walk_in_created', appointment.clinicId, {
+        appointmentId: appointment.id,
+        patientName: appointment.patientName,
+        doctorId: appointment.doctorId,
+        doctorName: appointment.doctorName,
+        tokenNumber: appointment.tokenNumber,
+        sessionIndex: appointment.sessionIndex,
+        slotIndex: appointment.slotIndex,
       });
 
       return appointment;

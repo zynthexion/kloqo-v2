@@ -56,7 +56,8 @@ export function useSlotVisualizer() {
   const fetchAppointments = useCallback(async (isCancelledRef?: { current: boolean }) => {
     if (isMockMode || !selectedDoctorId) return;
     try {
-      const formattedDate = format(selectedDate, "d MMMM yyyy");
+      // Standardize to ISO date for backend matching
+      const formattedDate = `${selectedDate.getFullYear()}-${(selectedDate.getMonth() + 1).toString().padStart(2, '0')}-${selectedDate.getDate().toString().padStart(2, '0')}`;
       const docs = await apiRequest<Appointment[]>(`/clinic/appointments?doctorId=${selectedDoctorId}&date=${formattedDate}`);
       if (!isCancelledRef?.current) {
         setAppointments(docs.sort((a, b) => (Number(a.slotIndex) || 0) - (Number(b.slotIndex) || 0)));

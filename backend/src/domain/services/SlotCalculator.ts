@@ -1,6 +1,6 @@
 import { addMinutes, isAfter, isBefore, subMinutes, format } from 'date-fns';
 import { Appointment, Doctor, Clinic } from '../../../../packages/shared/src/index';
-import { parseClinicTime } from './DateUtils';
+import { parseClinicTime, getClinicISODateString, getClinicDateString } from './DateUtils';
 import { computeWalkInSchedule, SchedulerSlot, SchedulerAdvance, SchedulerWalkInCandidate } from './SlotScheduler';
 
 export interface DailySlot {
@@ -12,7 +12,7 @@ export interface DailySlot {
 export class SlotCalculator {
   static generateSlots(doctor: Doctor, date: Date): DailySlot[] {
     // 1. Check for specific date override first (Rule: Specific overrides beat weekly recurring)
-    const dateStrIso = format(date, 'yyyy-MM-dd');
+    const dateStrIso = getClinicISODateString(date);
     const override = doctor.dateOverrides?.[dateStrIso];
 
     if (override) {
@@ -60,9 +60,10 @@ export class SlotCalculator {
 
     // Availability extensions
     // Availability extensions: check both legacy and ISO keys
-    const dateStrLegacy = format(date, 'd MMMM yyyy');
+    const dateStrLegacy = getClinicDateString(date);
+    const dateStrIsoExt = getClinicISODateString(date);
     const legacyExtension = doctor.availabilityExtensions?.[dateStrLegacy];
-    const isoExtension = doctor.availabilityExtensions?.[dateStrIso];
+    const isoExtension = doctor.availabilityExtensions?.[dateStrIsoExt];
     
     // ISO takes precedence if both exist, but we merge logic if needed (here we just need the sessions)
     const extension = isoExtension || legacyExtension;
