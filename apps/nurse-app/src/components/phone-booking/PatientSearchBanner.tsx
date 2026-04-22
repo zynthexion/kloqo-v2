@@ -9,7 +9,7 @@ interface PatientSearchBannerProps {
   isSearchingPatient: boolean;
   isSendingLink: boolean;
   handleSendLink: () => void;
-  nextSlotHint: { date: string, time: string, reportingTime: string } | null;
+  nextSlotHint?: { date: string, time: string, reportingTime: string } | null;
   onSearch: (phone: string) => void;
 }
 

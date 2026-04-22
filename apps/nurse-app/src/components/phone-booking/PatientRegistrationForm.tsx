@@ -5,15 +5,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
-import { FormValues } from '@/hooks/use-phone-booking-details';
+
+export interface BasePatientFormValues {
+  patientName: string;
+  age: number;
+  phone: string;
+  communicationPhone?: string;
+  place: string;
+  sex: "Male" | "Female" | "Other";
+}
 
 interface PatientRegistrationFormProps {
-  form: UseFormReturn<FormValues>;
-  onSubmit: (values: FormValues) => void;
+  form: UseFormReturn<any>;
+  onSubmit: (values: any) => void;
   isSubmitting: boolean;
   selectedPatient: any | null;
   primaryPatient: any | null;
   toast: any;
+  submitLabel?: string;
 }
 
 export const PatientRegistrationForm: React.FC<PatientRegistrationFormProps> = ({
@@ -22,7 +31,8 @@ export const PatientRegistrationForm: React.FC<PatientRegistrationFormProps> = (
   isSubmitting,
   selectedPatient,
   primaryPatient,
-  toast
+  toast,
+  submitLabel,
 }) => {
   return (
     <Form {...(form as any)}>
@@ -167,7 +177,7 @@ export const PatientRegistrationForm: React.FC<PatientRegistrationFormProps> = (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
             <>
-              <span>Proceed to Selection</span>
+              <span>{submitLabel || 'Proceed to Selection'}</span>
               <ArrowLeft className="h-5 w-5 rotate-180" />
             </>
           )}

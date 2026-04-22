@@ -89,7 +89,10 @@ export class GetWalkInPreviewUseCase {
       }));
 
     return {
-      placeholderAssignment: newAssignment,
+      placeholderAssignment: newAssignment ? {
+        ...newAssignment,
+        numericToken
+      } : null,
       advanceShifts
     };
   }
