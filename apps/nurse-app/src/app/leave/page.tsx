@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
-import { Loader2, ArrowLeft, CalendarIcon, Check, Trash2, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowLeft, CalendarIcon, Check, Trash2, AlertTriangle, ChevronRight } from 'lucide-react';
 import { format, startOfDay, parseISO, isWithinInterval } from 'date-fns';
 import { cn, parseTime, formatTime12Hour } from '@/lib/utils';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ import { apiRequest } from '@/lib/api-client';
 import { Appointment, Doctor } from '@kloqo/shared';
 import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
 import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
+import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 
 type TimeSession = { from: string; to: string; };
@@ -190,14 +191,42 @@ function MarkLeaveContent() {
     const sessionsToCancel = selectedSessions.filter(s => isSessionOnLeave(s)).length;
     const sessionsToMark = selectedSessions.filter(s => !isSessionOnLeave(s)).length;
 
+    return (
+        <AppFrameLayout>
+            <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
+                {/* Header */}
+                <header className="flex items-center gap-4 p-4 bg-white border-b sticky top-0 z-20">
+                    <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => router.back()}>
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div className="flex-1">
+                        <h1 className="text-lg font-black text-slate-900 leading-tight">Mark Doctor Leave</h1>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            {doctor ? `Dr. ${doctor.name}` : 'Select Doctor'}
+                        </p>
+                    </div>
+                </header>
+
+                <div className="flex-1 p-6 space-y-8 overflow-y-auto pb-24">
+                    <section className="space-y-4">
+                        <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Select Date</h2>
+                        
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button className="w-full text-left bg-white rounded-3xl p-6 shadow-sm border border-slate-100 transition-all active:scale-[0.98]">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100">
+                                                <CalendarIcon className="h-6 w-6 text-slate-400" />
+                                            </div>
                                             <div>
-                                                <p className="font-semibold">{format(selectedDate, 'EEEE, yyyy')}</p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Select a date to see the schedule
+                                                <p className="font-black text-slate-800 text-lg leading-none">{format(selectedDate, 'EEEE, d MMMM')}</p>
+                                                <p className="text-xs font-bold text-slate-400 mt-1">
+                                                    Showing schedule for this date
                                                 </p>
                                             </div>
                                         </div>
-                                        <CalendarIcon className="h-6 w-6 opacity-50 text-destructive" />
+                                        <ChevronRight className="h-5 w-5 text-slate-300" />
                                     </div>
                                 </button>
                             </PopoverTrigger>

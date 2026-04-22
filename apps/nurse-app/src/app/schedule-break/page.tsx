@@ -130,7 +130,6 @@ function Content() {
     />
   );
 }
-}
 
 export default function ScheduleBreakPage() {
   return (

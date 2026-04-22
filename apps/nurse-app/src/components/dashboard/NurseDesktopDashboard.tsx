@@ -213,7 +213,7 @@ export function NurseDesktopDashboard() {
                       <AppointmentList 
                          appointments={arrivedAppointments}
                          onUpdateStatus={handleUpdateStatus}
-                         onRejoinQueue={(appt) => handleUpdateStatus(appt.id, 'Confirmed')}
+                         onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          showTopRightActions={false}
                          currentTime={new Date()}
                       />
@@ -222,7 +222,7 @@ export function NurseDesktopDashboard() {
                       <AppointmentList 
                          appointments={pendingAppointments}
                          onUpdateStatus={handleUpdateStatus}
-                         onAddToQueue={(appt) => handleUpdateStatus(appt.id, 'Confirmed')}
+                         onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          showTopRightActions={false}
                          currentTime={new Date()}
                       />

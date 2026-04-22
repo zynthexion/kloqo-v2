@@ -112,7 +112,9 @@ export function useBookingSummaryState() {
 
             if (patientRes?.patient) {
                 setPatient(patientRes.patient);
-                savePatientToCache(patientId, patientRes.patient);
+                if (patientId) {
+                    savePatientToCache(patientId, patientRes.patient);
+                }
             }
         } catch (error) {
             console.error('Fetch error:', error);

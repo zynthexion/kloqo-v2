@@ -236,7 +236,7 @@ function WalkInContent() {
                       </div>
 
                       <Button 
-                        onClick={confirmBooking}
+                        onClick={() => confirmBooking()}
                         disabled={isSubmitting}
                         className="w-full h-16 rounded-3xl bg-black hover:bg-slate-900 text-white font-black text-lg shadow-xl shadow-black/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
                       >
