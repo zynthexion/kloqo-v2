@@ -55,7 +55,10 @@ export class FilterAppointmentsByTenantUseCase {
 
     // 3. Apply Filters
     if (status) {
-      const statusList = (status as string).split(',');
+      // Normalize: Express parses ?status=A&status=B as string[] but ?status=A,B as string
+      const statusList: string[] = Array.isArray(status)
+        ? status as string[]
+        : (status as string).split(',');
       appointments = appointments.filter(a => statusList.includes(a.status));
     }
     if (reviewed !== undefined) {

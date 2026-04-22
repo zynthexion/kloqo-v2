@@ -1,4 +1,4 @@
-import { IAppointmentRepository, IDoctorRepository, IClinicRepository } from '../domain/repositories';
+import { IAppointmentRepository, IDoctorRepository, IClinicRepository, IConsultationCounterRepository } from '../domain/repositories';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine, type SlotSource, type DecoratedSlot } from '../domain/services/BookingSessionEngine';
 import { 
@@ -27,8 +27,13 @@ export interface GetAvailableSlotsRequest {
   userLon?: number;
 }
 
-// Re-export so controller/routes importing from here still work
-export type { DecoratedSlot as AvailableSlotInfo };
+export interface GetAvailableSlotsResponse {
+  slots: DecoratedSlot[];
+  isSessionActive: boolean;
+  activeSessionIndex: number | null;
+  distributionType: 'classic' | 'advanced';
+  consultationCount: number;
+}
 
 /**
  * GetAvailableSlotsUseCase
@@ -36,24 +41,16 @@ export type { DecoratedSlot as AvailableSlotInfo };
  * Returns all slots for a given doctor/date, decorated with availability status.
  * Delegates ALL session & break logic to BookingSessionEngine — the canonical
  * domain service that is the single source of truth across the monorepo.
- *
- * Key design decisions:
- *  • source param drives the buffer (patient 30m / staff 15m)
- *  • Breaks are fetched via the appointment repo (Blocked appointments)
- *    — this is safer than legacy offset math and treats breaks as immutable objects
- *  • First Available rule: only the earliest unblocked slot per session is
- *    marked 'available'. This forces density without hiding future sessions.
- *  • Staff see breaks as status:'break'; patients see them as status:'booked'
- *  • Rule 8 / 14: advance-booking window enforced; past-date guard applied.
  */
 export class GetAvailableSlotsUseCase {
   constructor(
     private appointmentRepo: IAppointmentRepository,
     private doctorRepo: IDoctorRepository,
-    private clinicRepo: IClinicRepository
+    private clinicRepo: IClinicRepository,
+    private consultationCounterRepo: IConsultationCounterRepository
   ) {}
 
-  async execute(request: GetAvailableSlotsRequest): Promise<DecoratedSlot[]> {
+  async execute(request: GetAvailableSlotsRequest): Promise<GetAvailableSlotsResponse> {
     let { clinicId, doctorId, date: dateStr, source = 'staff', userLat, userLon } = request;
 
     // ── 1. Fetch doctor and enforce tenant isolation (Rule 15) ──────────────
@@ -158,10 +155,20 @@ export class GetAvailableSlotsUseCase {
 
     // ── 6. Generate raw slots via SlotCalculator ──────────────────────────────
     const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);
-    if (allSlots.length === 0) return [];
+    if (allSlots.length === 0) {
+      return {
+        slots: [],
+        isSessionActive: false,
+        activeSessionIndex: null,
+        distributionType: (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced',
+        consultationCount: 0
+      };
+    }
 
     // ── 7. Decorate via BookingSessionEngine — single source of truth ─────────
     const reserveRatio = doctor.walkInReserveRatio ?? clinic.walkInReserveRatio ?? 0.15;
+    const distributionType = (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
+    
     const decoratedSlots = BookingSessionEngine.decorateSlots(
       allSlots,
       bookedMap,
@@ -169,13 +176,37 @@ export class GetAvailableSlotsUseCase {
       now,
       source,
       reserveRatio,
-      (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced',
+      distributionType,
       doctor.walkInTokenAllotment || 5
     );
 
+    // ── 7.5. Calculate Active Session Flag (for Today only) ──────────────────
+    let isSessionActive = false;
+    let activeSessionIndex: number | null = null;
+    
+    if (isSameDay(requestedDate, todayBaselineIst)) {
+      activeSessionIndex = BookingSessionEngine.findActiveSession(
+        doctor,
+        allSlots,
+        appointments,
+        now,
+        distributionType
+      );
+      isSessionActive = activeSessionIndex !== null;
+    }
+    
+    // ── 7.7 Fetch Consultation Count (Rule 14 parity) ────────────────────────
+    let consultationCount = 0;
+    if (activeSessionIndex !== null) {
+      consultationCount = await this.consultationCounterRepo.getCount(
+        clinicId,
+        doctorId,
+        firestoreDateStr,
+        activeSessionIndex
+      );
+    }
+
     // ── 8. Staff Parity: Enforce "Next Available Only" per Session ────────────
-    // Walk-ins handled via separate endpoint. Staff Advanced Booking only
-    // ever needs the single next available slot per session.
     if (source === 'staff') {
       const filteredSlots: DecoratedSlot[] = [];
       const sessionMap = new Set<number>();
@@ -185,9 +216,21 @@ export class GetAvailableSlotsUseCase {
              sessionMap.add(slot.sessionIndex);
          }
       }
-      return filteredSlots;
+      return {
+        slots: filteredSlots,
+        isSessionActive,
+        activeSessionIndex,
+        distributionType,
+        consultationCount
+      };
     }
 
-    return decoratedSlots;
+    return {
+      slots: decoratedSlots,
+      isSessionActive,
+      activeSessionIndex,
+      distributionType,
+      consultationCount
+    };
   }
 }

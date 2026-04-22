@@ -13,8 +13,8 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { Card, CardContent } from '@/components/ui/card';
 import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
-import { formatDayOfWeek, formatDate } from '@/lib/date-utils';
-import { getArriveByTimeFromAppointment } from '@/lib/utils';
+import { formatDate, formatDayOfWeek } from '@/lib/date-utils';
+import { getArriveByTimeFromAppointment, parseClinicDate } from '@/lib/utils';
 import { getLocalizedDepartmentName } from '@/lib/department-utils';
 import type { Appointment, Doctor, Clinic } from '@kloqo/shared';
 
@@ -28,25 +28,18 @@ interface AppointmentCardProps {
 }
 
 export function AppointmentCard({ appointment, departments, language, doctors, t, clinics }: AppointmentCardProps) {
-    let day: string, month: string, dayOfMonth: string;
+    let day: string = '---', month: string = '---', dayOfMonth: string = '--';
 
     try {
-        const dateObj = parse(appointment.date, 'd MMMM yyyy', new Date());
+        const dateObj = parseClinicDate(appointment.date);
         day = formatDayOfWeek(dateObj, language);
         month = formatDate(dateObj, 'MMM', language);
         dayOfMonth = format(dateObj, 'dd');
     } catch {
-        try {
-            const dateObj = new Date(appointment.date);
-            day = formatDayOfWeek(dateObj, language);
-            month = formatDate(dateObj, 'MMM', language);
-            dayOfMonth = format(dateObj, 'dd');
-        } catch {
-            const parts = appointment.date.split(' ');
-            month = parts[0];
-            dayOfMonth = parts[1];
-            day = formatDayOfWeek(new Date(), language);
-        }
+        const parts = appointment.date.split(' ');
+        month = parts[0] || '---';
+        dayOfMonth = parts[1] || '--';
+        day = formatDayOfWeek(new Date(), language);
     }
 
     const appointmentDoctor = doctors.find(d => d.name === appointment.doctor);

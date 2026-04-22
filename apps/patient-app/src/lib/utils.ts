@@ -17,7 +17,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export const parseClinicDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  
+  // 1. Try ISO Format (yyyy-MM-dd)
+  if (dateStr.includes('-')) {
+    const parsed = parseISO(dateStr);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+
+  // 2. Try Legacy Format (d MMMM yyyy)
+  try {
+    const parsed = parse(dateStr, "d MMMM yyyy", new Date());
+    if (!isNaN(parsed.getTime())) return parsed;
+  } catch (e) {}
+
+  // 3. Last resort fallback
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d;
+  
+  return new Date();
+};
+
 export const parseTime = (timeStr: string, date: Date): Date => {
+  if (!timeStr) return new Date(0);
   const [time, modifier] = timeStr.split(' ');
   let [hours, minutes] = time.split(':').map(Number);
   if (modifier === 'PM' && hours < 12) {
@@ -77,7 +100,7 @@ export const getArriveByTime = (appointmentTime: string, appointmentDate: Date, 
  */
 export const getArriveByTimeFromAppointment = (appointment: Appointment, doctor?: Doctor | null): string => {
   try {
-    const appointmentDate = parse(appointment.date, "d MMMM yyyy", new Date());
+    const appointmentDate = parseClinicDate(appointment.date);
     const isWalkIn = appointment.tokenNumber?.startsWith('W');
 
     if (appointment.arriveByTime) {
@@ -117,7 +140,7 @@ export const getReportByTimeLabel = getArriveByTimeFromAppointment;
  */
 export const getDisplayTimeFromAppointment = (appointment: Appointment, doctor?: Doctor | null): string => {
   try {
-    const appointmentDate = parse(appointment.date, "d MMMM yyyy", new Date());
+    const appointmentDate = parseClinicDate(appointment.date);
     const appointmentTime = parseTime(appointment.time, appointmentDate);
     // time is already shifted by shared-core.
     return appointment.time;
@@ -127,9 +150,10 @@ export const getDisplayTimeFromAppointment = (appointment: Appointment, doctor?:
 };
 
 export const parseAppointmentDateTime = (dateStr: string, timeStr: string): Date => {
-  // Assuming dateStr is "d MMMM yyyy" and timeStr is "hh:mm a"
+  // Handles plural both ISO "yyyy-MM-dd" and Legacy "d MMMM yyyy"
+  if (!dateStr || !timeStr) return new Date(0);
   try {
-    const date = parse(dateStr, "d MMMM yyyy", new Date());
+    const date = parseClinicDate(dateStr);
     const [time, modifier] = timeStr.split(' ');
     let [hours, minutes] = time.split(':').map(Number);
     if (modifier && modifier.toUpperCase() === 'PM' && hours < 12) {

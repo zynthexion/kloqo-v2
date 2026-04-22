@@ -30,7 +30,17 @@ export function BookingChoiceModal({
     if (!doctor) return null;
 
     const isNearby = distance !== null && distance <= 150;
-    
+
+    // 🔍 DEBUG: Walk-in disabled diagnosis
+    console.log('[BookingChoiceModal] distance (meters):', distance);
+    console.log('[BookingChoiceModal] isNearby:', isNearby);
+    console.log('[BookingChoiceModal] doctor.latitude:', (doctor as any).latitude);
+    console.log('[BookingChoiceModal] doctor.longitude:', (doctor as any).longitude);
+    if (distance === null) {
+        console.warn('[BookingChoiceModal] Walk-in DISABLED — distance is null. Either userLocation is missing or doctor has no GPS coords.');
+    } else if (distance > 150) {
+        console.warn(`[BookingChoiceModal] Walk-in DISABLED — too far: ${distance.toFixed(0)}m (limit: 150m).`);
+    }
     return (
         <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <SheetContent side="bottom" className="rounded-t-[3rem] px-6 pt-10 pb-12 border-none bg-background/95 backdrop-blur-xl">

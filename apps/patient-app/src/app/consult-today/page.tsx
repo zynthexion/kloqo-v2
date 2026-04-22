@@ -233,7 +233,7 @@ function ConsultTodayContent() {
                                         {t.consultToday.noDoctorsForWalkIn}
                                     </p>
                                     <p className="text-sm text-muted-foreground">
-                                        {t.consultToday.walkInOpens30MinutesBefore}
+                                        Walk-in registration for this session opens 30 minutes before the start time. To secure a guaranteed spot right now, please use Advance Booking.
                                     </p>
                                     <Button
                                         onClick={() => router.push(clinicId ? `/clinics/${clinicId}` : '/clinics')}

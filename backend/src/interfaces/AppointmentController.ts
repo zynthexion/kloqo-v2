@@ -214,13 +214,13 @@ export class AppointmentController {
         return res.status(400).json({ message: 'doctorId and date are required' });
       }
       // Staff route: 15-minute booking buffer
-      const slots = await this.getAvailableSlotsUseCase.execute({
+      const sessionInfo = await this.getAvailableSlotsUseCase.execute({
         doctorId: doctorId as string,
         clinicId: clinicId as string,
         date: date as string,
         source: 'staff'
       });
-      res.json(slots);
+      res.json(sessionInfo);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -241,7 +241,15 @@ export class AppointmentController {
       const appointment = await this.bookAdvancedAppointmentUseCase.execute({ ...req.body, clinicId });
       res.status(201).json(appointment);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      if (error instanceof SlotAlreadyBookedError) {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error instanceof DuplicateBookingError) {
+        return res.status(400).json({ error: error.message });
+      }
+      
+      console.error('[book error]', error.stack || error.message);
+      res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
   }
 
@@ -264,7 +272,10 @@ export class AppointmentController {
       }
 
       if (status) {
-        const statusList = (status as string).split(',');
+        // Normalize: Express parses ?status=A&status=B as string[] but ?status=A,B as string
+        const statusList: string[] = Array.isArray(status)
+          ? status as string[]
+          : (status as string).split(',');
         appointments = appointments.filter(a => statusList.includes(a.status));
       }
 

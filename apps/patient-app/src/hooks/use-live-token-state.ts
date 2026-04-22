@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useMasterDepartments } from '@/hooks/use-master-departments';
 import { useLiveTokenListeners } from '@/hooks/use-live-token-listeners';
 import { apiRequest } from '@/lib/api-client';
+import { parseClinicDate } from '@/lib/utils';
 import type { LiveTokenContextValue } from '@/contexts/LiveTokenContext';
 import type { Doctor, Appointment } from '@kloqo/shared';
 
@@ -61,6 +62,7 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
     const {
         allRelevantAppointments,
         liveDoctor,
+        consultationCount,
         clinics,
         loading: listenersLoading,
         liveDelay
@@ -117,7 +119,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         clinicData,
         validBreaks: calculateValidBreaks(currentDoctor, yourAppointment, allRelevantAppointments),
         currentTime,
-        appointmentDate: timingDate(yourAppointment)
+        appointmentDate: timingDate(yourAppointment),
+        consultationCount
     });
 
     // Re-bind timing to queue outputs for wait-time estimations
@@ -231,16 +234,15 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
 function timingDate(appointment: any) {
     if (!appointment) return new Date();
     try {
-        const { parse } = require('date-fns');
-        return parse(appointment.date, "d MMMM yyyy", new Date());
+        return parseClinicDate(appointment.date);
     } catch { return new Date(); }
 }
 
 function calculateValidBreaks(doctor: any, appointment: any, appointments: any[]) {
     if (!doctor?.breakPeriods || !appointment) return [];
     try {
-        const { format, parse } = require('date-fns');
-        const appointmentDate = parse(appointment.date, "d MMMM yyyy", new Date());
+        const { format } = require('date-fns');
+        const appointmentDate = parseClinicDate(appointment.date);
         const dateKey = format(appointmentDate, 'd MMMM yyyy');
         const breaks = doctor.breakPeriods[dateKey] || [];
         return breaks.filter((bp: any) => {

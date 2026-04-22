@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, parse, isPast, isToday } from 'date-fns';
-import { cn, getArriveByTimeFromAppointment, parseAppointmentDateTime } from '@/lib/utils';
+import { cn, getArriveByTimeFromAppointment, parseAppointmentDateTime, parseClinicDate } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Star, Loader2 } from 'lucide-react';
@@ -47,9 +47,14 @@ export function AppointmentCard({
     const [isCancelling, setIsCancelling] = useState(false);
     const [showReview, setShowReview] = useState(false);
 
-    let dateObj;
-    try { dateObj = parse(appointment.date, "d MMMM yyyy", new Date()); } catch { dateObj = new Date(appointment.date); }
-    
+    let dateObj: Date;
+    try {
+        dateObj = parseClinicDate(appointment.date);
+    } catch {
+        dateObj = new Date();
+    }
+    if (isNaN(dateObj.getTime())) dateObj = new Date();
+
     const day = formatDayOfWeek(dateObj, language);
     const month = formatDate(dateObj, 'MMM', language);
     const dayOfMonth = format(dateObj, 'dd');

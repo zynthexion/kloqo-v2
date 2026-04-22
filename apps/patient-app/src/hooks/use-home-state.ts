@@ -15,7 +15,7 @@ import { getLocalizedDepartmentName } from '@/lib/department-utils';
 import { compareAppointments } from '@kloqo/shared-core';
 import { isToday } from 'date-fns/isToday';
 import { isPast } from 'date-fns/isPast';
-import { parse } from 'date-fns/parse';
+import { parseClinicDate } from '@/lib/utils';
 import useSWR from 'swr';
 import type { Doctor, Appointment, Clinic } from '@kloqo/shared';
 
@@ -152,7 +152,7 @@ export function useHomeState() {
     const walkInAppointment = useMemo(() => {
         const active = effectiveAppointments.filter((a: Appointment) => 
             a.tokenNumber?.startsWith('W') && 
-            isToday(parse(a.date, "d MMMM yyyy", new Date())) &&
+            isToday(parseClinicDate(a.date)) &&
             a.status !== 'Cancelled' && a.status !== 'Completed' && (a as any).cancelledByBreak === undefined
         );
         return active.sort(compareAppointments as any)[0] || null;
@@ -161,16 +161,12 @@ export function useHomeState() {
     const upcomingAppointments = useMemo(() => {
         return effectiveAppointments.filter((a: Appointment) => {
             if ((a as any).cancelledByBreak !== undefined || a.status === 'Cancelled' || a.status === 'Completed') return false;
+            
+            const date = parseClinicDate(a.date);
             if (a.tokenNumber?.startsWith('W')) {
-                try {
-                   const date = parse(a.date, "d MMMM yyyy", new Date());
-                   if (isToday(date)) return false;
-                } catch { return false; }
+                if (isToday(date)) return false;
             }
-            try {
-                const date = parse(a.date, "d MMMM yyyy", new Date());
-                return !isPast(date) || isToday(date);
-            } catch { return false; }
+            return !isPast(date) || isToday(date);
         }).sort(compareAppointments as any);
     }, [effectiveAppointments]);
 

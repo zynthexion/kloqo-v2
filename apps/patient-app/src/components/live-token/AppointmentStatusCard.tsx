@@ -98,7 +98,6 @@ export const AppointmentStatusCard = () => {
                                 {yourAppointment.tokenNumber}
                             </span>
                         </div>
-                    </div>
 
                         {renderArrivalStatus()}
                         

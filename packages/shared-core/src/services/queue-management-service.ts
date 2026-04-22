@@ -111,10 +111,13 @@ export async function computeQueues(
     date: string,
     sessionIndex: number,
     doctorConsultationStatus?: 'In' | 'Out',
-    tokenDistribution?: 'classic' | 'advanced'
+    tokenDistribution?: 'classic' | 'advanced',
+    providedConsultationCount?: number
 ): Promise<QueueState> {
-    // Get consultation count
-    const consultationCount = await getConsultationCount(clinicId, doctorId, date, sessionIndex);
+    // Get consultation count — use provided value if available, otherwise fetch from Firestore
+    const consultationCount = typeof providedConsultationCount === 'number' 
+        ? providedConsultationCount 
+        : await getConsultationCount(clinicId, doctorId, date, sessionIndex);
 
     // Filter appointments for this doctor, date, and session
     const relevantAppointments = appointments.filter(apt =>

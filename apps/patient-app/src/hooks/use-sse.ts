@@ -30,7 +30,8 @@ export type SSEEventType =
   | 'session_ended'
   | 'break_scheduled'
   | 'break_cancelled'
-  | 'appointment_reslotted'; // Fired by QueueBubblingService when a W-Token is moved
+  | 'appointment_reslotted'
+  | 'queue_reoptimized';
 
 export interface SSEPayload {
   type: SSEEventType;
@@ -92,6 +93,7 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
       'session_ended',
       'break_scheduled',
       'break_cancelled',
+      'queue_reoptimized',
     ];
 
     eventTypes.forEach((type) => {

@@ -384,13 +384,13 @@ export class DoctorController {
 
       this.validateClinicAccess(req, clinicId);
 
-      const slots = await this.getAvailableSlotsUseCase.execute({ 
+      const sessionInfo = await this.getAvailableSlotsUseCase.execute({ 
         doctorId: id, 
         clinicId, 
         date: date as string,
         source: 'staff'
       });
-      res.json(slots);
+      res.json(sessionInfo);
     } catch (error: any) {
       if (error.status === 403) return res.status(403).json({ error: error.message });
       console.error(`[DoctorController] getAvailableSlots Error:`, error.message);

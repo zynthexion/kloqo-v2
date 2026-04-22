@@ -37,7 +37,7 @@ import { apiRequest } from '@/lib/api-client';
 import { getClinicNow, getClinicISOString, parseClinicDate } from '@kloqo/shared-core';
 
 export function NurseDesktopDashboard() {
-  const { data, loading, selectedDoctorId, updateAppointmentStatus, refresh } = useNurseDashboardContext();
+  const { data, loading, selectedDoctorId, updateAppointmentStatus } = useNurseDashboardContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('arrived');
   const [isBookingDrawerOpen, setIsBookingDrawerOpen] = useState(false);
@@ -68,10 +68,11 @@ export function NurseDesktopDashboard() {
     setBookingMode('advanced');
     setIsBookingDrawerOpen(true);
     setAdvancedStep('identify');
-    // We can reuse walkIn's identify state if needed, but for now we keep it separate
-    walkIn.setCurrentStep('identify'); 
+    
+    // Hard Reset identity state for a clean new booking
     walkIn.setPhoneNumber('');
     walkIn.selectPatient(null);
+    walkIn.setCurrentStep('identify'); 
   };
 
   // Advanced Booking Functions
@@ -97,7 +98,7 @@ export function NurseDesktopDashboard() {
     if (!selectedSlot || !walkIn.selectedPatient || !selectedDoctorId || !data?.clinic?.id) return;
     setIsBooking(true);
     try {
-      const patientId = walkIn.selectedPatient.id || walkIn.selectedPatient._id;
+      const patientId = walkIn.selectedPatient?.id || walkIn.selectedPatient?._id;
       await apiRequest('/appointments/book', {
         method: 'POST',
         body: JSON.stringify({
@@ -112,10 +113,16 @@ export function NurseDesktopDashboard() {
           source: 'Desktop_Hub'
         })
       });
-      setAdvancedStep('success');
-      toast({ title: 'Success', description: 'Advanced appointment booked.' });
+      // Close immediately — SSE will silently refresh the queue
+      toast({ title: '✅ Appointment Booked', description: 'Slot locked. Queue will update in real-time.' });
+      setIsBookingDrawerOpen(false);
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Booking Failed', description: error.message });
+      const isConflict = (error as any)?.status === 409;
+      toast({
+        variant: 'destructive',
+        title: isConflict ? 'Slot Already Taken' : 'Booking Failed',
+        description: isConflict ? 'Someone just grabbed this slot. Please pick another.' : error.message
+      });
     } finally {
       setIsBooking(false);
     }
@@ -403,7 +410,10 @@ export function NurseDesktopDashboard() {
                               </div>
                               <CardContent className="p-8 space-y-6">
                                  <Button 
-                                    onClick={walkIn.confirmBooking}
+                                    onClick={async () => {
+                                       const apt = await walkIn.confirmBooking(true);
+                                       if (apt) setIsBookingDrawerOpen(false);
+                                    }}
                                     disabled={walkIn.isSubmitting}
                                     className="w-full h-16 rounded-[2rem] bg-slate-900 hover:bg-black text-white font-black text-lg shadow-xl shadow-black/20 gap-3"
                                  >
@@ -413,22 +423,6 @@ export function NurseDesktopDashboard() {
                            </Card>
                         </>
                      )}
-                  </div>
-               )}
-
-               {walkIn.currentStep === 'confirm' && (
-                  <div className="flex flex-col items-center justify-center p-8 text-center space-y-6">
-                     <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center animate-bounce">
-                        <CheckCircle2 className="h-10 w-10" />
-                     </div>
-                     <h2 className="text-2xl font-black">Booking Success!</h2>
-                     <p className="text-slate-500 font-medium">Token has been successfully allotted and patient notified.</p>
-                     <Button 
-                        onClick={() => { setIsBookingDrawerOpen(false); refresh(); }}
-                        className="w-full h-14 rounded-2xl bg-black text-white"
-                     >
-                        Finish & Back to Queue
-                     </Button>
                   </div>
                )}
             </div>
@@ -459,7 +453,8 @@ export function NurseDesktopDashboard() {
                         searchedPatients={walkIn.searchedPatients}
                         selectedPatient={walkIn.selectedPatient}
                         onSelectPatient={(p) => {
-                           walkIn.selectPatient(p);
+                           // Select patient but SKIP the automatic walk-in preview transition
+                           walkIn.selectPatient(p, true); 
                            if (p) {
                               setAdvancedStep('slots');
                               fetchSlots(selectedDate);
@@ -475,7 +470,7 @@ export function NurseDesktopDashboard() {
                         <PatientRegistrationForm 
                            form={walkIn.form}
                            onSubmit={async (data) => {
-                              const p = await walkIn.onRegistrationSubmit(data);
+                              const p = await walkIn.onRegistrationSubmit(data, true);
                               if (p) {
                                  setAdvancedStep('slots');
                                  fetchSlots(selectedDate);
@@ -606,22 +601,6 @@ export function NurseDesktopDashboard() {
                             {isBooking ? <Loader2 className="h-6 w-6 animate-spin" /> : <><CheckCircle2 className="h-6 w-6" /> Confirm Advanced Booking</>}
                          </Button>
                       </div>
-                   </div>
-                )}
-
-                {advancedStep === 'success' && (
-                   <div className="flex flex-col items-center justify-center py-10 text-center space-y-6">
-                      <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center animate-bounce">
-                         <CheckCircle2 className="h-10 w-10" />
-                      </div>
-                      <h2 className="text-2xl font-black">Booking Success!</h2>
-                      <p className="text-slate-500 font-medium">Advanced appointment has been scheduled and the patient will receive a notification.</p>
-                      <Button 
-                         onClick={() => { setIsBookingDrawerOpen(false); refresh(); }}
-                         className="w-full h-14 rounded-2xl bg-black text-white font-black"
-                      >
-                         Finish & Close Drawer
-                      </Button>
                    </div>
                 )}
              </div>

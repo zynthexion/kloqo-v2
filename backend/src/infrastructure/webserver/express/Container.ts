@@ -273,13 +273,13 @@ const getNurseDashboardUseCase = new GetNurseDashboardUseCase(clinicRepo, doctor
 const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, queueBubblingService);
 const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
 const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
-const getAvailableSlotsUseCase = new GetAvailableSlotsUseCase(appointmentRepo, doctorRepo, clinicRepo);
+const getAvailableSlotsUseCase = new GetAvailableSlotsUseCase(appointmentRepo, doctorRepo, clinicRepo, counterRepo);
 const deleteAppointmentUseCase = new DeleteAppointmentUseCase(appointmentRepo);
 const sendBookingLinkUseCase = new SendBookingLinkUseCase(notificationService, clinicRepo, patientRepo, userRepo);
 const getWalkInEstimateUseCase = new GetWalkInEstimateUseCase(appointmentRepo, doctorRepo, clinicRepo, tokenGeneratorService);
 const getWalkInPreviewUseCase = new GetWalkInPreviewUseCase(appointmentRepo, doctorRepo, clinicRepo, tokenGeneratorService);
 const confirmArrivalUseCase = new ConfirmArrivalUseCase(appointmentRepo, clinicRepo, updateAppointmentStatusUseCase);
-const getPublicQueueStatusUseCase = new GetPublicQueueStatusUseCase(clinicRepo, doctorRepo, appointmentRepo);
+const getPublicQueueStatusUseCase = new GetPublicQueueStatusUseCase(clinicRepo, doctorRepo, appointmentRepo, counterRepo);
 const confirmAppointmentPaymentUseCase = new ConfirmAppointmentPaymentUseCase(appointmentRepo, sseService);
 
 // Prescriptions

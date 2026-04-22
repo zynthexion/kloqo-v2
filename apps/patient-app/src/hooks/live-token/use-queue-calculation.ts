@@ -22,7 +22,8 @@ export function useQueueCalculation({
     clinicData,
     validBreaks,
     currentTime,
-    appointmentDate
+    appointmentDate,
+    consultationCount
 }: {
     yourAppointment: Appointment | null;
     activeDoctorId: string;
@@ -33,6 +34,7 @@ export function useQueueCalculation({
     validBreaks: any[];
     currentTime: Date;
     appointmentDate: Date;
+    consultationCount?: number;
 }) {
     const [queueState, setQueueState] = useState<QueueState | null>(null);
 
@@ -50,7 +52,8 @@ export function useQueueCalculation({
                     yourAppointment.date,
                     yourAppointment.sessionIndex ?? 0,
                     (currentDoctor.consultationStatus as any),
-                    clinicData?.tokenDistribution === 'advanced' ? 'advanced' : 'classic'
+                    clinicData?.tokenDistribution === 'advanced' ? 'advanced' : 'classic',
+                    consultationCount
                 );
                 setQueueState(state);
             } catch (error) {
@@ -58,7 +61,7 @@ export function useQueueCalculation({
             }
         };
         compute();
-    }, [allRelevantAppointments, yourAppointment, activeDoctorId, activeClinicId, currentDoctor, clinicData]);
+    }, [allRelevantAppointments, yourAppointment, activeDoctorId, activeClinicId, currentDoctor, clinicData, consultationCount]);
 
     // Arrived estimates for individual patients
     const arrivedEstimates = useMemo(() => {

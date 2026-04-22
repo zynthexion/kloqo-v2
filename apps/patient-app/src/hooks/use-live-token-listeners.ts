@@ -31,6 +31,7 @@ interface UseLiveTokenListenersResult {
     clinics: Clinic[];
     loading: boolean;
     liveDelay: number;
+    consultationCount: number;
 }
 
 export function useLiveTokenListeners({
@@ -42,6 +43,7 @@ export function useLiveTokenListeners({
     const [allClinicAppointments, setAllClinicAppointments] = useState<Appointment[]>([]);
     const [futureAppointments, setFutureAppointments] = useState<Appointment[]>([]);
     const [liveDoctor, setLiveDoctor] = useState<Doctor | null>(null);
+    const [consultationCount, setConsultationCount] = useState(0);
     const [clinics, setClinics] = useState<Clinic[]>([]);
     const [loading, setLoading] = useState(true);
     const [liveDelay, setLiveDelay] = useState(0);
@@ -66,6 +68,9 @@ export function useLiveTokenListeners({
             
             if (data) {
                 setLiveDoctor(data.doctor as Doctor);
+                if (data.doctor?.consultationCount !== undefined) {
+                    setConsultationCount(data.doctor.consultationCount);
+                }
                 setLiveDelay(data.doctor?.liveDelayMinutes || 0);
                 if (appointmentDateStr === todayStr) {
                     setAllClinicAppointments(data.masterQueue as Appointment[]);
@@ -107,7 +112,12 @@ export function useLiveTokenListeners({
             if (event.type === 'queue_reoptimized') {
                 const p = event.payload as { updatedQueue: Appointment[]; doctor?: Doctor; liveDelayMinutes?: number };
                 setAllClinicAppointments(p.updatedQueue);
-                if (p.doctor) setLiveDoctor(p.doctor);
+                if (p.doctor) {
+                    setLiveDoctor(p.doctor);
+                    if ((p.doctor as any).consultationCount !== undefined) {
+                        setConsultationCount((p.doctor as any).consultationCount);
+                    }
+                }
                 if (p.liveDelayMinutes !== undefined) setLiveDelay(p.liveDelayMinutes);
                 return;
             }
@@ -169,6 +179,7 @@ export function useLiveTokenListeners({
         futureAppointments,
         allRelevantAppointments,
         liveDoctor,
+        consultationCount,
         clinics,
         loading,
         liveDelay

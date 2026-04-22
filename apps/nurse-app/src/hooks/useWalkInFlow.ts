@@ -102,7 +102,20 @@ export function useWalkInFlow() {
     return () => clearTimeout(debounceTimer);
   }, [phoneNumber, handlePatientSearch]);
 
-  const selectPatient = useCallback((patient: any) => {
+  const selectPatient = useCallback((patient: any, skipPreview = false) => {
+    if (!patient) {
+      setSelectedPatient(null);
+      form.reset({
+        patientName: '',
+        age: undefined,
+        place: '',
+        sex: 'Male' as any,
+        phone: '',
+        communicationPhone: '',
+      });
+      return;
+    }
+
     setSelectedPatient(patient);
     form.reset({
       patientName: patient.name || '',
@@ -112,21 +125,25 @@ export function useWalkInFlow() {
       phone: (patient.phone || "").replace('+91', ''),
       communicationPhone: (patient.communicationPhone || "").replace('+91', ''),
     });
-    // For existing patients, we go straight to preview once selected
-    proceedToPreview({
-      ...patient,
-      patientName: patient.name,
-      age: Number(patient.age),
-      phone: patient.phone,
-    });
+    // For existing patients, we go straight to preview once selected (unless skipped)
+    if (!skipPreview) {
+      proceedToPreview({
+        ...patient,
+        patientName: patient.name,
+        age: Number(patient.age),
+        phone: patient.phone,
+      });
+    }
   }, [form]);
 
   // 🕒 Step 2: Preview Logic
-  const proceedToPreview = async (patientInfo: any) => {
+  const proceedToPreview = async (patientInfo: any, skipStepChange = false) => {
     if (!doctorId || !clinicId) return;
     setSelectedPatient(patientInfo);
     setIsPreviewLoading(true);
-    setCurrentStep('preview');
+    if (!skipStepChange) {
+      setCurrentStep('preview');
+    }
     
     try {
       const dateStr = new Date().toLocaleDateString('en-CA'); // yyyy-mm-dd
@@ -134,16 +151,19 @@ export function useWalkInFlow() {
         `/appointments/walk-in-preview?doctorId=${doctorId}&clinicId=${clinicId}&date=${dateStr}`
       );
       setWalkInPreview(preview);
+      return preview;
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Preview Error', description: error.message });
-      setCurrentStep('identify');
+      if (!skipStepChange) {
+        setCurrentStep('identify');
+      }
     } finally {
       setIsPreviewLoading(false);
     }
   };
 
   // 📝 Registration Form Submission (if new patient)
-  const onRegistrationSubmit = async (values: FormValues) => {
+  const onRegistrationSubmit = async (values: FormValues, skipPreview = false) => {
     if (!clinicId || !doctorId) return;
     setIsSubmitting(true);
     try {
@@ -155,25 +175,35 @@ export function useWalkInFlow() {
           age: values.age,
           sex: values.sex,
           place: values.place,
-          id: selectedPatient?.id,
+          id: selectedPatient?.id || selectedPatient?._id,
           clinicId,
           phone: values.phone ? `+91${values.phone.replace(/\D/g, '')}` : '',
           communicationPhone: values.communicationPhone ? `+91${values.communicationPhone.replace(/\D/g, '')}` : ''
         })
       });
 
-      // Then proceed to preview
-      proceedToPreview({ ...values, id: patientId });
+      const patientResult = { ...values, id: patientId };
+      // Then proceed to preview (unless skipped)
+      if (!skipPreview) {
+        await proceedToPreview(patientResult);
+      } else {
+        setSelectedPatient(patientResult);
+      }
+      return patientResult;
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
+      return null;
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // ✅ Step 3: Final Confirmation
-  const confirmBooking = async () => {
-    if (!doctorId || !clinicId || !selectedPatient) return;
+  // Returns the appointment on success, or null on failure.
+  // skipConfirmStep=true lets the caller (e.g. drawer) close immediately
+  // rather than showing the in-drawer success screen.
+  const confirmBooking = async (skipConfirmStep = false) => {
+    if (!doctorId || !clinicId || !selectedPatient) return null;
     setIsSubmitting(true);
     try {
       const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -193,10 +223,14 @@ export function useWalkInFlow() {
       });
 
       setConfirmedAppointment(apt);
-      setCurrentStep('confirm');
-      toast({ title: 'Success', description: `Walk-in registered! Token: ${apt.tokenNumber}` });
+      if (!skipConfirmStep) {
+        setCurrentStep('confirm');
+      }
+      toast({ title: '✅ Walk-in Registered', description: `Token ${apt.tokenNumber} allotted successfully.` });
+      return apt;
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Booking Failed', description: error.message });
+      return null;
     } finally {
       setIsSubmitting(false);
     }

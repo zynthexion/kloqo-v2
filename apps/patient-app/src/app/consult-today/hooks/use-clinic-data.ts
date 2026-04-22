@@ -20,23 +20,21 @@ export function useClinicData(clinicId: string | null) {
             if (!clinicId) return;
 
             try {
-                const [clinicData, doctorsData] = await Promise.all([
-                    apiRequest(`/clinics/${clinicId}`),
-                    apiRequest(`/doctors?clinicId=${clinicId}`)
-                ]);
+                const todayStr = new Date().toISOString().split('T')[0]; // Simple local today str, backend will normalize
+                const context = await apiRequest<any>(`/public-booking/clinics/${clinicId}?date=${todayStr}`);
                 
-                if (clinicData) {
+                if (context?.clinic) {
                     setClinic({
-                        id: clinicData.id,
-                        name: clinicData.name || '',
-                        latitude: clinicData.latitude || 0,
-                        longitude: clinicData.longitude || 0,
-                        tokenDistribution: clinicData.tokenDistribution || 'classic'
+                        id: context.clinic.id,
+                        name: context.clinic.name || '',
+                        latitude: context.clinic.latitude || 0,
+                        longitude: context.clinic.longitude || 0,
+                        tokenDistribution: context.clinic.settings?.allowOnlineBooking ? 'advanced' : 'classic'
                     });
                 }
                 
-                if (doctorsData?.doctors) {
-                    setDoctors(doctorsData.doctors);
+                if (context?.doctors) {
+                    setDoctors(context.doctors);
                 }
             } catch (error) {
                 console.error('Error fetching data:', error);

@@ -113,13 +113,13 @@ export class PublicBookingController {
         return res.status(400).json({ error: 'doctorId, clinicId, and date are required' });
       }
 
-      const slots = await this.getAvailableSlotsUseCase.execute({
+      const sessionInfo = await this.getAvailableSlotsUseCase.execute({
         doctorId,
         clinicId: clinicId as string,
         date: date as string,
         source: 'patient'
       });
-      res.json(slots);
+      res.json(sessionInfo);
     } catch (error: any) {
       res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -176,10 +176,10 @@ export class PublicBookingController {
       // 3. For each doctor, scrub sensitive data and potentially fetch slots (if date provided)
       const scrubbedDoctors = await Promise.all(doctors.map(async (doc: Doctor) => {
         // Fetch slots if a date is provided, otherwise return null
-        let availableSlots = null;
+        let sessionInfo = null;
         if (date && typeof date === 'string') {
           try {
-            availableSlots = await this.getAvailableSlotsUseCase.execute({
+            sessionInfo = await this.getAvailableSlotsUseCase.execute({
               doctorId: doc.id,
               clinicId,
               date,
@@ -199,8 +199,10 @@ export class PublicBookingController {
           bio: doc.bio,
           consultationFee: doc.consultationFee,
           experience: doc.experience,
-          availableSlots
-          // EXPLICITLY REMOVED: phone, email, address, internal metrics, panNumber, etc.
+          availableSlots: sessionInfo?.slots || null,
+          isSessionActive: sessionInfo?.isSessionActive ?? false,
+          activeSessionIndex: sessionInfo?.activeSessionIndex ?? null,
+          distributionType: sessionInfo?.distributionType ?? (doc.tokenDistribution || 'advanced')
         };
       }));
 

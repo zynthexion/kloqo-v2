@@ -158,10 +158,10 @@ export function useBookingState() {
         setSlotsLoading(true);
         try {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            const data = await apiRequest<any[]>(
+            const data = await apiRequest<any>(
               `/public-booking/doctors/${effectiveDoctorId}/slots?clinicId=${effectiveClinicId}&date=${encodeURIComponent(dateStr)}`
             );
-            setBackendSlots(Array.isArray(data) ? data : []);
+            setBackendSlots(data?.slots || []);
         } catch (err) {
             console.error('Slot fetch error:', err);
             setBackendSlots([]);

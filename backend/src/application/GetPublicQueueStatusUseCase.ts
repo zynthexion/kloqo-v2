@@ -1,5 +1,8 @@
-import { IClinicRepository, IDoctorRepository, IAppointmentRepository } from '../domain/repositories';
-import { Appointment, QueueState, compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
+import { IClinicRepository, IDoctorRepository, IAppointmentRepository, IConsultationCounterRepository } from '../domain/repositories';
+import { Appointment, compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
+import { SlotCalculator } from '../domain/services/SlotCalculator';
+import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
+import { getClinicNow, getClinicISOString, parseClinicDate } from '../domain/services/DateUtils';
 
 export interface PublicQueueStatus {
   clinic: {
@@ -13,6 +16,7 @@ export interface PublicQueueStatus {
     name: string;
     consultationStatus: 'In' | 'Out' | string;
     currentSessionIndex?: number;
+    consultationCount?: number;
   };
   queue: {
     arrivedCount: number;
@@ -30,7 +34,8 @@ export class GetPublicQueueStatusUseCase {
   constructor(
     private clinicRepo: IClinicRepository,
     private doctorRepo: IDoctorRepository,
-    private appointmentRepo: IAppointmentRepository
+    private appointmentRepo: IAppointmentRepository,
+    private consultationCounterRepo: IConsultationCounterRepository
   ) {}
 
   async execute(clinicId: string, doctorId: string, date: string, patientId?: string): Promise<PublicQueueStatus> {
@@ -44,7 +49,34 @@ export class GetPublicQueueStatusUseCase {
       throw new Error('Clinic or Doctor not found');
     }
 
+    const now = getClinicNow();
+    const todayStrIst = getClinicISOString(now);
+    const todayBaselineIst = parseClinicDate(todayStrIst);
+    const requestedDate = parseClinicDate(date);
+
     const tokenDistribution = doctor.tokenDistribution || clinic.tokenDistribution || 'advanced';
+    
+    // ── Session & Consultation logic ───────────────────────────────────────────
+    let consultationCount = 0;
+    let activeSessionIndex: number | null = null;
+    
+    // We only fetch counters for "Today" active sessions
+    const isToday = requestedDate.setHours(0,0,0,0) === todayBaselineIst.getTime();
+    
+    if (isToday) {
+      const allSlotsForSession = SlotCalculator.generateSlots(doctor, requestedDate);
+      activeSessionIndex = BookingSessionEngine.findActiveSession(
+        doctor,
+        allSlotsForSession,
+        appointments,
+        now,
+        tokenDistribution as 'classic' | 'advanced'
+      );
+      
+      if (activeSessionIndex !== null) {
+        consultationCount = await this.consultationCounterRepo.getCount(clinicId, doctorId, date, activeSessionIndex);
+      }
+    }
 
     // ANALYTICS GUARDRAIL: Strip system-generated ghost break-blocker records
     // before any queue logic runs. These records exist to block the scheduling
@@ -98,6 +130,8 @@ export class GetPublicQueueStatusUseCase {
         id: doctor.id,
         name: doctor.name,
         consultationStatus: doctor.consultationStatus || 'Out',
+        currentSessionIndex: activeSessionIndex ?? undefined,
+        consultationCount
       },
       queue: {
         arrivedCount: arrivedQueue.length + priorityQueue.length,
