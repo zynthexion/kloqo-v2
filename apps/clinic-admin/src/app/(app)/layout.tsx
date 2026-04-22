@@ -3,7 +3,7 @@
 
 import { Sidebar } from '@/components/layout/sidebar';
 import { OnboardingCheck } from '@/components/onboarding/onboarding-check';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useAuth, AuthProvider } from '@/context/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
 import { useClinicSync } from '@/hooks/use-clinic-sync';
@@ -37,6 +37,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isVerifying, setIsVerifying] = useState(true);
+  const hasVerified = useRef(false);
 
   useEffect(() => {
     if (loading) return;
@@ -47,89 +48,62 @@ function AppContent({ children }: { children: React.ReactNode }) {
     }
 
     // RBAC Guard: Ensure user has administrative privileges for THIS app
-    // Standardizing on KLOQO_ROLES constants to prevent identity ghosting
     const { CLINIC_ADMIN, SUPER_ADMIN, NURSE, DOCTOR, PHARMACIST, RECEPTIONIST, PATIENT } = KLOQO_ROLES;
     const isAdmin = RBACUtils.hasAnyRole(currentUser, [CLINIC_ADMIN, SUPER_ADMIN] as Role[]);
     
     if (!isAdmin) {
-      console.warn("Unauthorized access to Clinic Admin app. Evaluating redirect portal...");
-      
-      // REDIRECT LOGICS: Only runs if the user FAILED the admin check above.
-      
-      // If a Nurse/Pharmacists/Receptionist hits the Admin URL, teleport them to the Nurse App
       if (RBACUtils.hasAnyRole(currentUser, [NURSE, DOCTOR, PHARMACIST, RECEPTIONIST] as Role[])) {
         const nurseUrl = process.env.NEXT_PUBLIC_NURSE_URL;
-        if (!nurseUrl) {
-          console.error('[AppGuard] NEXT_PUBLIC_NURSE_URL is not configured. Cannot redirect clinical staff.');
-          return;
-        }
-        window.location.href = `${nurseUrl}/dashboard`; 
+        if (nurseUrl) window.location.href = `${nurseUrl}/dashboard`; 
         return;
       }
 
-      // If a Patient hits the Admin URL, teleport them to the Patient App
       if (RBACUtils.hasAnyRole(currentUser, [PATIENT] as Role[])) {
         const patientUrl = process.env.NEXT_PUBLIC_PATIENT_URL;
-        if (!patientUrl) {
-          console.error('[AppGuard] NEXT_PUBLIC_PATIENT_URL is not configured. Cannot redirect patient.');
-          return;
-        }
-        window.location.href = `${patientUrl}/dashboard`;
+        if (patientUrl) window.location.href = `${patientUrl}/dashboard`;
         return;
       }
 
-      // If we don't know who they are, send to logout to clear the session and break the loop
-      console.error("Unknown role detected. Clearing session.");
       logout();
       return;
     }
 
     if (!currentUser.clinicId) {
-      console.error("No clinicId found for user. Logging out.");
       logout();
-      router.push('/');
       return;
     }
 
     const verifyStatus = async () => {
+      // Avoid re-verifying if we already did it for this mount
+      if (hasVerified.current) {
+        setIsVerifying(false);
+        return;
+      }
+
       try {
-        // If already on registration-status or onboarding, we don't need to double-check here
-        // as the components themselves handle their own state properly.
         if (pathname === '/registration-status' || pathname === '/onboarding') {
           setIsVerifying(false);
+          hasVerified.current = true;
           return;
         }
 
         const clinicData = await apiRequest<any>("/clinic/me");
         
         if (clinicData) {
-          const registrationStatus = clinicData.registrationStatus;
-          const onboardingStatus = clinicData.onboardingStatus;
-
-          // Block access if not explicitly 'Approved' — mirrors backend enforcement
-          if (registrationStatus !== 'Approved') {
+          if (clinicData.registrationStatus !== 'Approved') {
             router.push('/registration-status');
             return;
           }
-          
-          // Block access if onboarding not explicitly 'Completed' — mirrors backend enforcement
-          // This catches null, undefined, 'Pending', 'Incomplete', etc.
-          if (onboardingStatus !== 'Completed') {
+          if (clinicData.onboardingStatus !== 'Completed') {
             router.push('/onboarding');
             return;
           }
         }
         
         setIsVerifying(false);
+        hasVerified.current = true;
       } catch (error: any) {
         console.error("Failed to fetch dashboard data:", error);
-        // If the API explicitly says not approved or onboarding incomplete, redirect
-        if (error.message === 'Clinic is not approved by Superadmin' || 
-            error.message === 'Clinic onboarding is incomplete') {
-          router.push('/registration-status');
-          return;
-        }
-
         setIsVerifying(false);
       }
     };

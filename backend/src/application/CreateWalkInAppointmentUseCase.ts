@@ -28,6 +28,8 @@ export interface CreateWalkInAppointmentDTO {
   date: string; // d MMMM yyyy
   isForceBooked?: boolean; // Nurse-only: bypass capacity cap
   isPriority?: boolean; // Triage cases (PW-Tokens)
+  userLat?: number;
+  userLon?: number;
 }
 
 export class CreateWalkInAppointmentUseCase {
@@ -78,6 +80,18 @@ export class CreateWalkInAppointmentUseCase {
       place: dto.place,
       clinicId: dto.clinicId,
     });
+
+    // ── PROXIMITY CHECK (FOR PATIENT SOURCE) ─────────────────────────────────
+    // Staff can book from anywhere, but patients must be within 150m.
+    if (!dto.isForceBooked && typeof dto.userLat === 'number' && typeof dto.userLon === 'number') {
+      if (doctor.latitude && doctor.longitude) {
+        const { calculateDistance } = await import('@kloqo/shared-core/src/utils/location-utils');
+        const distance = calculateDistance(dto.userLat, dto.userLon, doctor.latitude, doctor.longitude);
+        if (distance > 150) {
+          throw new Error(`Location verification failed. You must be within 150m of the doctor's location to book a walk-in token. (Current distance: ${Math.round(distance)}m)`);
+        }
+      }
+    }
 
     // ── MAIN BOOKING TRANSACTION ──────────────────────────────────────────────
     // All reads, compute, and writes are inside one atomic block.

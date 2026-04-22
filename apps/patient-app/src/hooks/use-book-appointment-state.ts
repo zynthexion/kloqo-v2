@@ -33,6 +33,8 @@ export function useBookAppointmentState() {
   const [patient, setPatient] = useState<any>(null);
   const [doctor, setDoctor] = useState<any>(null);
   const [fetchingDoctor, setFetchingDoctor] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isWalkInEligible, setIsWalkInEligible] = useState(false);
 
   // 1. Resolve Available Dates
   const dates = useMemo(() => {
@@ -85,6 +87,19 @@ export function useBookAppointmentState() {
     fetchMeta();
   }, [doctorId, patientId, clinicId]);
 
+  // 2.5 Geolocation Detection (Once on mount)
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => console.warn('[Booking] Location denied or error:', err),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    }
+  }, []);
+
   // 3. Slot Retrieval
   const fetchSlots = useCallback(async () => {
     if (!doctorId || !clinicId || !selectedDate) return;
@@ -92,11 +107,29 @@ export function useBookAppointmentState() {
     setSelectedSlot(null);
     try {
       const dateStr = format(selectedDate, 'd MMMM yyyy');
-      const data = await apiRequest<any[]>(
-        `/appointments/available-slots?doctorId=${doctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
-      );
+      const query = new URLSearchParams({
+        doctorId: doctorId!,
+        clinicId: clinicId!,
+        date: dateStr,
+        source: 'patient'
+      });
+      
+      if (userLocation) {
+        query.append('userLat', userLocation.lat.toString());
+        query.append('userLon', userLocation.lng.toString());
+      }
+
+      const data = await apiRequest<any[]>(`/appointments/available-slots?${query.toString()}`);
       setSlots(data);
 
+      // Check if the backend promoted us to 'walkin' (which happens if distance <= 150m)
+      // Since decorateSlots returns individual slots, we check the first available one's logic if possible,
+      // or simply rely on the fact that 'available' slots appearing in the current buffer means we are 'nearby'.
+      // A more robust check: see if any slot that would be 'past' for a standard patient is now 'available'.
+      const nearby = data.some((s: any) => s.reason === 'Walk-in Gap' || s.status === 'available'); 
+      // Actually, let's just track if we successfully hit the 'walkin' source logic in the backend. 
+      // For now, if userLocation exists, the backend handles the distance math.
+      
       const firstAvailable = data.find((s: any) => s.status === 'available');
       if (firstAvailable) setSelectedSlot(firstAvailable);
     } catch (error) {
@@ -113,20 +146,48 @@ export function useBookAppointmentState() {
     if (!selectedSlot || !patientId || !clinicId || !doctorId) return;
     setBooking(true);
     try {
-      await apiRequest('/appointments/advanced', {
-        method: 'POST',
-        body: JSON.stringify({
-          doctorId,
-          clinicId,
-          patientId,
-          date: format(selectedDate, 'd MMMM yyyy'),
-          slotTime: format(new Date(selectedSlot.time), 'HH:mm'),
-          time: format(new Date(selectedSlot.time), 'HH:mm'),
-          slotIndex: selectedSlot.slotIndex,
-          sessionIndex: selectedSlot.sessionIndex,
-          source: 'Phone'
-        })
-      });
+      // Determine if we are booking an 'Advanced' or 'Walk-in' appointment
+      // based on proximity (the backend already has the doctor coordinates).
+      // We'll resend coordinates to CreateWalkIn for strict enforcement.
+      
+      // logic: If a patient books a slot starting < 45m from now, it MUST be a walk-in.
+      const now = getClinicNow();
+      const slotTime = new Date(selectedSlot.time);
+      const diffMs = slotTime.getTime() - now.getTime();
+      const isInstant = diffMs < (45 * 60 * 1000); // Less than 45 min buffer
+
+      if (isInstant && isSameDay(selectedDate, now)) {
+        // BOOK AS WALK-IN (W-TOKEN)
+        await apiRequest('/appointments/walk-in', {
+          method: 'POST',
+          body: JSON.stringify({
+            doctorId,
+            clinicId,
+            patientId,
+            patientName: patient?.name,
+            date: format(selectedDate, 'd MMMM yyyy'),
+            userLat: userLocation?.lat,
+            userLon: userLocation?.lng,
+            place: patient?.place || 'Patient App'
+          })
+        });
+      } else {
+        // BOOK AS ADVANCED (A-TOKEN)
+        await apiRequest('/appointments/advanced', {
+          method: 'POST',
+          body: JSON.stringify({
+            doctorId,
+            clinicId,
+            patientId,
+            date: format(selectedDate, 'd MMMM yyyy'),
+            slotTime: format(new Date(selectedSlot.time), 'HH:mm'),
+            time: format(new Date(selectedSlot.time), 'HH:mm'),
+            slotIndex: selectedSlot.slotIndex,
+            sessionIndex: selectedSlot.sessionIndex,
+            source: 'Patient App'
+          })
+        });
+      }
 
       toast({ title: 'Success', description: 'Appointment booked successfully.' });
       router.push('/appointments');

@@ -22,12 +22,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Edit, Trash2, Upload, Activity, PlusCircle as PlusCircleIcon, Shield, UserCog, FlaskConical, Smartphone, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Edit, Trash2, Upload, Activity, PlusCircle as PlusCircleIcon, Shield, UserCog, FlaskConical, Smartphone, ShieldCheck, CheckCircle2, MapPin, Loader2 } from "lucide-react";
 import Image from "next/image";
 import type { Department } from '@kloqo/shared';
 import { cn } from "@/lib/utils";
 import { capitalizeWords, toUpperCase } from "@kloqo/shared-core";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface PersonalInfoTabProps {
   form: UseFormReturn<any>;
@@ -60,6 +62,38 @@ export function PersonalInfoTab({
   maleAvatar,
   femaleAvatar,
 }: PersonalInfoTabProps) {
+  const [isDetecting, setIsDetecting] = useState(false);
+  const { toast } = useToast();
+
+  const handleDetectLocation = () => {
+    setIsDetecting(true);
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "Error", description: "Geolocation is not supported by your browser." });
+      setIsDetecting(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        form.setValue("latitude", position.coords.latitude, { shouldDirty: true, shouldValidate: true });
+        form.setValue("longitude", position.coords.longitude, { shouldDirty: true, shouldValidate: true });
+        toast({ title: "Location Captured", description: "Latitude and Longitude updated." });
+        setIsDetecting(false);
+      },
+      (error) => {
+        let msg = "Could not detect location.";
+        if (error.code === 1) msg = "Location permission denied by browser or OS.";
+        else if (error.code === 2) msg = "Location information is unavailable.";
+        else if (error.code === 3) msg = "Location request timed out. Try again.";
+        
+        console.error(`[Geolocation Error] Code ${error.code}: ${error.message}`);
+        toast({ variant: "destructive", title: "Detection Failed", description: msg });
+        setIsDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
       <div className="space-y-4">
@@ -192,7 +226,7 @@ export function PersonalInfoTab({
                   <SelectTrigger><SelectValue placeholder="Select a department" /></SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {departments.map(dept => (
+                  {departments.map((dept: Department) => (
                     <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
                   ))}
                   <Separator />
@@ -208,6 +242,58 @@ export function PersonalInfoTab({
             </FormItem>
           )}
         />
+
+        <div className="pt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-theme-blue" />
+              <Label className="text-xs font-black uppercase tracking-widest text-slate-500">Doctor Location</Label>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-[10px] font-black uppercase px-2 hover:bg-theme-blue/5 hover:text-theme-blue border-slate-200 transition-all"
+              onClick={handleDetectLocation}
+              disabled={isDetecting}
+            >
+              {isDetecting ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <MapPin className="mr-1 h-3 w-3" />}
+              Set to My Location
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="latitude"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Latitude</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="any" placeholder="0.0000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="longitude"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest px-1">Longitude</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="any" placeholder="0.0000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <p className="text-[9px] text-muted-foreground px-1 italic">
+            Required for Patient App walk-in verification (150m radius).
+          </p>
+        </div>
       </div>
 
       <div className="space-y-4">

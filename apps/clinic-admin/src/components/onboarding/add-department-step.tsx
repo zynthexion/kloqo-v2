@@ -61,6 +61,12 @@ export function AddDepartmentStep({ onDepartmentsAdded, onAddDoctorClick }: { on
     }
 
     const fetchInitialData = async () => {
+      // Avoid redundant fetches if already loaded
+      if (masterDepartments.length > 0 && clinicDetails) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const response = await apiRequest<any>('/clinic/departments/master');
@@ -208,8 +214,6 @@ export function AddDepartmentStep({ onDepartmentsAdded, onAddDoctorClick }: { on
         setIsOpen={setIsDialogOpen}
         departments={availableMasterDepartments}
         onDepartmentsSelect={handleSelectDepartments}
-        limit={clinicDetails?.numDoctors}
-        currentCount={clinicDepartments.length}
       />
     </div>
   );

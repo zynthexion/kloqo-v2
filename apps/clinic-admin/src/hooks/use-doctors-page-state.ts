@@ -86,26 +86,21 @@ export function useDoctorsPageState() {
       setAppointments(appointmentsList);
 
       if (doctorsList.length > 0) {
-        if (!selectedDoctor) {
-          if (doctorIdFromUrl) {
-            setSelectedDoctor(doctorsList.find(d => d.id === doctorIdFromUrl) || doctorsList[0]);
-          } else {
-            setSelectedDoctor(doctorsList[0]);
+        // Use functional updates to reach the current selectedDoctor state without being a dependency
+        setSelectedDoctor(prev => {
+          if (!prev) {
+            // Initial load of the doctor or follow URL param
+            const doctorId = new URLSearchParams(window.location.search).get('doctorId');
+            return doctorsList.find(d => d.id === doctorId) || doctorsList[0];
           }
-        } else {
-          // 🏥 STATE SYNC FIX: Re-sync selectedDoctor with fresh data from server
-          // This ensures that updates to dateOverrides, accessibleMenus, etc. 
-          // are immediately reflected in the current view.
-          const freshSelected = doctorsList.find(d => d.id === selectedDoctor.id);
-          if (freshSelected) {
-            setSelectedDoctor(freshSelected);
-          }
-        }
+          // Re-sync with fresh data from server
+          return doctorsList.find(d => d.id === prev.id) || prev;
+        });
       }
     } catch (e) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to load clinic data.' });
     }
-  }, [toast, selectedDoctor, doctorIdFromUrl]);
+  }, [toast]); // Removed selectedDoctor and doctorIdFromUrl from dependencies
 
   useEffect(() => {
     if (auth.currentUser) fetchAllData();

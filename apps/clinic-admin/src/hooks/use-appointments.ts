@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api-client';
 import type { Appointment, Doctor } from '@kloqo/shared';
@@ -16,8 +16,18 @@ export function useAppointments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Throttling Logic: Prevent re-fetch storms when multiple SSE events fire at once
+  const lastFetchRef = useRef<number>(0);
+  const FETCH_COOLDOWN = 2000; // 2 seconds
+
   const fetchData = useCallback(async (silent = false) => {
     if (!currentUser?.clinicId) return;
+
+    if (silent) {
+      const now = Date.now();
+      if (now - lastFetchRef.current < FETCH_COOLDOWN) return;
+      lastFetchRef.current = now;
+    }
 
     if (!silent) setLoading(true);
     try {

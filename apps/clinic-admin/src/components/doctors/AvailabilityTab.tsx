@@ -203,7 +203,7 @@ export function AvailabilityTab({ doctor, onUpdate, isPending, refreshData }: Av
                 {isEditingSettings ? (
                   <Select 
                     value={settingsForm.tokenDistribution} 
-                    onValueChange={v => setSettingsForm({ ...settingsForm, tokenDistribution: v })}
+                    onValueChange={v => setSettingsForm({ ...settingsForm, tokenDistribution: v as 'advanced' | 'classic' })}
                   >
                     <SelectTrigger className="rounded-xl border-2 border-emerald-100 bg-white font-black text-xs text-slate-800 h-12">
                       <SelectValue placeholder="Strategy" />

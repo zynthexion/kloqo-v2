@@ -68,6 +68,8 @@ const formSchema = z.object({
   tokenDistribution: z.enum(['classic', 'advanced']).default('advanced'),
   accessibleMenus: z.array(z.string()).optional(),
   roles: z.array(z.string()).default(['doctor']),
+  latitude: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
 });
 
 type AddDoctorFormValues = z.infer<typeof formSchema>;
@@ -92,7 +94,7 @@ export function AddDoctorForm({ onSave, isOpen, setIsOpen, doctor, departments, 
 
   const form = useForm<AddDoctorFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", specialty: "", department: "", registrationNumber: "", bio: "", experience: 0, consultationFee: undefined, averageConsultingTime: 5, availabilitySlots: [], freeFollowUpDays: 7, advanceBookingDays: 7, walkInReserveRatio: 0.15, gracePeriodMinutes: 15, tokenDistribution: 'advanced', accessibleMenus: AVAILABLE_MENUS.map(m => m.id), roles: ['doctor'] },
+    defaultValues: { name: "", specialty: "", department: "", registrationNumber: "", bio: "", experience: 0, consultationFee: undefined, averageConsultingTime: 5, availabilitySlots: [], freeFollowUpDays: 7, advanceBookingDays: 7, walkInReserveRatio: 0.15, gracePeriodMinutes: 15, tokenDistribution: 'advanced', accessibleMenus: AVAILABLE_MENUS.map(m => m.id), roles: ['doctor'], latitude: undefined, longitude: undefined },
     mode: 'onBlur',
   });
 

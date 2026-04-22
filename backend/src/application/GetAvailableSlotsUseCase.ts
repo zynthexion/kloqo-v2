@@ -23,6 +23,8 @@ export interface GetAvailableSlotsRequest {
    * Defaults to 'staff' if not provided so existing staff routes are unaffected.
    */
   source?: SlotSource;
+  userLat?: number;
+  userLon?: number;
 }
 
 // Re-export so controller/routes importing from here still work
@@ -52,7 +54,7 @@ export class GetAvailableSlotsUseCase {
   ) {}
 
   async execute(request: GetAvailableSlotsRequest): Promise<DecoratedSlot[]> {
-    const { clinicId, doctorId, date: dateStr, source = 'staff' } = request;
+    let { clinicId, doctorId, date: dateStr, source = 'staff', userLat, userLon } = request;
 
     // ── 1. Fetch doctor and enforce tenant isolation (Rule 15) ──────────────
     const doctor = await this.doctorRepo.findById(doctorId);
@@ -139,6 +141,20 @@ export class GetAvailableSlotsUseCase {
         }
       }
     });
+
+    // ── 5.5 Location Check: Promote patient to walkin if nearby (150m) ───────
+    if (source === 'patient' && typeof userLat === 'number' && typeof userLon === 'number' && doctor.latitude && doctor.longitude) {
+      try {
+        const { calculateDistance } = await import('@kloqo/shared-core/src/utils/location-utils');
+        const distance = calculateDistance(userLat, userLon, doctor.latitude, doctor.longitude);
+        if (distance <= 150) {
+          console.log(`[Proximity] Patient is within ${Math.round(distance)}m. Unlocking walk-in slots.`);
+          source = 'walkin';
+        }
+      } catch (e) {
+        console.error('[Proximity] Failed to calculate distance:', e);
+      }
+    }
 
     // ── 6. Generate raw slots via SlotCalculator ──────────────────────────────
     const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);

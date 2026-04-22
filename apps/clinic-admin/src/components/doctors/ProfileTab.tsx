@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, BriefcaseMedical, Trophy, Star, Edit, Save, X, Upload, Loader2, Shield, Activity, FlaskConical, UserCog, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { User, BriefcaseMedical, Trophy, Star, Edit, Save, X, Upload, Loader2, Shield, Activity, FlaskConical, UserCog, ShieldCheck, CheckCircle2, MapPin } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { Doctor, Department, Role } from '@kloqo/shared';
@@ -32,8 +33,12 @@ export function ProfileTab({ doctor, departments, onUpdate, isPending }: Profile
     experience: doctor.experience || 0,
     registrationNumber: doctor.registrationNumber || '',
     bio: doctor.bio || '',
-    roles: doctor.roles && doctor.roles.length > 0 ? doctor.roles : (doctor.role ? [doctor.role] : ['doctor'])
+    roles: doctor.roles && doctor.roles.length > 0 ? doctor.roles : (doctor.role ? [doctor.role] : ['doctor']),
+    latitude: doctor.latitude,
+    longitude: doctor.longitude
   });
+  const [isDetecting, setIsDetecting] = useState(false);
+  const { toast } = useToast();
   const [newPhoto, setNewPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(doctor.avatar || null);
 
@@ -45,6 +50,38 @@ export function ProfileTab({ doctor, departments, onUpdate, isPending }: Profile
       reader.onloadend = () => setPhotoPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleDetectLocation = () => {
+    setIsDetecting(true);
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "Error", description: "Geolocation is not supported by your browser." });
+      setIsDetecting(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setForm(prev => ({ 
+          ...prev, 
+          latitude: position.coords.latitude, 
+          longitude: position.coords.longitude 
+        }));
+        toast({ title: "Location Captured", description: "Coordinates updated locally. Save to persist." });
+        setIsDetecting(false);
+      },
+      (error) => {
+        let msg = "Could not detect location.";
+        if (error.code === 1) msg = "Location permission denied by browser or OS.";
+        else if (error.code === 2) msg = "Location information is unavailable.";
+        else if (error.code === 3) msg = "Location request timed out. Try again.";
+        
+        console.error(`[Geolocation Error] Code ${error.code}: ${error.message}`);
+        toast({ variant: "destructive", title: "Detection Failed", description: msg });
+        setIsDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleSave = async () => {
@@ -72,7 +109,9 @@ export function ProfileTab({ doctor, departments, onUpdate, isPending }: Profile
       department: form.department,
       experience: Number(form.experience),
       registrationNumber: form.registrationNumber,
-      avatar: photoUrl
+      avatar: photoUrl,
+      latitude: form.latitude ? Number(form.latitude) : undefined,
+      longitude: form.longitude ? Number(form.longitude) : undefined
     });
     
     setIsEditing(false);
@@ -171,7 +210,54 @@ export function ProfileTab({ doctor, departments, onUpdate, isPending }: Profile
                    <p className="font-black text-lg text-slate-800">{doctor.registrationNumber || '--'}</p>
                  )}
                </div>
-            </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Geofence Coordinates</Label>
+                    {isEditing && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 text-[9px] font-black uppercase px-2 py-0 hover:text-theme-blue"
+                        onClick={handleDetectLocation}
+                        disabled={isDetecting}
+                      >
+                        {isDetecting ? <Loader2 className="h-3 w-3 animate-spin" /> : <MapPin className="h-3 w-3 mr-1" />}
+                        Auto Detect
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Lat</p>
+                      {isEditing ? (
+                        <Input 
+                          type="number" step="any" 
+                          value={form.latitude || ''} 
+                          onChange={e => setForm({...form, latitude: Number(e.target.value)})} 
+                          className="h-9 rounded-lg border-slate-100 font-bold text-xs" 
+                        />
+                      ) : (
+                        <p className="text-xs font-black text-slate-800 tracking-tight">{doctor.latitude || '--'}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Lon</p>
+                      {isEditing ? (
+                        <Input 
+                          type="number" step="any" 
+                          value={form.longitude || ''} 
+                          onChange={e => setForm({...form, longitude: Number(e.target.value)})} 
+                          className="h-9 rounded-lg border-slate-100 font-bold text-xs" 
+                        />
+                      ) : (
+                        <p className="text-xs font-black text-slate-800 tracking-tight">{doctor.longitude || '--'}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+             </div>
           </div>
         </CardContent>
       </Card>

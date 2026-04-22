@@ -15,7 +15,7 @@ const ONGOING_STATUSES = new Set(['Pending', 'Confirmed', 'Skipped']);
  *   staff    → 15 minutes (nurses / admins book for patients already present)
  *   internal → 0 minutes  (system operations, no user-facing buffer)
  */
-export type SlotSource = 'patient' | 'staff' | 'internal';
+export type SlotSource = 'patient' | 'staff' | 'internal' | 'walkin';
 
 /** How a slot should appear to the requester. */
 export type SlotStatus = 'available' | 'booked' | 'reserved' | 'past' | 'blocked' | 'break';
@@ -58,7 +58,8 @@ export class BookingSessionEngine {
   static getBookingBuffer(source: SlotSource): number {
     switch (source) {
       case 'patient':  return 45;
-      case 'staff':    return 30;
+      case 'staff':    return 0; // Reduced to 0 for instant nurse booking
+      case 'walkin':   return 0; // 0 buffer for nearby patients
       case 'internal': return 0;
     }
   }

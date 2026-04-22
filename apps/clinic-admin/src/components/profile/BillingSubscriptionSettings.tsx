@@ -44,7 +44,7 @@ function MetricRow({ icon: Icon, label, value, sub }: { icon: any; label: string
   );
 }
 
-export function BillingSubscriptionSettings({ clinicDetails, currentDoctorCount }: BillingSubscriptionSettingsProps) {
+export function BillingSubscriptionSettings({ clinicDetails, currentDoctorCount, onUpgrade }: BillingSubscriptionSettingsProps) {
   if (!clinicDetails) {
     return (
       <Card>

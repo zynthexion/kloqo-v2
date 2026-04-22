@@ -36,8 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) return null;
     
     // Priority check for this specific app
-    if (RBACUtils.hasAnyRole(currentUser, ['superAdmin', 'super-admin', 'superadmin'])) return 'superAdmin';
-    if (RBACUtils.hasAnyRole(currentUser, ['clinicAdmin', 'admin'])) return 'clinicAdmin';
+    if (RBACUtils.hasAnyRole(currentUser, ['superAdmin'])) return 'superAdmin';
+    if (RBACUtils.hasAnyRole(currentUser, ['clinicAdmin'])) return 'clinicAdmin';
     
     // Fallback to whatever they have (though layout.tsx should block them)
     return (currentUser.roles?.[0] as Role) || (currentUser.role as Role) || null;
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchUser();
   }, [fetchUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const { user, token } = await apiRequest<{ user: User; token: string }>('/auth/login', {
         method: 'POST',
@@ -91,15 +91,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       throw new Error(error.message || 'Login failed');
     }
-  };
+  }, [router]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('kloqo_token');
     setCurrentUser(null);
     router.push('/login');
-  };
+  }, [router]);
 
-  const updateProfile = async (data: Partial<User>) => {
+  const updateProfile = useCallback(async (data: Partial<User>) => {
     try {
       await apiRequest('/auth/profile', {
         method: 'PATCH',
@@ -109,9 +109,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       throw new Error(error.message || 'Failed to update profile');
     }
-  };
+  }, []);
 
-  const changePassword = async (currentPassword: string, newPassword: string) => {
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     try {
       await apiRequest('/auth/change-password', {
         method: 'POST',
@@ -120,10 +120,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       throw new Error(error.message || 'Failed to change password');
     }
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    currentUser,
+    activeRole,
+    loading,
+    login,
+    logout,
+    updateProfile,
+    changePassword
+  }), [currentUser, activeRole, loading, login, logout, updateProfile, changePassword]);
 
   return (
-    <AuthContext.Provider value={{ currentUser, activeRole, loading, login, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

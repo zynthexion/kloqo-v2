@@ -47,7 +47,7 @@ PrintableContent.displayName = 'PrintableContent';
 
 function DashboardPageContent() {
   const { currentUser } = useAuth();
-  const isAdmin = RBACUtils.hasAnyRole(currentUser, ['admin', 'clinicAdmin', 'superAdmin', 'super-admin']);
+  const isAdmin = RBACUtils.hasAnyRole(currentUser, ['clinicAdmin', 'superAdmin']);
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subDays(new Date(), 6),
