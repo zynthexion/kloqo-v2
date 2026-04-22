@@ -152,7 +152,9 @@ export class GetAvailableSlotsUseCase {
       breakSlotIndices,
       now,
       source,
-      reserveRatio
+      reserveRatio,
+      (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced',
+      doctor.walkInTokenAllotment || 5
     );
 
     // ── 8. Staff Parity: Enforce "Next Available Only" per Session ────────────

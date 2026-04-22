@@ -236,29 +236,64 @@ export class BookingSessionEngine {
     breakSlotIndices: Set<number>,       // slot indices blocked by breaks
     now: Date,
     source: SlotSource,
-    reserveRatio: number = 0.15
+    reserveRatio: number = 0.15,
+    tokenDistribution: 'classic' | 'advanced' = 'advanced',
+    walkInTokenAllotment: number = 5
   ): DecoratedSlot[] {
     const isToday    = getClinicISOString(now) === (allSlots[0] ? getClinicISOString(allSlots[0].time) : '');
     const bufferMins = this.getBookingBuffer(source);
     const cutoff    = addMinutes(now, bufferMins);
     const reserved  = this.calculateReservedSlots(allSlots, now, reserveRatio);
 
+    const isClassic = tokenDistribution === 'classic';
+
     // Pre-pass: find the first truly available slot per session
     const firstAvailablePerSession = new Map<number, number>(); // sessionIndex → slotIndex
+    
+    // Classic Mode: Interval Trackers
+    const sessionTokenCounters = new Map<number, number>(); // sessionIndex -> current token count
+
     for (const slot of allSlots) {
       if (firstAvailablePerSession.has(slot.sessionIndex)) continue;
+
       const isPast     = isToday && isAfter(cutoff, slot.time);
       const isBooked   = bookedMap.has(slot.index);
       const isBreak    = breakSlotIndices.has(slot.index);
       const isReserved = reserved.has(slot.index);
-      if (!isPast && !isBooked && !isBreak && !isReserved) {
+
+      // Classic Interleaving Check
+      let isClassicGap = false;
+      if (isClassic) {
+        const currentCount = sessionTokenCounters.get(slot.sessionIndex) || 1;
+        if (currentCount > walkInTokenAllotment) {
+          isClassicGap = true;
+          sessionTokenCounters.set(slot.sessionIndex, 1); // Reset counter after gap
+        } else {
+          sessionTokenCounters.set(slot.sessionIndex, currentCount + 1);
+        }
+      }
+
+      if (!isPast && !isBooked && !isBreak && !isReserved && !isClassicGap) {
         firstAvailablePerSession.set(slot.sessionIndex, slot.index);
       }
     }
 
+    // Reset counters for the actual mapping phase
+    const sessionTokenCountersMap = new Map<number, number>();
+
     return allSlots.map(slot => {
       const timeStr = slot.time.toISOString();
       const base    = { time: timeStr, slotIndex: slot.index, sessionIndex: slot.sessionIndex };
+
+      // 1. Classic Interleaving Gap (Highest Priority for blocking)
+      if (isClassic) {
+        const currentCount = sessionTokenCountersMap.get(slot.sessionIndex) || 1;
+        if (currentCount > walkInTokenAllotment) {
+          sessionTokenCountersMap.set(slot.sessionIndex, 1);
+          return { ...base, isAvailable: false, status: 'blocked' as SlotStatus, reason: 'Walk-in Gap' };
+        }
+        sessionTokenCountersMap.set(slot.sessionIndex, currentCount + 1);
+      }
 
       // A. Past / buffer
       if (isToday && isAfter(cutoff, slot.time)) {
