@@ -35,6 +35,7 @@ import { PatientRegistrationForm } from '../phone-booking/PatientRegistrationFor
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';
 import { getClinicNow, getClinicISOString, parseClinicDate } from '@kloqo/shared-core';
+import { AddRelativeDialog } from '../patients/AddRelativeDialog';
 
 export function NurseDesktopDashboard() {
   const { data, loading, selectedDoctorId, updateAppointmentStatus } = useNurseDashboardContext();
@@ -338,10 +339,22 @@ export function NurseDesktopDashboard() {
                         selectedPatient={walkIn.selectedPatient}
                         onSelectPatient={walkIn.selectPatient}
                         primaryPatient={walkIn.primaryPatient}
-                        setIsAddRelativeDialogOpen={() => {}}
+                        setIsAddRelativeDialogOpen={walkIn.setIsAddRelativeDialogOpen}
                         linkPendingPatients={[]}
                         showForm={walkIn.showRegistrationForm}
                      />
+
+                     {walkIn.selectedPatient && !walkIn.showRegistrationForm && (
+                        <div className="pt-4 animate-in fade-in slide-in-from-bottom-4">
+                           <Button 
+                              onClick={() => walkIn.setCurrentStep('preview')}
+                              className="w-full h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 flex items-center justify-center gap-2 group"
+                           >
+                              Proceed to Token Preview
+                              <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                           </Button>
+                        </div>
+                     )}
 
                      {walkIn.showRegistrationForm && (
                         <PatientRegistrationForm 
@@ -606,6 +619,17 @@ export function NurseDesktopDashboard() {
              </div>
           )}
       </BookingDrawer>
+
+      <AddRelativeDialog 
+        isOpen={walkIn.isAddRelativeDialogOpen}
+        setIsOpen={walkIn.setIsAddRelativeDialogOpen}
+        primaryPatientPhone={walkIn.phoneNumber}
+        clinicId={data?.clinic?.id || null}
+        onRelativeAdded={(newRelative) => {
+          walkIn.handlePatientSearch(walkIn.phoneNumber); // Refresh list
+          walkIn.selectPatient(newRelative); // Automatically select and proceed
+        }}
+      />
     </div>
   );
 }
