@@ -2,7 +2,9 @@
 
 import { useRouter } from 'next/navigation';
 import { useLiveToken } from '@/contexts/LiveTokenContext';
-import { getReportByTimeLabel } from '@/lib/utils';
+import { getReportByTimeLabel, cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import { Users } from 'lucide-react';
 
 export const PatientSwitcher = () => {
     const {
@@ -11,58 +13,67 @@ export const PatientSwitcher = () => {
         language,
         clinics,
         doctors,
-        t
     } = useLiveToken();
     const router = useRouter();
 
     if (uniquePatientAppointments.length <= 1) return null;
 
-    const patientMenuLabel = language === 'ml' ? 'രോഗിയെ തിരഞ്ഞെടുക്കുക' : 'Choose patient';
-
     return (
-        <div className="w-full max-w-sm">
-            <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold">{patientMenuLabel}</p>
-                <p className="text-xs text-muted-foreground">
-                    {uniquePatientAppointments.length} {language === 'ml' ? 'രോഗികൾ' : 'patients'}
+        <div className="w-full mb-6">
+            <div className="flex items-center gap-2 mb-3 px-6">
+                <Users className="w-3 h-3 text-slate-500" />
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    {language === 'ml' ? 'പ്രൊഫൈൽ മാറ്റുക' : 'Switch Profile'}
                 </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-                {uniquePatientAppointments.map(appt => {
+
+            <div className="flex overflow-x-auto gap-3 px-6 pb-2 no-scrollbar">
+                {uniquePatientAppointments.map((appt, index) => {
                     const isSelected = yourAppointment?.id === appt.id;
-                    const ageText = appt.age ? `${appt.age}` : '';
-                    const placeText = appt.place ? appt.place : '';
+                    const apptClinic = clinics.find(c => c.id === appt.clinicId);
+                    const isClassic = apptClinic?.tokenDistribution === 'classic';
                     
                     return (
-                        <button
+                        <motion.button
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ delay: index * 0.05 }}
                             key={appt.id}
                             onClick={() => router.push(`/live-token/${appt.id}`)}
-                            className={`flex-1 min-w-[120px] rounded-xl border px-3 py-2 text-left transition-colors ${isSelected
-                                ? 'border-green-400 bg-green-50'
-                                : 'border-border bg-background hover:border-primary/70'
-                                }`}
-                        >
-                            <p className="text-sm font-semibold truncate">{appt.patientName}</p>
-                            <p className="text-xs text-muted-foreground">
-                                {(() => {
-                                    const apptClinic = clinics.find(c => c.id === appt.clinicId);
-                                    const isClassic = apptClinic?.tokenDistribution === 'classic';
-
-                                    if (isClassic) {
-                                        return appt.classicTokenNumber ? `#${appt.classicTokenNumber.toString().padStart(3, '0')}` : "--";
-                                    }
-                                    return appt.tokenNumber;
-                                })()} • {(() => {
-                                    const apptDoctor = doctors.find(d => d.name === appt.doctor);
-                                    return getReportByTimeLabel(appt, apptDoctor);
-                                })()}
-                            </p>
-                            {(ageText || placeText) && (
-                                <p className="text-xs text-muted-foreground truncate">
-                                    {ageText && `${ageText} ${language === 'ml' ? 'വയസ്സ്' : 'yrs'}`} {placeText && `• ${placeText}`}
-                                </p>
+                            className={cn(
+                                "relative shrink-0 flex flex-col justify-center min-w-[140px] max-w-[160px] rounded-2xl p-3 border transition-all duration-300",
+                                isSelected
+                                    ? "bg-primary border-primary/50 shadow-[0_10px_20px_rgba(var(--primary),0.2)]"
+                                    : "bg-white/5 border-white/5 hover:bg-white/10"
                             )}
-                        </button>
+                        >
+                            <h3 className={cn(
+                                "text-xs font-bold truncate mb-1",
+                                isSelected ? "text-white" : "text-slate-300"
+                            )}>
+                                {appt.patientName}
+                            </h3>
+                            
+                            <div className="flex items-center gap-1.5">
+                                <span className={cn(
+                                    "px-1.5 py-0.5 rounded-md text-[9px] font-black",
+                                    isSelected ? "bg-white/20 text-white" : "bg-white/5 text-slate-500"
+                                )}>
+                                    {isClassic 
+                                        ? `#${appt.classicTokenNumber?.toString().padStart(3, '0') || '---'}` 
+                                        : appt.tokenNumber || '---'}
+                                </span>
+                                {isSelected && (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
+                                )}
+                            </div>
+
+                            {isSelected && (
+                                <div className="absolute -top-1 -right-1">
+                                    <div className="bg-emerald-500 w-2.5 h-2.5 rounded-full border-2 border-primary shadow-sm"></div>
+                                </div>
+                            )}
+                        </motion.button>
                     );
                 })}
             </div>

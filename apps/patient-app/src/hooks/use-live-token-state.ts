@@ -106,7 +106,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         clinicData,
         doctorAppointmentsToday: [], // Will be handled inside useQueueCalculation effectively
         masterQueue: [], // Placeholder, will be updated by dependencies if needed
-        arrivedEstimates: [] // Placeholder
+        arrivedEstimates: [], // Placeholder
+        liveDelay
     });
 
     // Compute Queue state
@@ -135,7 +136,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         clinicData,
         doctorAppointmentsToday: queue.doctorAppointmentsToday,
         masterQueue: queue.masterQueue,
-        arrivedEstimates: queue.arrivedEstimates
+        arrivedEstimates: queue.arrivedEstimates,
+        liveDelay
     });
 
     // Encapsulated actions
@@ -225,7 +227,17 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         uniquePatientAppointments,
         t,
         language,
-        departments
+        departments,
+
+        // 4-Quadrant Logic
+        quadrant: !isDoctorIn 
+            ? (isConfirmedAppointment ? 'OUT_CLINIC' : 'OUT_HOME')
+            : (isConfirmedAppointment ? 'IN_CLINIC' : 'IN_HOME'),
+        doctorStatusInfo: {
+            isBreak: currentDoctor?.consultationStatus === 'Break',
+            isLate: liveDelay > 15,
+            awayReason: (currentDoctor as any)?.awayReason || '',
+        }
     };
 }
 

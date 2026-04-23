@@ -1,112 +1,130 @@
-import { Loader2, Users, Star, Clock } from 'lucide-react';
+import { Users, Star, Clock } from 'lucide-react';
 import { useLiveToken } from '@/contexts/LiveTokenContext';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 export const QueueVisualization = () => {
     const {
-        shouldShowQueueVisualization,
+        quadrant,
         isYourTurn,
         patientsAhead,
-        simulatedQueue,
         currentTokenAppointment,
         yourAppointment,
         estimatedWaitTime,
-        t
+        reportingCountdownLabel,
+        doctorStatusInfo,
+        t,
+        language,
+        liveDelay
     } = useLiveToken() as any;
 
-    if (!shouldShowQueueVisualization) return null;
-
-    // Next 3 people in the queue (excluding current)
-    const upNext = simulatedQueue
-        .filter((a: any) => a.id !== currentTokenAppointment?.id && a.id !== yourAppointment?.id)
-        .slice(0, 3);
+    const isHome = quadrant === 'OUT_HOME' || quadrant === 'IN_HOME';
+    const isOut = quadrant === 'OUT_HOME' || quadrant === 'OUT_CLINIC';
 
     return (
-        <div className="w-full space-y-6">
-            {/* 🌌 ZONE 1: THE "NOW CONSULTING" BANNER (Wait-room Mirror) */}
+        <div className="w-full h-full flex flex-col items-center justify-center py-4">
+            {/* 🛸 NOW CONSULTING PILL (Only in Flow Mode) */}
             <AnimatePresence mode="wait">
-                <motion.div
-                    key={currentTokenAppointment?.id || 'none'}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
-                    className="relative overflow-hidden rounded-2xl bg-primary/5 p-6 border-2 border-primary/20 animate-pulse-subtle"
-                >
-                    <div className="flex flex-col items-center text-center space-y-2">
-                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                            {t.liveToken.nowInside}
-                        </Badge>
-                        <h2 className="text-6xl font-black tracking-tighter text-primary">
+                {!isOut && currentTokenAppointment && (
+                    <motion.div
+                        key={currentTokenAppointment?.id}
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        className="mb-4 bg-white/10 backdrop-blur-2xl border border-white/20 rounded-full px-6 py-2 flex items-center gap-3 shadow-2xl shadow-primary/20"
+                    >
+                        <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                {t.liveToken.nowInside}
+                            </span>
+                        </div>
+                        <span className="text-xl font-black text-primary tracking-tighter">
                             {currentTokenAppointment?.tokenNumber || '---'}
-                        </h2>
-                        <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest">
-                            {t.liveToken.consultationInProgress}
-                        </p>
-                    </div>
-                </motion.div>
+                        </span>
+                    </motion.div>
+                )}
             </AnimatePresence>
 
-            {/* 👤 ZONE 2: PERSONAL STATUS (The Promise) */}
-            <Card className="border-none shadow-xl bg-card">
-                <CardContent className="p-8">
-                    <div className="flex flex-col items-center space-y-6">
-                        <div className="text-center">
-                            <p className="text-sm text-muted-foreground mb-1">{t.liveToken.yourToken}</p>
-                            <div className="flex items-center justify-center gap-3">
-                                <span className="text-7xl font-black text-foreground">
-                                    {yourAppointment?.tokenNumber || '---'}
+            {/* 🌋 CENTRAL HERO METRIC */}
+            <div className="relative flex items-center justify-center w-full">
+                {/* Background Glows */}
+                <div className={cn(
+                    "absolute inset-0 blur-[120px] rounded-full scale-150 transition-colors duration-1000",
+                    isOut ? "bg-amber-500/10" : "bg-primary/5"
+                )} />
+                
+                <motion.div 
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className={cn(
+                        "relative z-10 h-60 w-60 rounded-full border backdrop-blur-3xl flex flex-col items-center justify-center shadow-2xl overflow-hidden transition-all duration-700",
+                        isOut ? "border-amber-500/20 bg-amber-500/5" : "border-white/10 bg-white/5"
+                    )}
+                >
+                    {/* Inner Decorative Rings */}
+                    <div className={cn(
+                        "absolute inset-0 border rounded-full scale-[0.8] opacity-50",
+                        isOut ? "border-amber-500/20" : "border-primary/20"
+                    )} />
+                    <div className={cn(
+                        "absolute inset-0 border rounded-full scale-[0.6] opacity-30",
+                        isOut ? "border-amber-500/10" : "border-primary/10"
+                    )} />
+
+                    {isYourTurn ? (
+                        <div className="flex flex-col items-center text-center px-6">
+                            <Star className="h-12 w-12 text-primary fill-primary mb-4 animate-bounce" />
+                            <h2 className="text-4xl font-black text-white leading-tight uppercase tracking-tighter">
+                                {language === 'ml' ? 'നിങ്ങളുടെ ഊഴം!' : 'IT\'S YOUR TURN'}
+                            </h2>
+                        </div>
+                    ) : isHome ? (
+                        <div className="flex flex-col items-center text-center px-6">
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3">REPORT BY</p>
+                            <span className={cn(
+                                "font-black text-white tracking-tighter leading-none mb-4",
+                                (reportingCountdownLabel?.length || 0) > 15 ? "text-4xl" : "text-6xl"
+                            )}>
+                                {reportingCountdownLabel || '---'}
+                            </span>
+                            {!isOut && (
+                                <div className="space-y-2 flex flex-col items-center">
+                                    <div className="bg-primary/10 px-4 py-1.5 rounded-full border border-primary/20">
+                                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">SESSION ACTIVE</p>
+                                    </div>
+                                    {liveDelay >= 10 && (
+                                        <div className="bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5">
+                                            <Clock className="w-3 h-3 text-amber-500" />
+                                            <p className="text-[9px] font-black text-amber-500 uppercase">
+                                                +{Math.floor(liveDelay / 10) * 10}m DELAY
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center text-center px-6">
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">AHEAD</p>
+                            <span className="text-8xl font-black text-white tracking-tighter leading-none">
+                                {patientsAhead}
+                            </span>
+                            <div className={cn(
+                                "mt-4 flex items-center gap-2 px-4 py-1.5 rounded-full border",
+                                isOut ? "bg-amber-500/10 border-amber-500/20" : "bg-primary/10 border-primary/20"
+                            )}>
+                                <Clock className={cn("h-3.5 w-3.5", isOut ? "text-amber-500" : "text-primary")} />
+                                <span className={cn("text-sm font-black", isOut ? "text-amber-500" : "text-primary")}>
+                                    {isOut ? (language === 'ml' ? 'കണക്കാക്കുന്നു...' : 'Calculating...') : `~${estimatedWaitTime}m`}
                                 </span>
-                                {yourAppointment?.isPriority && (
-                                    <Star className="h-8 w-8 text-amber-500 fill-amber-500 animate-bounce" />
-                                )}
                             </div>
                         </div>
+                    )}
+                </motion.div>
+            </div>
 
-                        <div className="grid grid-cols-2 gap-4 w-full pt-4 border-t">
-                            <div className="flex flex-col items-center p-4 bg-muted/50 rounded-xl">
-                                <Clock className="h-5 w-5 text-primary mb-1" />
-                                <span className="text-xl font-bold">~{estimatedWaitTime}m</span>
-                                <span className="text-[10px] text-muted-foreground uppercase">{t.liveToken.estimatedWait}</span>
-                            </div>
-                            <div className="flex flex-col items-center p-4 bg-muted/50 rounded-xl">
-                                <Users className="h-5 w-5 text-primary mb-1" />
-                                <span className="text-xl font-bold">{patientsAhead}</span>
-                                <span className="text-[10px] text-muted-foreground uppercase">{t.liveToken.patientsAhead}</span>
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* ⚡ ZONE 3: THE LIVE FEED (Up Next / Integrity Proof) */}
-            {upNext.length > 0 && (
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                        <Star className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{t.liveToken.upNext}</span>
-                    </div>
-                    <div className="flex gap-2 w-full overflow-x-auto pb-2 no-scrollbar">
-                        <AnimatePresence initial={false}>
-                            {upNext.map((appt: any) => (
-                                <motion.div 
-                                    key={appt.id} 
-                                    layout
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="flex-shrink-0 bg-secondary/50 border rounded-lg px-4 py-2 flex items-center gap-2 min-w-[100px]"
-                                >
-                                    <div className="h-2 w-2 rounded-full bg-primary/40" />
-                                    <span className="text-sm font-bold">{appt.tokenNumber}</span>
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
-                    </div>
-                </div>
-            )}
+            {/* Remove context message section to avoid redundancy */}
         </div>
     );
 };

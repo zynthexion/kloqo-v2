@@ -30,7 +30,8 @@ export function useArrivalTiming({
     clinicData,
     doctorAppointmentsToday,
     masterQueue,
-    arrivedEstimates
+    arrivedEstimates,
+    liveDelay = 0
 }: {
     yourAppointment: Appointment | null;
     yourAppointmentDoctor: Doctor | null;
@@ -43,6 +44,7 @@ export function useArrivalTiming({
     doctorAppointmentsToday: Appointment[];
     masterQueue: Appointment[];
     arrivedEstimates: any[];
+    liveDelay?: number;
 }) {
     // 1. Core formatted date
     const formattedDate = useMemo(() => {
@@ -135,21 +137,73 @@ export function useArrivalTiming({
         if (!yourAppointment) return null;
         try {
             const arriveByString = getArriveByTimeFromAppointment(yourAppointment, yourAppointmentDoctor);
-            return parse(arriveByString, "hh:mm a", appointmentDate);
-        } catch {
+            
+            // Try parsing as 12h format first
+            let parsedDate = parse(arriveByString, "hh:mm a", appointmentDate);
+            
+            // Fallback to 24h format if 12h fails
+            if (isNaN(parsedDate.getTime())) {
+                parsedDate = parse(arriveByString, "HH:mm", appointmentDate);
+            }
+
+            if (isNaN(parsedDate.getTime())) {
+                // Last resort: manual parse
+                const [time, modifier] = arriveByString.split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+                if (modifier?.toUpperCase() === 'PM' && hours < 12) hours += 12;
+                if (modifier?.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                
+                const fallback = new Date(appointmentDate);
+                fallback.setHours(hours, minutes, 0, 0);
+                parsedDate = fallback;
+            }
+
+            // --- THE STABILITY FIX: 10-Minute Threshold ---
+            // We only shift the time in solid 10-minute blocks to prevent jitter
+            const stableDelay = Math.floor(liveDelay / 10) * 10;
+
+            if (stableDelay > 0) {
+                return addMinutes(parsedDate, stableDelay);
+            }
+
+            return parsedDate;
+        } catch (error) {
             try {
                 const scheduledDateTime = parseAppointmentDateTime(yourAppointment.date, yourAppointment.time);
                 const isWalkIn = yourAppointment.tokenNumber?.startsWith('W');
-                return isWalkIn ? scheduledDateTime : subMinutes(scheduledDateTime, 15);
+                const baseTime = isWalkIn ? scheduledDateTime : subMinutes(scheduledDateTime, 15);
+                const stableDelay = Math.floor(liveDelay / 10) * 10;
+                return stableDelay > 0 ? addMinutes(baseTime, stableDelay) : baseTime;
             } catch { return null; }
         }
-    }, [yourAppointment, yourAppointmentDoctor, appointmentDate]);
+    }, [yourAppointment, yourAppointmentDoctor, appointmentDate, liveDelay]);
 
-    const reportByTimeDisplay = useMemo(() => {
+    const originalReportByTime = useMemo(() => {
         if (!yourAppointment) return '--';
         try { return getArriveByTimeFromAppointment(yourAppointment, yourAppointmentDoctor); } 
         catch { return yourAppointment.arriveByTime || yourAppointment.time || '--'; }
     }, [yourAppointment, yourAppointmentDoctor]);
+
+    const reportByTimeDisplay = useMemo(() => {
+        if (!yourAppointment) return '--';
+        try { 
+            const base = originalReportByTime;
+            const stableDelay = Math.floor(liveDelay / 10) * 10;
+            
+            if (stableDelay > 0) {
+                // Return the "Adjusted" time for display if doctor is late
+                const [time, modifier] = base.split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+                if (modifier?.toUpperCase() === 'PM' && hours < 12) hours += 12;
+                if (modifier?.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                const d = new Date();
+                d.setHours(hours, minutes, 0, 0);
+                return format(addMinutes(d, stableDelay), 'hh:mm a');
+            }
+            return base;
+        } 
+        catch { return originalReportByTime; }
+    }, [yourAppointment, yourAppointmentDoctor, liveDelay, originalReportByTime]);
 
     const reportByDiffMinutes = useMemo(() => {
         if (!arrivalReminderDateTime) return null;
@@ -160,6 +214,12 @@ export function useArrivalTiming({
 
     const reportingCountdownLabel = useMemo(() => {
         if (reportByDiffMinutes === null) return null;
+        
+        // Handle "Arrive Immediately" state
+        if (reportByDiffMinutes < 0) {
+            return language === 'ml' ? 'ഉടൻ എത്തുക' : 'Arrive Immediately';
+        }
+
         const minutesValue = Math.abs(reportByDiffMinutes);
         
         const inLabel = t.liveToken?.in ?? (language === 'ml' ? 'ഇനി' : 'In');
@@ -173,7 +233,7 @@ export function useArrivalTiming({
         const formatLabel = (value: number, singular: string, plural: string) => {
             const absValue = Math.max(1, value);
             const unitLabel = absValue === 1 ? singular : plural;
-            return reportByDiffMinutes < 0 ? `-${absValue} ${unitLabel}` : `${inLabel} ${absValue} ${unitLabel}`;
+            return `${inLabel} ${absValue} ${unitLabel}`;
         };
 
         if (minutesValue >= 1440) return formatLabel(Math.floor(minutesValue / 1440), daySingular, dayPlural);
@@ -182,7 +242,7 @@ export function useArrivalTiming({
             const mins = minutesValue % 60;
             const hLab = hours === 1 ? hourSingular : hourPlural;
             const str = mins > 0 ? `${hours} ${hLab} ${mins} ${minutely(mins, language, t)}` : `${hours} ${hLab}`;
-            return reportByDiffMinutes < 0 ? `-${str}` : `${inLabel} ${str}`;
+            return `${inLabel} ${str}`;
         }
         return formatLabel(Math.round(minutesValue), minuteSingular, minutePlural);
     }, [reportByDiffMinutes, language, t]);
@@ -278,6 +338,7 @@ export function useArrivalTiming({
         doctorStatusInfo,
         breakMinutes,
         reportByTimeDisplay,
+        originalReportByTime,
         reportByDiffMinutes,
         isReportingPastDue,
         reportingCountdownLabel,

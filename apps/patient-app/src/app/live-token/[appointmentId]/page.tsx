@@ -10,10 +10,7 @@ import { AuthGuard } from '@/components/auth-guard';
 import { BottomNav } from '@/components/bottom-nav';
 import { LiveTokenProvider } from '@/contexts/LiveTokenContext';
 import { useLiveTokenState } from '@/hooks/use-live-token-state';
-import { AppointmentStatusCard } from '@/components/live-token/AppointmentStatusCard';
-import { BottomMessage } from '@/components/live-token/BottomMessage';
-import { QueueVisualization } from '@/components/live-token/QueueVisualization';
-import { PatientSwitcher } from '@/components/live-token/PatientSwitcher';
+import { QuadrantContent } from '@/components/live-token/QuadrantContent';
 
 function LiveTokenPage({ params }: { params: Promise<{ appointmentId: string }> }) {
     const { appointmentId } = use(params);
@@ -30,61 +27,52 @@ function LiveTokenPage({ params }: { params: Promise<{ appointmentId: string }> 
         );
     }
 
-    // Cast to LiveTokenContextValue safely
     const contextValue = state as any;
 
     return (
         <LiveTokenProvider value={contextValue}>
-            <div className="flex min-h-screen w-full flex-col bg-[hsl(var(--app-background))] font-body text-foreground">
-                <header className="flex items-center p-4 gap-2 border-b bg-card shadow-sm">
-                    <Link href="/home" className="p-2 hover:bg-muted rounded-full transition-colors">
-                        <ArrowLeft className="h-6 w-6" />
+            <div className="fixed inset-0 h-[100dvh] w-full overflow-hidden bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black font-body text-slate-100">
+                {/* Modern Floating Header */}
+                <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-6 bg-gradient-to-b from-black/60 to-transparent">
+                    <Link href="/home" className="p-3 bg-white/5 hover:bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl transition-all active:scale-95 group">
+                        <ArrowLeft className="h-6 w-6 text-slate-300 group-hover:text-white" />
                     </Link>
-                    <h1 className="text-xl font-bold text-center flex-grow">
-                        {contextValue.t.liveToken.title}
-                    </h1>
-                </header>
+                    <div className="text-right">
+                        <p className="text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">KLOQO LIVE</p>
+                        <h1 className="text-lg font-bold text-white tracking-tight">
+                            {contextValue.t.liveToken.title}
+                        </h1>
+                    </div>
+                </div>
 
-                <main className="flex-grow flex flex-col items-center justify-start p-4 pb-32 space-y-8 overflow-y-auto">
-                    {/* Patient Switcher (if family has multiple) */}
-                    <PatientSwitcher />
+                <main className="relative h-full w-full flex flex-col items-center p-0 pt-24">
+                    <QuadrantContent />
 
-                    {contextValue.yourAppointment ? (
-                        <div className="w-full max-w-sm space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* Main Status & Arrival Confirmation */}
-                            <AppointmentStatusCard />
-
-                            {/* Live Queue Visualization */}
-                            <QueueVisualization />
-
-                            {/* Status Messages & Estimated Wait */}
-                            <BottomMessage />
-                        </div>
-                    ) : (
-                        <Card className="w-full max-w-sm text-center mt-10">
-                            <CardContent className="p-10 space-y-6">
-                                <div className="flex justify-center">
-                                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                                        <Info className="h-10 w-10 text-primary" />
+                    {!contextValue.yourAppointment && (
+                        <div className="h-full flex items-center justify-center p-6">
+                            <Card className="w-full max-w-sm text-center border-white/5 bg-white/5 backdrop-blur-2xl">
+                                <CardContent className="p-10 space-y-6">
+                                    <div className="flex justify-center">
+                                        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+                                            <Info className="h-10 w-10 text-primary" />
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <h2 className="text-2xl font-bold">{contextValue.t.liveToken.noAppointments || 'No Token Found'}</h2>
-                                    <p className="text-muted-foreground">
-                                        {contextValue.t.liveToken.noAppointmentsDescription || 'We could not find any active token for this ID.'}
-                                    </p>
-                                </div>
-                                <Button asChild size="lg" className="w-full">
-                                    <Link href="/appointments">
-                                        {contextValue.t.appointments?.myAppointments || 'View My Appointments'}
-                                    </Link>
-                                </Button>
-                            </CardContent>
-                        </Card>
+                                    <div className="space-y-2">
+                                        <h2 className="text-2xl font-bold text-white">{contextValue.t.liveToken.noAppointments || 'No Token Found'}</h2>
+                                        <p className="text-slate-400 text-sm">
+                                            {contextValue.t.liveToken.noAppointmentsDescription || 'We could not find any active token for this ID.'}
+                                        </p>
+                                    </div>
+                                    <Button asChild size="lg" className="w-full bg-primary hover:bg-primary/90 text-white rounded-2xl h-14">
+                                        <Link href="/appointments">
+                                            {contextValue.t.appointments?.myAppointments || 'View My Appointments'}
+                                        </Link>
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
                 </main>
-
-                <BottomNav />
             </div>
         </LiveTokenProvider>
     );
