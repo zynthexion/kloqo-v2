@@ -101,6 +101,14 @@ export class ScheduleBreakUseCase {
         // ── 3. LOAD TODAY'S APPOINTMENTS ─────────────────────────────────────
         const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
 
+        // ✅ SEQUENCE PROTECTION: Sort appointments chronologically by 'time' before any processing.
+        // This ensures that Token #1 remains before Token #2 after shifting.
+        allAppointments.sort((a, b) => {
+            const tA = parseClinicTime(a.time, baseDate);
+            const tB = parseClinicTime(b.time, baseDate);
+            return tA.getTime() - tB.getTime();
+        });
+
         // Guard: Reject if another break already overlaps this window in this session
         const existingBreaks: BreakPeriod[] = (doctor.breakPeriods?.[date] || [])
             .filter((b: any) => b.sessionIndex === sessionIndex);
@@ -156,10 +164,12 @@ export class ScheduleBreakUseCase {
         const slotDuration = doctor.averageConsultingTime || 15;
 
         // Real appointments that fall within the break window (not system blockers, not cancelled)
+        // ✅ STRATEGY CHANGE: We now use 'time' (consultation) as the source of truth for break impact.
+        // This ensures patients whose slots fall in the break are moved even if they had early arriveByTimes.
         const appointmentsInBreak = allAppointments.filter(a => {
             if (a.sessionIndex !== sessionIndex) return false;
             if (a.status === 'Cancelled' || a.isSystemBlocker) return false;
-            const t = parseClinicTime(a.arriveByTime || a.time, baseDate);
+            const t = parseClinicTime(a.time, baseDate);
             return t >= breakStart && t < breakEnd;
         });
 
@@ -174,7 +184,7 @@ export class ScheduleBreakUseCase {
         const postBreakAppointments = allAppointments.filter(a => {
             if (a.sessionIndex !== sessionIndex) return false;
             if (a.status === 'Cancelled' || a.isSystemBlocker) return false;
-            const t = parseClinicTime(a.arriveByTime || a.time, baseDate);
+            const t = parseClinicTime(a.time, baseDate);
             return t >= breakEnd; // strictly after the break
         });
 
@@ -183,7 +193,7 @@ export class ScheduleBreakUseCase {
 
         // Shift appointments in break first (they get displaced to after the break)
         for (const appt of appointmentsInBreak) {
-            const oldTime = parseClinicTime(appt.arriveByTime || appt.time, baseDate);
+            const oldTime = parseClinicTime(appt.time, baseDate);
             // Displaced appointments are compacted to start right after the break
             const relativeIndex = appointmentsInBreak.indexOf(appt);
             const newTime       = addMinutes(breakEnd, relativeIndex * slotDuration);
@@ -215,7 +225,7 @@ export class ScheduleBreakUseCase {
         // Shift post-break appointments by actualShiftMinutes  
         if (actualShiftMinutes > 0) {
             for (const appt of postBreakAppointments) {
-                const oldTime  = parseClinicTime(appt.arriveByTime || appt.time, baseDate);
+                const oldTime  = parseClinicTime(appt.time, baseDate);
                 const newTime  = addMinutes(oldTime, actualShiftMinutes);
                 const deltaMin = actualShiftMinutes;
 
@@ -252,7 +262,7 @@ export class ScheduleBreakUseCase {
         //
         const totalBreakSlots = Math.ceil(breakDurationMinutes / slotDuration);
         const alreadyOccupiedSlotTimes = new Set<string>(
-            appointmentsInBreak.map(a => a.arriveByTime || a.time)
+            appointmentsInBreak.map(a => a.time)
         );
 
         let ghostsCreated = 0;
