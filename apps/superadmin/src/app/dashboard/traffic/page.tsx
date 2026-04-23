@@ -235,7 +235,7 @@ export default function TrafficAnalyticsPage() {
                                     const date = new Date(session.sessionStart);
                                     return (
                                         <tr key={session.id} className="border-b hover:bg-muted/50 transition-colors">
-                                            <td className="py-3 px-2">{format(date, 'MMM d, HH:mm')}</td>
+                                            <td className="py-3 px-2">{format(date, 'MMM d, hh:mm a')}</td>
                                             <td className="py-3 px-2 font-medium">
                                                 {session.phone || (
                                                     <div className="flex flex-col">

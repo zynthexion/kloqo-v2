@@ -46,8 +46,8 @@ export function AvailabilityForm({
     defaultValues: { availabilitySlots: (doctor.availabilitySlots || []).map((s: any) => ({
       ...s,
       timeSlots: s.timeSlots.map((ts: any) => ({
-        from: format(parseTime(ts.from, new Date()), 'HH:mm'),
-        to: format(parseTime(ts.to, new Date()), 'HH:mm')
+        from: format(parseTime(ts.from, new Date()), 'hh:mm a'),
+        to: format(parseTime(ts.to, new Date()), 'hh:mm a')
       }))
     })) }
   });

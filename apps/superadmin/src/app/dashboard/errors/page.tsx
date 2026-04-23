@@ -304,7 +304,7 @@ export default function ErrorLogsPage() {
                             </Badge>
                             {errorDate && (
                               <span className="text-xs text-muted-foreground">
-                                {format(errorDate, 'MMM d, yyyy HH:mm')}
+                                {format(errorDate, 'MMM d, yyyy hh:mm a')}
                               </span>
                             )}
                           </div>

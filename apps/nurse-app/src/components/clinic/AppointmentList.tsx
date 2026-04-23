@@ -565,7 +565,7 @@ export default function AppointmentList({
                                   return (
                                     <Badge variant={isSwiping ? 'default' : 'outline'} className={cn("text-xs", isSwiping && 'bg-white/20 text-white')}>
                                       {appt.date && `${appt.date} - `}
-                                      {['Confirmed', 'Completed', 'Cancelled', 'No-show'].includes(appt.status) ? appt.time : getDisplayTime(appt.time)}
+                                      {getDisplayTime(appt.time)}
                                     </Badge>
                                   );
                                 })()}

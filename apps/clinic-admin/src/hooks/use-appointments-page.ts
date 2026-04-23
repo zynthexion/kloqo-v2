@@ -471,7 +471,14 @@ export function useAppointmentsPage() {
     handlePatientSearch: sse.searchPatients,
     handleForceBookEstimate,
     isAppointmentOnLeave,
-    getDisplayTimeForAppointment: (apt: Appointment) => apt.time || "",
+    getDisplayTimeForAppointment: (apt: Appointment) => {
+      if (!apt.time) return "";
+      try {
+        return format(parse(apt.time, 'HH:mm', new Date()), 'hh:mm a');
+      } catch (e) {
+        return apt.time;
+      }
+    },
     handleRejoinQueue,
     onDoctorChange,
     handleSkip: mutations.handleSkip,

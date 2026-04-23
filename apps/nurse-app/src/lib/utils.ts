@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { parse, set } from "date-fns"
+import { parse, set, format } from "date-fns"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -47,11 +47,7 @@ export function getDisplayTime(timeStr: string | null | undefined): string {
   const date = parseTime(timeStr);
   if (!date) return timeStr;
   
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  return format(date, 'hh:mm a');
 }
 
 

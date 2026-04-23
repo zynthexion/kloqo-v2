@@ -107,8 +107,8 @@ export function NurseDesktopDashboard() {
           clinicId: data.clinic.id,
           patientId,
           date: format(selectedDate, 'd MMMM yyyy'),
-          slotTime: format(new Date(selectedSlot.time), 'HH:mm'),
-          time: format(new Date(selectedSlot.time), 'HH:mm'),
+          slotTime: format(new Date(selectedSlot.time), 'hh:mm a'),
+          time: format(new Date(selectedSlot.time), 'hh:mm a'),
           slotIndex: selectedSlot.slotIndex,
           sessionIndex: selectedSlot.sessionIndex,
           source: 'Desktop_Hub'

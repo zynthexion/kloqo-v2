@@ -169,7 +169,7 @@ export default function PunctualityReportPage() {
                                                 <div className="flex flex-col">
                                                     <span>{log.date}</span>
                                                     <span className="text-xs text-muted-foreground">
-                                                        {actualDate ? format(actualDate, 'HH:mm:ss') : '-'}
+                                                        {actualDate ? format(actualDate, 'hh:mm:ss a') : '-'}
                                                     </span>
                                                 </div>
                                             </TableCell>

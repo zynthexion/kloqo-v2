@@ -1,4 +1,4 @@
-import { IAppointmentRepository, IDoctorRepository } from '../domain/repositories';
+import { IAppointmentRepository, IDoctorRepository, IPatientRepository } from '../domain/repositories';
 import { Appointment, Doctor, KLOQO_ROLES, RBACUtils } from '@kloqo/shared';
 
 export interface FilterAppointmentsParams {
@@ -14,7 +14,8 @@ export interface FilterAppointmentsParams {
 export class FilterAppointmentsByTenantUseCase {
   constructor(
     private appointmentRepo: IAppointmentRepository,
-    private doctorRepo: IDoctorRepository
+    private doctorRepo: IDoctorRepository,
+    private patientRepo: IPatientRepository
   ) {}
 
   async execute(params: FilterAppointmentsParams): Promise<Appointment[]> {
@@ -22,12 +23,23 @@ export class FilterAppointmentsByTenantUseCase {
 
     // 1. SECURITY: Enforce Tenant/Identity Boundaries
     let effectiveClinicId = clinicId;
-    let effectivePatientId = patientId;
+    let effectivePatientIds: string[] = patientId ? [patientId] : [];
 
     if (user?.role === KLOQO_ROLES.PATIENT) {
       const tokenPatientId = user.patientId || user.id;
-      // Patients can only see themselves
-      effectivePatientId = tokenPatientId;
+      // Patients can see themselves and their relatives
+      effectivePatientIds = [tokenPatientId];
+      
+      try {
+        const patientDoc = await this.patientRepo.findById(tokenPatientId);
+        if (patientDoc?.relatedPatientIds && patientDoc.relatedPatientIds.length > 0) {
+            effectivePatientIds.push(...patientDoc.relatedPatientIds);
+            console.log(`[FilterAppointments] Found ${patientDoc.relatedPatientIds.length} relatives for ${tokenPatientId}`);
+        }
+      } catch (e) {
+        console.warn(`[FilterAppointments] Failed to fetch relatives for ${tokenPatientId}:`, e);
+      }
+
       // Clinic scope is optional for patients but prioritized if provided
       effectiveClinicId = clinicId || undefined;
     } else {
@@ -39,14 +51,14 @@ export class FilterAppointmentsByTenantUseCase {
       }
     }
 
-    if (!effectiveClinicId && !effectivePatientId) {
+    if (!effectiveClinicId && effectivePatientIds.length === 0) {
       throw new Error('Unauthorized: Query must be scoped to a clinic or a patient profile.');
     }
 
     // 2. Fetch Base List
     let appointments: Appointment[] = [];
-    if (effectivePatientId) {
-      appointments = await this.appointmentRepo.findByPatientId(effectivePatientId);
+    if (effectivePatientIds.length > 0) {
+      appointments = await this.appointmentRepo.findByPatientIds(effectivePatientIds);
     } else if (effectiveClinicId && date) {
       appointments = await this.appointmentRepo.findByClinicAndDate(effectiveClinicId, date);
     } else if (effectiveClinicId) {

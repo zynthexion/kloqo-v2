@@ -162,7 +162,7 @@ export function AvailabilityTab({
                               <SelectTrigger><SelectValue placeholder="Start" /></SelectTrigger>
                               <SelectContent>
                                 {fromOptions.map(t => (
-                                  <SelectItem key={t} value={t}>{format(parse(t, "HH:mm", new Date()), 'p')}</SelectItem>
+                                  <SelectItem key={t} value={t}>{format(parse(t, "HH:mm", new Date()), 'hh:mm a')}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -177,7 +177,7 @@ export function AvailabilityTab({
                               <SelectTrigger><SelectValue placeholder="End" /></SelectTrigger>
                               <SelectContent>
                                 {toOptions.map(t => (
-                                  <SelectItem key={t} value={t}>{format(parse(t, "HH:mm", new Date()), 'p')}</SelectItem>
+                                  <SelectItem key={t} value={t}>{format(parse(t, "HH:mm", new Date()), 'hh:mm a')}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -211,7 +211,7 @@ export function AvailabilityTab({
                           <div className="flex flex-wrap gap-2">
                             {daySlot.timeSlots.map((ts: any, j: number) => (
                               <Badge key={j} variant="secondary" className="font-mono text-[10px]">
-                                {format(parse(ts.from, 'HH:mm', new Date()), 'p')} - {format(parse(ts.to, 'HH:mm', new Date()), 'p')}
+                                {format(parse(ts.from, 'HH:mm', new Date()), 'hh:mm a')} - {format(parse(ts.to, 'HH:mm', new Date()), 'hh:mm a')}
                               </Badge>
                             ))}
                             <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={() => {

@@ -118,7 +118,7 @@ export function AddDoctorForm({ onSave, isOpen, setIsOpen, doctor, departments, 
   useEffect(() => {
     if (isOpen) {
       if (doctor) {
-        const slots = doctor.availabilitySlots?.map(s => ({ ...s, timeSlots: s.timeSlots.map(ts => ({ from: format(parseTime(ts.from, new Date()), 'HH:mm'), to: format(parseTime(ts.to, new Date()), 'HH:mm') })) })) || [];
+        const slots = doctor.availabilitySlots?.map(s => ({ ...s, timeSlots: s.timeSlots.map(ts => ({ from: format(parseTime(ts.from, new Date()), 'hh:mm a'), to: format(parseTime(ts.to, new Date()), 'hh:mm a') })) })) || [];
         const roles = doctor.roles && doctor.roles.length > 0 ? doctor.roles : (doctor.role ? [doctor.role] : ['doctor']);
         form.reset({ ...doctor as any, availabilitySlots: slots, registrationNumber: doctor.registrationNumber || "", email: doctor.email || "", bio: doctor.bio || "", experience: doctor.experience || 0, walkInReserveRatio: doctor.walkInReserveRatio || 0.15, gracePeriodMinutes: doctor.gracePeriodMinutes || 15, tokenDistribution: doctor.tokenDistribution || 'advanced', accessibleMenus: doctor.accessibleMenus || AVAILABLE_MENUS.map(m => m.id), roles });
         setPhotoPreview(doctor.avatar || MALE_AVATAR);

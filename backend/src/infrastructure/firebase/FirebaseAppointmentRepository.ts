@@ -292,6 +292,33 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(a => !a.isDeleted);
   }
 
+  async findByPatientIds(patientIds: string[]): Promise<Appointment[]> {
+    if (patientIds.length === 0) return [];
+    
+    // Firestore 'in' supports max 30 items
+    const CHUNK_SIZE = 30;
+    const chunks: string[][] = [];
+    for (let i = 0; i < patientIds.length; i += CHUNK_SIZE) {
+      chunks.push(patientIds.slice(i, i + CHUNK_SIZE));
+    }
+
+    const snapshots = await Promise.all(
+      chunks.map(chunk =>
+        this.collection
+          .where('patientId', 'in', chunk)
+          .orderBy('date', 'desc')
+          .limit(100)
+          .get()
+      )
+    );
+
+    const docs = snapshots.flatMap(snapshot => 
+      snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment))
+    );
+    
+    return docs.filter(a => !a.isDeleted);
+  }
+
   async delete(id: string): Promise<void> {
     await this.collection.doc(id).update({
       isDeleted: true,

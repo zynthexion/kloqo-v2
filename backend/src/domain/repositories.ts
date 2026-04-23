@@ -29,6 +29,7 @@ export interface IAppointmentRepository {
   findAllByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
   findLatestByPatientIds(patientIds: string[], clinicId: string): Promise<Map<string, Appointment>>;
   findByPatientId(patientId: string): Promise<Appointment[]>;
+  findByPatientIds(patientIds: string[]): Promise<Appointment[]>;
   save(appointment: Appointment, transaction?: ITransaction): Promise<void>;
   update(id: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void>;
   incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number>;

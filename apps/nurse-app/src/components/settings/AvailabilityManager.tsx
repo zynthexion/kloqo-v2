@@ -413,7 +413,11 @@ export default function AvailabilityManager() {
                               }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {generateTimeOptions("00:00", "23:45", 15).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                  {generateTimeOptions("00:00", "23:45", 15).map(t => (
+                                    <SelectItem key={t} value={t}>
+                                      {format(parse(t, 'HH:mm', new Date()), 'hh:mm a')}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -426,7 +430,11 @@ export default function AvailabilityManager() {
                               }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {generateTimeOptions("00:00", "23:45", 15).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                                  {generateTimeOptions("00:00", "23:45", 15).map(t => (
+                                    <SelectItem key={t} value={t}>
+                                      {format(parse(t, 'HH:mm', new Date()), 'hh:mm a')}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -448,7 +456,11 @@ export default function AvailabilityManager() {
                           {form.watch('availabilitySlots')?.sort((a,b) => Number(a.day) - Number(b.day)).map(slot => (
                             <div key={slot.day} className="text-sm">
                               <span className="font-medium mr-2">{daysOfWeek[Number(slot.day)]}:</span>
-                              {slot.timeSlots.map((ts, i) => <Badge key={i} variant="secondary" className="mr-1">{ts.from} - {ts.to}</Badge>)}
+                              {slot.timeSlots.map((ts, i) => (
+                                <Badge key={i} variant="secondary" className="mr-1">
+                                  {format(parse(ts.from, 'HH:mm', new Date()), 'hh:mm a')} - {format(parse(ts.to, 'HH:mm', new Date()), 'hh:mm a')}
+                                </Badge>
+                              ))}
                             </div>
                           ))}
                         </div>
@@ -468,7 +480,7 @@ export default function AvailabilityManager() {
                         <div className="flex flex-wrap gap-2 mt-2">
                           {slot.timeSlots.map((ts, i) => (
                             <Badge key={i} variant="outline" className="group pr-7 relative">
-                              {ts.from} - {ts.to}
+                              {format(parse(ts.from, 'HH:mm', new Date()), 'hh:mm a')} - {format(parse(ts.to, 'HH:mm', new Date()), 'hh:mm a')}
                               <button onClick={() => handleDeleteTimeSlot(Number(slot.day), ts)} className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <X className="w-3 h-3 text-red-500" />
                               </button>
@@ -565,7 +577,11 @@ export default function AvailabilityManager() {
                           }}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {generateTimeOptions("00:00", "23:45", 15).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                              {generateTimeOptions("00:00", "23:45", 15).map(t => (
+                                <SelectItem key={t} value={t}>
+                                  {format(parse(t, 'HH:mm', new Date()), 'hh:mm a')}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>
@@ -578,7 +594,11 @@ export default function AvailabilityManager() {
                           }}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {generateTimeOptions("00:00", "23:45", 15).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                              {generateTimeOptions("00:00", "23:45", 15).map(t => (
+                                <SelectItem key={t} value={t}>
+                                  {format(parse(t, 'HH:mm', new Date()), 'hh:mm a')}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </div>

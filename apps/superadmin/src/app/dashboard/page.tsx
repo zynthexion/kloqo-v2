@@ -201,7 +201,7 @@ export default function OverviewDashboard() {
                         {session.sessionDuration ? `${Math.round(session.sessionDuration / 60)}m` : '< 1m'}
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">
-                        {new Date(session.sessionStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {format(new Date(session.sessionStart), 'hh:mm a')}
                       </td>
                     </tr>
                   ))}

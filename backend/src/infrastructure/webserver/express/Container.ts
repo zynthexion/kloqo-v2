@@ -316,7 +316,7 @@ const updateGlobalSettingsUseCase = new UpdateGlobalSettingsUseCase(globalSettin
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 4: Controllers
 // ═══════════════════════════════════════════════════════════════════════════
-const filterAppointmentsByTenantUseCase = new FilterAppointmentsByTenantUseCase(appointmentRepo, doctorRepo);
+const filterAppointmentsByTenantUseCase = new FilterAppointmentsByTenantUseCase(appointmentRepo, doctorRepo, patientRepo);
 
 const appointmentController = new AppointmentController(
   getAllAppointmentsUseCase,

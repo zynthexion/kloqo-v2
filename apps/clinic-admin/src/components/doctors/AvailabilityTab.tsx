@@ -411,7 +411,9 @@ export function AvailabilityTab({ doctor, onUpdate, isPending, refreshData }: Av
                        <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100/50 group-hover:bg-white transition-colors">
                          <div className="flex items-center gap-3">
                             <Clock className="h-3.5 w-3.5 text-slate-400 group-hover:text-theme-blue transition-colors" />
-                            <span className="text-xs font-black text-slate-600">{ts.from} – {ts.to}</span>
+                            <span className="text-xs font-black text-slate-600">
+                               {format(parse(ts.from, 'HH:mm', new Date()), 'hh:mm a')} – {format(parse(ts.to, 'HH:mm', new Date()), 'hh:mm a')}
+                            </span>
                          </div>
                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/50" />
                        </div>

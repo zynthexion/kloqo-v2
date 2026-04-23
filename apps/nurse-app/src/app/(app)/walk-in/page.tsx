@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { Loader2, ArrowLeft, CheckCircle2, Ticket, Clock, User, Phone, MapPin, Hash } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle2, Ticket, Clock, User, Phone, MapPin, Hash, ArrowRight } from 'lucide-react';
+import { format } from 'date-fns';
 import Link from 'next/link';
 import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import { Button } from '@/components/ui/button';
@@ -218,7 +219,7 @@ function WalkInContent() {
                               <Clock className="h-4 w-4 opacity-60" />
                               <span className="text-xs font-bold">
                                 {walkInPreview?.placeholderAssignment?.slotTime 
-                                  ? new Date(walkInPreview.placeholderAssignment.slotTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                                  ? format(new Date(walkInPreview.placeholderAssignment.slotTime), 'hh:mm a')
                                   : 'Calculating...'
                                 }
                               </span>
