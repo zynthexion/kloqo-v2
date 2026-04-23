@@ -113,7 +113,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    localStorage.removeItem('token');
+    // 🧹 Comprehensive Session Cleanup
+    const keysToRemove = [
+      'token', 
+      'activeRole', 
+      'app-theme', 
+      'selectedDoctorId',
+      'last_daily_reminder_run_morning',
+      'last_daily_reminder_run_evening',
+      'last_daily_reminder_run_expiry'
+    ];
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+
     setUser(null);
     router.push('/login');
   };

@@ -94,7 +94,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [router]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('kloqo_token');
+    // 🧹 Comprehensive Session Cleanup
+    const keysToRemove = [
+      'kloqo_token', 
+      'activeRole', 
+      'app-theme',
+      'last_daily_reminder_run_morning',
+      'last_daily_reminder_run_evening',
+      'last_daily_reminder_run_expiry'
+    ];
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+
     setCurrentUser(null);
     router.push('/login');
   }, [router]);
