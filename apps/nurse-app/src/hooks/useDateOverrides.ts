@@ -67,7 +67,7 @@ export function useDateOverrides(doctor: Doctor, onUpdate: (newOverrides: Record
           forceCancelConflicts: force
         }),
       });
-      await onUpdate();
+      await onUpdate(null);
       toast({
         title: "Success",
         description: "Doctor marked as on leave. Conflicts resolved.",
