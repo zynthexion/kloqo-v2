@@ -25,13 +25,94 @@ const formatTimeStr = (t: string | null) => {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
 };
 
+function BreakLayoutContent({
+  stage, setStage, selectedDate, setSelectedDate,
+  doctor, availableSessions, timeIntervals, endIntervals,
+  sessionIndex, setSessionIndex, startTime, setStartTime, endTime, setEndTime,
+  isFullCompensation, setIsFullCompensation,
+  previewResult, isLoadingPreview, isConfirming, dates, handlePreview, handleConfirm,
+  onBack
+}: any) {
+  return (
+    <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
+      <BreakHeader stage={stage} onBack={onBack} />
+
+      {stage === 'SELECT' && (
+        <>
+          <BreakDatePicker dates={dates} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+          <main className="flex-1 p-4 pt-0 overflow-y-auto">
+            <BreakSlotGrid 
+              doctor={doctor}
+              availableSessions={availableSessions}
+              timeIntervals={timeIntervals}
+              endIntervals={endIntervals}
+              sessionIndex={sessionIndex}
+              setSessionIndex={setSessionIndex}
+              startTime={startTime}
+              setStartTime={setStartTime}
+              endTime={endTime}
+              setEndTime={setEndTime}
+              isFullCompensation={isFullCompensation}
+              setIsFullCompensation={setIsFullCompensation}
+            />
+          </main>
+
+          {sessionIndex !== null && startTime && endTime && (
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t z-50 animate-in slide-in-from-bottom-full">
+              <div className="max-w-md mx-auto space-y-4">
+                <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
+                   <span>Fulfillment window</span>
+                   <span className="text-amber-600">
+                     {formatTimeStr(startTime)} – {formatTimeStr(endTime)}
+                   </span>
+                </div>
+                <Button onClick={handlePreview} disabled={isLoadingPreview} className="w-full h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-xl shadow-amber-500/20 active:scale-95 flex gap-3">
+                  {isLoadingPreview ? <Loader2 className="h-6 w-6 animate-spin" /> : <><span>Preview Impact</span><ArrowRight className="h-5 w-5" /></>}
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {stage === 'PREVIEW' && (
+        <>
+          <BreakImpactPreview 
+            previewResult={previewResult} 
+            isFullCompensation={isFullCompensation} 
+            startTime={startTime}
+            endTime={endTime}
+            sessionSlot={sessionIndex !== null ? availableSessions[sessionIndex] : null}
+          />
+          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t z-50">
+            <div className="max-w-md mx-auto flex gap-3">
+              <Button onClick={() => setStage('SELECT')} variant="outline" className="flex-1 h-16 rounded-[2rem] font-black uppercase text-xs tracking-widest border-2">Back</Button>
+              <Button onClick={handleConfirm} disabled={isConfirming} className="flex-[2] h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-base shadow-xl shadow-amber-500/20 active:scale-95">
+                {isConfirming ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Confirm & Commit'}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {stage === 'DONE' && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
+          <div className="h-24 w-24 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-inner">
+             <CheckCircle2 className="h-12 w-12 text-emerald-500 animate-in zoom-in-50" />
+          </div>
+          <div className="text-center">
+            <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Break Active</h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Syncing with clinical dashboard...</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Content() {
-  const {
-    router, doctorId, stage, setStage, selectedDate, setSelectedDate,
-    doctor, availableSessions, timeIntervals, endIntervals,
-    sessionIndex, setSessionIndex, startTime, setStartTime, endTime, setEndTime,
-    previewResult, isLoadingPreview, isConfirming, dates, handlePreview, handleConfirm
-  } = useScheduleBreak();
+  const scheduleProps = useScheduleBreak();
+  const { doctorId, router, stage, setStage } = scheduleProps;
   const { activeRole } = useActiveIdentity();
 
   if (!doctorId) {
@@ -52,84 +133,20 @@ function Content() {
 
   const mobileView = (
     <AppFrameLayout>
-      <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
-        <BreakHeader stage={stage} onBack={() => stage === 'PREVIEW' ? setStage('SELECT') : router.back()} />
-
-        {stage === 'SELECT' && (
-          <>
-            <BreakDatePicker dates={dates} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-            <main className="flex-1 p-4 pt-0 overflow-y-auto">
-              <BreakSlotGrid 
-                doctor={doctor}
-                availableSessions={availableSessions}
-                timeIntervals={timeIntervals}
-                endIntervals={endIntervals}
-                sessionIndex={sessionIndex}
-                setSessionIndex={setSessionIndex}
-                startTime={startTime}
-                setStartTime={setStartTime}
-                endTime={endTime}
-                setEndTime={setEndTime}
-              />
-            </main>
-
-            {sessionIndex !== null && startTime && endTime && (
-              <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t z-50 animate-in slide-in-from-bottom-full">
-                <div className="max-w-md mx-auto space-y-4">
-                  <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
-                     <span>Fulfillment window</span>
-                     <span className="text-amber-600">
-                       {formatTimeStr(startTime)} – {formatTimeStr(endTime)}
-                     </span>
-                  </div>
-                  <Button onClick={handlePreview} disabled={isLoadingPreview} className="w-full h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-xl shadow-amber-500/20 active:scale-95 flex gap-3">
-                    {isLoadingPreview ? <Loader2 className="h-6 w-6 animate-spin" /> : <><span>Preview Impact</span><ArrowRight className="h-5 w-5" /></>}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {stage === 'PREVIEW' && (
-          <>
-            <BreakImpactPreview previewResult={previewResult} />
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t z-50">
-              <div className="max-w-md mx-auto flex gap-3">
-                <Button onClick={() => setStage('SELECT')} variant="outline" className="flex-1 h-16 rounded-[2rem] font-black uppercase text-xs tracking-widest border-2">Back</Button>
-                <Button onClick={handleConfirm} disabled={isConfirming} className="flex-[2] h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-base shadow-xl shadow-amber-500/20 active:scale-95">
-                  {isConfirming ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Confirm & Commit'}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {stage === 'DONE' && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8">
-            <div className="h-24 w-24 rounded-full bg-emerald-500/10 flex items-center justify-center shadow-inner">
-               <CheckCircle2 className="h-12 w-12 text-emerald-500 animate-in zoom-in-50" />
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Break Active</h2>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Syncing with clinical dashboard...</p>
-            </div>
-          </div>
-        )}
-      </div>
+      <BreakLayoutContent 
+        {...scheduleProps} 
+        onBack={() => stage === 'PREVIEW' ? setStage('SELECT') : router.back()} 
+      />
     </AppFrameLayout>
   );
 
   const tabletView = (
-    <TabletDashboardLayout>
-       <div className="h-full bg-slate-50 flex flex-col py-8">
-          <header className="mb-8">
-             <h1 className="text-4xl font-black text-slate-900 tracking-tight">Schedule Break</h1>
-             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-2 px-1">Define temporary clinical downtime</p>
-          </header>
-          <div className="flex-1 bg-white rounded-[3rem] shadow-premium overflow-hidden relative">
-             {mobileView}
-          </div>
+    <TabletDashboardLayout noPadding>
+       <div className="h-full bg-slate-50 flex flex-col">
+          <BreakLayoutContent 
+            {...scheduleProps} 
+            onBack={() => stage === 'PREVIEW' ? setStage('SELECT') : router.back()} 
+          />
        </div>
     </TabletDashboardLayout>
   );

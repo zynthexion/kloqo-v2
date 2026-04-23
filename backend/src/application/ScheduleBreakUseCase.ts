@@ -11,6 +11,8 @@ import {
 import { BreakPeriod, KloqoRole, Appointment, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { db } from '../infrastructure/firebase/config';
 
+export type BreakCompensationMode = 'GAP_ABSORPTION' | 'FULL_COMPENSATION';
+
 export interface ScheduleBreakRequest {
     clinicId: string;
     doctorId: string;
@@ -19,6 +21,7 @@ export interface ScheduleBreakRequest {
     endTime: string;   // "11:00" (HH:mm 24h)
     sessionIndex: number;
     reason?: string;
+    compensationMode?: BreakCompensationMode; // Default to GAP_ABSORPTION
     performedBy: { id: string; name: string; role: KloqoRole };
     /**
      * DRY RUN MODE: If true, the full Gap Absorption math is executed and
@@ -65,6 +68,7 @@ export class ScheduleBreakUseCase {
             endTime, 
             sessionIndex, 
             reason, 
+            compensationMode = 'GAP_ABSORPTION',
             performedBy, 
             isDryRun = false
         } = request;
@@ -178,7 +182,12 @@ export class ScheduleBreakUseCase {
 
         const occupiedSlotsInBreak = appointmentsInBreak.length;
         
-        let actualShiftMinutes = occupiedSlotsInBreak * slotDuration;
+        // 🛡️ COMPENSATION STRATEGY 🛡️
+        // FULL_COMPENSATION: Shift the day by the total break duration, effectively recovering the time.
+        // GAP_ABSORPTION: Shift the day only by the occupied slots (efficient for minimal patient delay).
+        let actualShiftMinutes = compensationMode === 'FULL_COMPENSATION'
+            ? breakDurationMinutes
+            : occupiedSlotsInBreak * slotDuration;
 
         // ── 6. APPLY SHIFT to post-break appointments in SAME SESSION ONLY ───
         //

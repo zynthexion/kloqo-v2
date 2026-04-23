@@ -14,6 +14,8 @@ interface BreakTimeSelectorProps {
   setStartTime: (val: string | null) => void;
   endTime: string | null;
   setEndTime: (val: string | null) => void;
+  isFullCompensation: boolean;
+  setIsFullCompensation: (val: boolean) => void;
 }
 
 const formatTimeStr = (t: string) => {
@@ -33,7 +35,9 @@ export const BreakSlotGrid: React.FC<BreakTimeSelectorProps> = ({
   startTime,
   setStartTime,
   endTime,
-  setEndTime
+  setEndTime,
+  isFullCompensation,
+  setIsFullCompensation
 }) => {
   if (!doctor) {
     return (
@@ -78,52 +82,89 @@ export const BreakSlotGrid: React.FC<BreakTimeSelectorProps> = ({
       </div>
 
       {sessionIndex !== null && (
-        <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">2. Start Time</label>
-            <div className="relative">
-              <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-              <select 
-                className={cn(
-                  "w-full h-14 bg-white border-2 rounded-2xl pl-12 pr-4 text-sm font-black text-slate-800 outline-none transition-all",
-                  startTime ? "border-amber-500 shadow-sm shadow-amber-500/10" : "border-slate-100 focus:border-amber-500"
-                )}
-                value={startTime || ''}
-                onChange={(e) => {
-                  setStartTime(e.target.value);
-                  setEndTime(null);
-                }}
-              >
-                <option value="" disabled>Start...</option>
-                {timeIntervals.slice(0, -1).map((time) => (
-                  <option key={time} value={time}>{formatTimeStr(time)}</option>
-                ))}
-              </select>
+        <>
+          <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">2. Start Time</label>
+              <div className="relative">
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                <select 
+                  className={cn(
+                    "w-full h-14 bg-white border-2 rounded-2xl pl-12 pr-4 text-sm font-black text-slate-800 outline-none transition-all",
+                    startTime ? "border-amber-500 shadow-sm shadow-amber-500/10" : "border-slate-100 focus:border-amber-500"
+                  )}
+                  value={startTime || ''}
+                  onChange={(e) => {
+                    setStartTime(e.target.value);
+                    setEndTime(null);
+                  }}
+                >
+                  <option value="" disabled>Start...</option>
+                  {timeIntervals.slice(0, -1).map((time) => (
+                    <option key={time} value={time}>{formatTimeStr(time)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">3. End Time</label>
+              <div className="relative">
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                <select 
+                  disabled={!startTime}
+                  className={cn(
+                    "w-full h-14 bg-white border-2 rounded-2xl pl-12 pr-4 text-sm font-black text-slate-800 outline-none transition-all",
+                    !startTime ? "opacity-50 cursor-not-allowed bg-slate-50" :
+                    endTime ? "border-amber-500 shadow-sm shadow-amber-500/10" : "border-slate-100 focus:border-amber-500"
+                  )}
+                  value={endTime || ''}
+                  onChange={(e) => setEndTime(e.target.value)}
+                >
+                  <option value="" disabled>End...</option>
+                  {endIntervals.map((time) => (
+                    <option key={time} value={time}>{formatTimeStr(time)}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">3. End Time</label>
-            <div className="relative">
-              <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-              <select 
-                disabled={!startTime}
-                className={cn(
-                  "w-full h-14 bg-white border-2 rounded-2xl pl-12 pr-4 text-sm font-black text-slate-800 outline-none transition-all",
-                  !startTime ? "opacity-50 cursor-not-allowed bg-slate-50" :
-                  endTime ? "border-amber-500 shadow-sm shadow-amber-500/10" : "border-slate-100 focus:border-amber-500"
-                )}
-                value={endTime || ''}
-                onChange={(e) => setEndTime(e.target.value)}
-              >
-                <option value="" disabled>End...</option>
-                {endIntervals.map((time) => (
-                  <option key={time} value={time}>{formatTimeStr(time)}</option>
-                ))}
-              </select>
+          {/* 🛡️ COMPENSATION STRATEGY TOGGLE 🛡️ */}
+          <div 
+            onClick={() => setIsFullCompensation(!isFullCompensation)}
+            className={cn(
+              "p-5 rounded-3xl border-2 transition-all cursor-pointer group flex items-start gap-4",
+              isFullCompensation 
+                ? "bg-amber-500 border-amber-600 shadow-lg shadow-amber-500/20" 
+                : "bg-white border-slate-100 hover:border-slate-200"
+            )}
+          >
+            <div className={cn(
+              "h-6 w-11 rounded-full relative transition-all flex items-center px-1 shrink-0",
+              isFullCompensation ? "bg-white/30" : "bg-slate-200"
+            )}>
+              <div className={cn(
+                "h-4 w-4 rounded-full bg-white shadow-md transition-all transform",
+                isFullCompensation ? "translate-x-5" : "translate-x-0"
+              )} />
+            </div>
+            <div className="space-y-1">
+              <p className={cn(
+                "text-xs font-black tracking-tight",
+                isFullCompensation ? "text-white" : "text-slate-800"
+              )}>
+                Full Break Compensation
+              </p>
+              <p className={cn(
+                "text-[10px] font-medium leading-relaxed",
+                isFullCompensation ? "text-amber-50/80" : "text-slate-400"
+              )}>
+                Extends your availability by the full break time to allow new bookings at the end of the day.
+              </p>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

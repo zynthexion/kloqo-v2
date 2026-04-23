@@ -42,6 +42,7 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
   const [startTime, setStartTime] = useState<string | null>(null);
   const [endTime, setEndTime] = useState<string | null>(null);
   
+  const [isFullCompensation, setIsFullCompensation] = useState(false);
   const [previewResult, setPreviewResult] = useState<DryRunResult | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -73,6 +74,7 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     setEndTime(null);
     setStage('SELECT');
     setPreviewResult(null);
+    setIsFullCompensation(false);
   }, [selectedDate]);
 
   const availableSessions = useMemo(() => {
@@ -124,13 +126,14 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     return {
       doctorId,
       clinicId,
-      date:         format(selectedDate, 'd MMMM yyyy'),
+      date:             format(selectedDate, 'd MMMM yyyy'),
       startTime,
       endTime,
       sessionIndex,
-      isDryRun:     dry
+      compensationMode: isFullCompensation ? 'FULL_COMPENSATION' : 'GAP_ABSORPTION',
+      isDryRun:         dry
     };
-  }, [sessionIndex, startTime, endTime, selectedDate, doctorId, clinicId]);
+  }, [sessionIndex, startTime, endTime, selectedDate, doctorId, clinicId, isFullCompensation]);
 
   const handlePreview = async () => {
     const payload = buildPayload(true);
@@ -187,6 +190,8 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     setStartTime,
     endTime,
     setEndTime,
+    isFullCompensation,
+    setIsFullCompensation,
     previewResult,
     isLoadingPreview,
     isConfirming,
