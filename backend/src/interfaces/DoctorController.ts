@@ -188,9 +188,12 @@ export class DoctorController {
 
       this.validateClinicAccess(req, doctor.clinicId);
 
-      // 🛡️ IDOR GUARD: Doctors can only manage themselves
-      if (RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR) && (user.id !== doctorId && user.userId !== doctorId)) {
-        return res.status(403).json({ error: "Access Denied: You are not authorized to modify another doctor's schedule." });
+      // 🛡️ RBAC GUARD: Admins and Nurses can manage anyone. Pure Doctors can only manage themselves.
+      const isElevatedStaff = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.NURSE]);
+      const isSelf = user.id === doctorId || user.userId === doctorId;
+
+      if (!isElevatedStaff && !isSelf) {
+        return res.status(403).json({ error: "Access Denied: You are not authorized to modify this doctor's schedule." });
       }
 
       await this.updateDoctorAvailabilityUseCase.execute({ 
@@ -218,9 +221,12 @@ export class DoctorController {
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
       this.validateClinicAccess(req, clinicId);
       
-      // 🛡️ IDOR GUARD
-      if (RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR) && (user.id !== doctorId && user.userId !== doctorId)) {
-        return res.status(403).json({ error: "Access Denied: You are not authorized to modify another doctor's leave." });
+      // 🛡️ RBAC GUARD
+      const isElevatedStaff = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.NURSE]);
+      const isSelf = user.id === doctorId || user.userId === doctorId;
+
+      if (!isElevatedStaff && !isSelf) {
+        return res.status(403).json({ error: "Access Denied: You are not authorized to modify this doctor's leave." });
       }
 
       await this.updateDoctorLeaveUseCase.execute({ 
@@ -345,8 +351,11 @@ export class DoctorController {
       const { doctor } = await this.getDoctorDetailsUseCase.execute(doctorId);
       if (doctor) this.validateClinicAccess(req, doctor.clinicId);
 
-      // 🛡️ IDOR GUARD
-      if (RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR) && (user.id !== doctorId && user.userId !== doctorId)) {
+      // 🛡️ RBAC GUARD
+      const isElevatedStaff = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.NURSE]);
+      const isSelf = user.id === doctorId || user.userId === doctorId;
+
+      if (!isElevatedStaff && !isSelf) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to mark leave for another doctor." });
       }
 

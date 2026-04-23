@@ -133,7 +133,8 @@ export default function AvailabilityPage() {
   // Admin managing anyone = FULL
   // Nurse managing anyone = TACTICAL
   const isAdmin = user?.role === 'clinicAdmin' || user?.role === 'superAdmin';
-  const mode = (isSelf || isAdmin) ? 'full' : 'tactical';
+  const isElevatedStaff = isAdmin || user?.role === 'nurse' || user?.role === 'doctor';
+  const mode = (isSelf || isElevatedStaff) ? 'full' : 'tactical';
 
   return (
     <AppFrameLayout>
@@ -184,6 +185,15 @@ export default function AvailabilityPage() {
                     <div>
                       <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Identity Verified</p>
                       <p className="text-sm font-black text-slate-800 tracking-tight">Full Autonomy Granted</p>
+                    </div>
+                  </div>
+                )}
+                {!isSelf && mode === 'full' && (
+                  <div className="px-6 py-4 bg-blue-50 rounded-3xl border-2 border-blue-100/50 flex items-center gap-4 animate-in zoom-in-95 duration-300">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-xs px-2">STAFF</div>
+                    <div>
+                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1">Elevated Access</p>
+                      <p className="text-sm font-black text-slate-800 tracking-tight">Full Override Granted</p>
                     </div>
                   </div>
                 )}
