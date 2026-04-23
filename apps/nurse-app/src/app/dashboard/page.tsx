@@ -16,8 +16,8 @@ import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
 import { NurseDesktopDashboard } from '@/components/dashboard/NurseDesktopDashboard';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
-import { Loader2, Sparkles, Users } from 'lucide-react';
-import { Appointment } from '@kloqo/shared';
+import { Loader2, Sparkles, Users, Power, AlertCircle } from 'lucide-react';
+import { Appointment, Doctor } from '@kloqo/shared';
 import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
@@ -136,16 +136,40 @@ export default function DashboardPage() {
           setIsQueueOpen={setIsQueueOpen}
         >
           {selectedAppointment && currentDoctor && currentPatient ? (
-            <PrescriptionCanvas
-              key={selectedAppointment.id} 
-              doctor={currentDoctor}
-              clinic={data.clinic}
-              appointment={selectedAppointment}
-              patient={currentPatient as any}
-              onComplete={handleComplete}
-              onSkip={handleSkip}
-              isSubmitting={isSubmitting}
-            />
+            currentDoctor.consultationStatus === 'In' ? (
+              <PrescriptionCanvas
+                key={selectedAppointment.id} 
+                doctor={currentDoctor}
+                clinic={data.clinic}
+                appointment={selectedAppointment}
+                patient={currentPatient as any}
+                onComplete={handleComplete}
+                onSkip={handleSkip}
+                isSubmitting={isSubmitting}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full bg-white/40 backdrop-blur-md p-12 text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                <div className="w-24 h-24 rounded-[2.5rem] bg-amber-50 flex items-center justify-center shadow-xl shadow-amber-500/10 border border-amber-100/50">
+                  <Power className="h-10 w-10 text-amber-500" />
+                </div>
+                <div className="max-w-md space-y-4">
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">Session Not Started</h2>
+                  <p className="text-slate-500 font-medium leading-relaxed">
+                    You are currently marked as <span className="font-bold text-slate-900">"Out"</span>. 
+                    Please toggle your session status to <span className="font-bold text-emerald-600">"In"</span> 
+                    using the sidebar switch to start consultations and write prescriptions.
+                  </p>
+                </div>
+                <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center gap-4 max-w-sm">
+                   <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                      <AlertCircle className="h-5 w-5 text-emerald-600" />
+                   </div>
+                   <p className="text-[11px] font-bold text-slate-500 text-left leading-tight">
+                      Starting a session will automatically notify all waiting patients that consultations have begun.
+                   </p>
+                </div>
+              </div>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center h-full bg-slate-50 text-slate-400 p-8 text-center space-y-4">
               <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center shadow-lg">

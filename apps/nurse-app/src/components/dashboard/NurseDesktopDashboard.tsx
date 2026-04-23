@@ -39,6 +39,9 @@ import { AddRelativeDialog } from '../patients/AddRelativeDialog';
 
 export function NurseDesktopDashboard() {
   const { data, loading, selectedDoctorId, updateAppointmentStatus } = useNurseDashboardContext();
+  const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
+  const consultationStatus = selectedDoctor?.consultationStatus || 'Out';
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('arrived');
   const [isBookingDrawerOpen, setIsBookingDrawerOpen] = useState(false);
@@ -216,6 +219,7 @@ export function NurseDesktopDashboard() {
                          onUpdateStatus={handleUpdateStatus}
                          onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          showTopRightActions={false}
+                         clinicStatus={consultationStatus}
                          currentTime={new Date()}
                       />
                    </TabsContent>
@@ -225,6 +229,7 @@ export function NurseDesktopDashboard() {
                          onUpdateStatus={handleUpdateStatus}
                          onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          showTopRightActions={false}
+                         clinicStatus={consultationStatus}
                          currentTime={new Date()}
                       />
                    </TabsContent>

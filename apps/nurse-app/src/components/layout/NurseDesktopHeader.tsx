@@ -10,11 +10,23 @@ import { format } from 'date-fns';
 import { User, Power, Clock, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function NurseDesktopHeader() {
   const { data, selectedDoctorId, setSelectedDoctorId, updateDoctorStatus } = useNurseDashboardContext();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [showConfirmIn, setShowConfirmIn] = React.useState(false);
+  const [isToggling, setIsToggling] = React.useState(false);
   
   const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
 
@@ -39,7 +51,23 @@ export function NurseDesktopHeader() {
   const handleStatusToggle = async () => {
     if (!selectedDoctorId) return;
     const newStatus = consultationStatus === 'In' ? 'Out' : 'In';
-    await updateDoctorStatus(selectedDoctorId, newStatus);
+    
+    if (newStatus === 'In') {
+      setShowConfirmIn(true);
+      return;
+    }
+
+    await performToggle('Out');
+  };
+
+  const performToggle = async (status: 'In' | 'Out') => {
+    setIsToggling(true);
+    try {
+      await updateDoctorStatus(selectedDoctorId!, status);
+    } finally {
+      setIsToggling(false);
+      setShowConfirmIn(false);
+    }
   };
 
   return (
@@ -138,6 +166,35 @@ export function NurseDesktopHeader() {
           ))}
         </div>
       )}
+      <AlertDialog open={showConfirmIn} onOpenChange={setShowConfirmIn}>
+        <AlertDialogContent className="rounded-[2rem] p-8 border-slate-100 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-black text-slate-900 leading-tight">
+              Start Doctor Session?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 font-medium py-4 leading-relaxed">
+              Toggling <span className="font-bold text-emerald-600">"Doctor In"</span> will immediately notify all arrived patients that the consultation has started. Please ensure you are ready to receive patients.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 mt-4">
+            <AlertDialogCancel className="h-14 rounded-2xl border-slate-200 font-bold text-slate-500 hover:bg-slate-50">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => performToggle('In')}
+              disabled={isToggling}
+              className="h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-lg shadow-emerald-500/20 px-8"
+            >
+              {isToggling ? (
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              ) : (
+                <Power className="h-4 w-4 mr-2" />
+              )}
+              Start Session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }

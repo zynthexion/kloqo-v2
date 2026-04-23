@@ -234,6 +234,14 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   };
 
   const completeWithPrescription = async (appointmentId: string, patientId: string, imageBlob: Blob) => {
+    // Safety Check: Ensure doctor session is active
+    const appt = data?.appointments.find(a => a.id === appointmentId);
+    const doctor = data?.doctors.find(d => d.id === (appt?.doctorId || selectedDoctorId));
+    
+    if (doctor?.consultationStatus === 'Out') {
+      throw new Error(`Doctor ${doctor.name} is currently "Out". Please start session before completing.`);
+    }
+
     try {
       const imageCompression = (await import('browser-image-compression')).default;
       const compressedFile = await imageCompression(

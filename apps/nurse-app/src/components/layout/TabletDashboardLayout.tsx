@@ -13,6 +13,18 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Switch } from '@/components/ui/switch';
+import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Power, Loader2 } from 'lucide-react';
 
 interface TabletDashboardLayoutProps {
   children: React.ReactNode;
@@ -36,6 +48,9 @@ export function TabletDashboardLayout({
   const pathname = usePathname();
   const { user } = useAuth();
   const { activeRole, availableRoles, displayName, displayAvatar, clinicalProfile } = useActiveIdentity();
+  const { data, selectedDoctorId, updateDoctorStatus } = useNurseDashboardContext();
+  const [showConfirmIn, setShowConfirmIn] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
   
   // Custom interactive collapse state
   const isDashboard = pathname.startsWith('/dashboard');
@@ -63,9 +78,32 @@ export function TabletDashboardLayout({
   
   const navItems = hardcodedRoles.includes(activeRole as Role)
     ? ALL_NAV_ITEMS.filter(item => activeRole === 'nurse' || activeRole === 'doctor' ? item.menuKey !== '/prescriptions' : true)
-    : ALL_NAV_ITEMS.filter(item =>
-        user?.accessibleMenus?.some((m: string) => m === item.menuKey || item.menuKey === '/settings')
       );
+
+  const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
+  const consultationStatus = selectedDoctor?.consultationStatus || 'Out';
+
+  const handleStatusChange = async (checked: boolean) => {
+    if (!selectedDoctorId) return;
+    const newStatus = checked ? 'In' : 'Out';
+    
+    if (newStatus === 'In') {
+      setShowConfirmIn(true);
+      return;
+    }
+
+    await performToggle('Out');
+  };
+
+  const performToggle = async (status: 'In' | 'Out') => {
+    setIsToggling(true);
+    try {
+      await updateDoctorStatus(selectedDoctorId!, status);
+    } finally {
+      setIsToggling(false);
+      setShowConfirmIn(false);
+    }
+  };
 
   return (
     <div className="flex h-screen w-full bg-[#F8FAFC] overflow-hidden font-sans text-lg">
@@ -133,9 +171,14 @@ export function TabletDashboardLayout({
                         {displayName}
                       </p>
                       <div className="flex items-center justify-center gap-2 mt-2 bg-slate-50 py-1.5 px-3 rounded-full border border-slate-100">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Out</span>
-                        <Switch className="scale-75 data-[state=checked]:bg-emerald-500" />
-                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">In</span>
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'Out' ? "text-slate-900" : "text-slate-400")}>Out</span>
+                        <Switch 
+                          className="scale-75 data-[state=checked]:bg-emerald-500" 
+                          checked={consultationStatus === 'In'}
+                          onCheckedChange={handleStatusChange}
+                          disabled={isToggling}
+                        />
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'In' ? "text-emerald-600" : "text-slate-400")}>In</span>
                       </div>
                   </div>
               </div>
@@ -197,6 +240,36 @@ export function TabletDashboardLayout({
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .shadow-premium { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.02), 0 8px 10px -6px rgba(0, 0, 0, 0.02); }
       `}</style>
+
+      <AlertDialog open={showConfirmIn} onOpenChange={setShowConfirmIn}>
+        <AlertDialogContent className="rounded-[2rem] p-8 border-slate-100 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-black text-slate-900 leading-tight">
+              Start Doctor Session?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 font-medium py-4 leading-relaxed">
+              Toggling <span className="font-bold text-emerald-600">"Doctor In"</span> will immediately notify all arrived patients that the consultation has started. Please ensure you are ready to receive patients.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 mt-4">
+            <AlertDialogCancel className="h-14 rounded-2xl border-slate-200 font-bold text-slate-500 hover:bg-slate-50">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => performToggle('In')}
+              disabled={isToggling}
+              className="h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black shadow-lg shadow-emerald-500/20 px-8"
+            >
+              {isToggling ? (
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              ) : (
+                <Power className="h-4 w-4 mr-2" />
+              )}
+              Start Session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
