@@ -8,6 +8,7 @@ import {
     getClinicTimeString
 } from '../domain/services/DateUtils';
 import { BreakPeriod, KloqoRole, Appointment, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { db } from '../infrastructure/firebase/config';
 
 export interface ScheduleBreakRequest {
     clinicId: string;
@@ -27,10 +28,9 @@ export interface ScheduleBreakRequest {
     isDryRun?: boolean;
     /**
      * COMPENSATION MODE:
-     * - 'GAP_ABSORPTION' (default): Only shifts day by (occupied_slots * slotDuration).
-     * - 'FULL_COMPENSATION': Shifts day by the TOTAL break duration, even if slots were empty.
+     * Locked strictly to 'GAP_ABSORPTION' per architectural guidelines.
+     * Only shifts day by (occupied_slots * slotDuration).
      */
-    compensationMode?: 'GAP_ABSORPTION' | 'FULL_COMPENSATION';
 }
 
 export interface ScheduleBreakResult {
@@ -65,8 +65,7 @@ export class ScheduleBreakUseCase {
             sessionIndex, 
             reason, 
             performedBy, 
-            isDryRun = false,
-            compensationMode = 'GAP_ABSORPTION'
+            isDryRun = false
         } = request;
 
         // ── 1. LOAD & AUTHORIZE ──────────────────────────────────────────────
@@ -125,6 +124,8 @@ export class ScheduleBreakUseCase {
         const sessionSlot = availability.timeSlots[sessionIndex];
         const sessionEnd  = parseClinicTime(sessionSlot.to, baseDate);
 
+        const batch = db.batch(); // Global batch for all mutations
+
         // WATERTIGHT BULKHEAD: break must end before OR at session end
         if (breakEnd > sessionEnd) {
             throw new Error(
@@ -150,12 +151,7 @@ export class ScheduleBreakUseCase {
 
         const occupiedSlotsInBreak = appointmentsInBreak.length;
         
-        let actualShiftMinutes: number;
-        if (compensationMode === 'FULL_COMPENSATION') {
-            actualShiftMinutes = breakDurationMinutes;
-        } else {
-            actualShiftMinutes = occupiedSlotsInBreak * slotDuration;
-        }
+        let actualShiftMinutes = occupiedSlotsInBreak * slotDuration;
 
         // ── 6. APPLY SHIFT to post-break appointments in SAME SESSION ONLY ───
         //
@@ -181,7 +177,8 @@ export class ScheduleBreakUseCase {
 
             // DRY RUN: skip DB write, math is still executed for the preview
             if (!isDryRun) {
-                await this.appointmentRepo.update(appt.id, {
+                const apptRef = db.collection('appointments').doc(appt.id);
+                batch.update(apptRef, {
                     time:           getClinicTimeString(newTime),
                     arriveByTime:   getClinicTimeString(subMinutes(newTime, 15)),
                     cancelledByBreak: false, // NOT cancelled — they are just moved
@@ -210,7 +207,8 @@ export class ScheduleBreakUseCase {
 
                 // DRY RUN: skip DB write
                 if (!isDryRun) {
-                    await this.appointmentRepo.update(appt.id, {
+                    const apptRef = db.collection('appointments').doc(appt.id);
+                    batch.update(apptRef, {
                         time:         getClinicTimeString(newTime),
                         arriveByTime: getClinicTimeString(subMinutes(newTime, 15)),
                         updatedAt:    new Date()
@@ -253,7 +251,8 @@ export class ScheduleBreakUseCase {
             // DRY RUN: count but do not write
             if (!isDryRun) {
                 const ghostId = `ghost-break-${doctorId}-${date}-${slotTimeStr.replace(':', '')}-${sessionIndex}`;
-                await this.appointmentRepo.save({
+                const ghostRef = db.collection('appointments').doc(ghostId);
+                batch.set(ghostRef, {
                     id:            ghostId,
                     patientId:     'system-break-blocker',
                     patientName:   'kloqo break block',
@@ -273,7 +272,7 @@ export class ScheduleBreakUseCase {
                     isSystemBlocker:  true,       // ← ANALYTICS GUARDRAIL flag
                     createdAt:     new Date(),
                     updatedAt:     new Date()
-                } as any);
+                }, { merge: true });
             }
 
             ghostsCreated++;
@@ -320,15 +319,17 @@ export class ScheduleBreakUseCase {
 
         // DRY RUN: skip all persistence (doctor metadata + audit log)
         if (!isDryRun) {
-            await this.doctorRepo.update(doctorId, {
+            const doctorRef = db.collection('doctors').doc(doctorId);
+            batch.update(doctorRef, {
                 breakPeriods,
                 availabilityExtensions,
                 updatedAt: new Date()
             });
 
             // ── 9. AUDIT LOG ─────────────────────────────────────────────────
-            await this.activityRepo.save({
-                id:          '',
+            const activityRef = db.collection('activity_logs').doc();
+            batch.set(activityRef, {
+                id:          activityRef.id,
                 type:        'SCHEDULING_CHANGE',
                 action:      'SCHEDULE_BREAK',
                 doctorId,
@@ -350,6 +351,12 @@ export class ScheduleBreakUseCase {
                 timestamp:   new Date(),
                 expiresAt:   null
             });
+
+            await batch.commit();
+            // Cache invalidation required when bypassing repository
+            if (this.doctorRepo.invalidateCache) {
+                this.doctorRepo.invalidateCache(doctorId, clinicId);
+            }
         }
 
         return {

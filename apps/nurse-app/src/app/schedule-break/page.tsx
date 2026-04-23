@@ -18,12 +18,19 @@ import { BreakSlotGrid } from '@/components/schedule-break/BreakSlotGrid';
 import { BreakImpactPreview } from '@/components/schedule-break/BreakImpactPreview';
 import { BreakCompensationToggle } from '@/components/schedule-break/BreakCompensationToggle';
 
+const formatTimeStr = (t: string | null) => {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+};
+
 function Content() {
   const {
     router, doctorId, stage, setStage, selectedDate, setSelectedDate,
-    slots, loadingSlots, startSlotId, endSlotId, selectedRange,
-    previewResult, isLoadingPreview, isConfirming, compensationMode,
-    setCompensationMode, dates, handleSlotClick, handlePreview, handleConfirm
+    doctor, availableSessions, timeIntervals, endIntervals,
+    sessionIndex, setSessionIndex, startTime, setStartTime, endTime, setEndTime,
+    previewResult, isLoadingPreview, isConfirming, dates, handlePreview, handleConfirm
   } = useScheduleBreak();
   const { activeRole } = useActiveIdentity();
 
@@ -52,17 +59,27 @@ function Content() {
           <>
             <BreakDatePicker dates={dates} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
             <main className="flex-1 p-4 pt-0 overflow-y-auto">
-              <BreakSlotGrid slots={slots} loadingSlots={loadingSlots} selectedRange={selectedRange} startSlotId={startSlotId} endSlotId={endSlotId} onSlotClick={handleSlotClick} />
+              <BreakSlotGrid 
+                doctor={doctor}
+                availableSessions={availableSessions}
+                timeIntervals={timeIntervals}
+                endIntervals={endIntervals}
+                sessionIndex={sessionIndex}
+                setSessionIndex={setSessionIndex}
+                startTime={startTime}
+                setStartTime={setStartTime}
+                endTime={endTime}
+                setEndTime={setEndTime}
+              />
             </main>
 
-            {startSlotId && endSlotId && (
+            {sessionIndex !== null && startTime && endTime && (
               <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t z-50 animate-in slide-in-from-bottom-full">
                 <div className="max-w-md mx-auto space-y-4">
-                  <BreakCompensationToggle mode={compensationMode} onModeChange={(checked) => setCompensationMode(checked ? 'FULL_COMPENSATION' : 'GAP_ABSORPTION')} />
                   <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
                      <span>Fulfillment window</span>
                      <span className="text-amber-600">
-                       {format(new Date(slots.find(s => s.time === startSlotId)!.time), 'hh:mm a')} – {format(new Date(slots.find(s => s.time === endSlotId)!.time), 'hh:mm a')}
+                       {formatTimeStr(startTime)} – {formatTimeStr(endTime)}
                      </span>
                   </div>
                   <Button onClick={handlePreview} disabled={isLoadingPreview} className="w-full h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-xl shadow-amber-500/20 active:scale-95 flex gap-3">

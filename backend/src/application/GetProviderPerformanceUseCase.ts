@@ -37,7 +37,12 @@ export class GetProviderPerformanceUseCase {
 
     // 3. In-Memory Aggregation
     const leaderboard: ProviderPerformance[] = doctors.map((doctor: Doctor) => {
-      const docAppts = appointments.filter((a: Appointment) => a.doctorId === doctor.id && !a.isDeleted);
+      // ANALYTICS GUARDRAIL: Filter out system blockers (ghost slots) from performance metrics
+      const docAppts = appointments.filter((a: Appointment) => 
+        a.doctorId === doctor.id && 
+        !a.isDeleted && 
+        !a.isSystemBlocker
+      );
       
       const completedAppts = docAppts.filter((a: Appointment) => a.status === 'Completed');
       const dispensedAppts = docAppts.filter((a: Appointment) => a.pharmacyStatus === 'dispensed');

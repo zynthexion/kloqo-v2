@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { format, addDays } from 'date-fns';
+import { format, addDays, addMinutes } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';
-import { getClinicTimeString } from '@kloqo/shared-core';
+import { getClinicTimeString, parseClinicDate, parseClinicTime } from '@kloqo/shared-core';
+import type { Doctor } from '@kloqo/shared';
 
 export type Stage = 'SELECT' | 'PREVIEW' | 'DONE';
 
@@ -24,7 +25,7 @@ export interface DryRunResult {
   preview: PreviewEntry[];
 }
 
-export function useScheduleBreak() {
+export function useScheduleBreak(doctorProp?: Doctor | null) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -35,82 +36,89 @@ export function useScheduleBreak() {
 
   const [stage, setStage] = useState<Stage>('SELECT');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [slots, setSlots] = useState<any[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(true);
-  const [startSlotId, setStartSlotId] = useState<string | null>(null);
-  const [endSlotId, setEndSlotId]   = useState<string | null>(null);
+  const [doctor, setDoctor] = useState<Doctor | null>(doctorProp || null);
 
-  const [previewResult, setPreviewResult]   = useState<DryRunResult | null>(null);
+  const [sessionIndex, setSessionIndex] = useState<number | null>(null);
+  const [startTime, setStartTime] = useState<string | null>(null);
+  const [endTime, setEndTime] = useState<string | null>(null);
+  
+  const [previewResult, setPreviewResult] = useState<DryRunResult | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [isConfirming, setIsConfirming]     = useState(false);
-  const [compensationMode, setCompensationMode] = useState<'GAP_ABSORPTION' | 'FULL_COMPENSATION'>('GAP_ABSORPTION');
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const dates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(new Date(), i)), []);
 
-  const fetchSlots = useCallback(async () => {
-    if (!doctorId || !clinicId || !selectedDate) return;
-    setLoadingSlots(true);
-    setStartSlotId(null);
-    setEndSlotId(null);
-    setStage('SELECT');
-    setPreviewResult(null);
-    try {
-      const dateStr = format(selectedDate, 'd MMMM yyyy');
-      const response = await apiRequest<any>(
-        `/appointments/available-slots?doctorId=${doctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
-      );
-      setSlots(response.slots || []);
-    } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not load schedule.' });
-    } finally {
-      setLoadingSlots(false);
+  const fetchDoctor = useCallback(async () => {
+    if (doctorProp) {
+        setDoctor(doctorProp);
+        return;
     }
-  }, [doctorId, clinicId, selectedDate, toast]);
+    if (!doctorId) return;
+    try {
+      const response = await apiRequest<{ doctor: Doctor }>(`/doctors/${doctorId}`);
+      setDoctor(response.doctor);
+    } catch {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not load doctor data.' });
+    }
+  }, [doctorId, doctorProp, toast]);
 
   useEffect(() => {
-    fetchSlots();
-  }, [fetchSlots]);
+    fetchDoctor();
+  }, [fetchDoctor]);
 
-  const handleSlotClick = useCallback((id: string) => {
-    if (!startSlotId || (startSlotId && endSlotId)) {
-      setStartSlotId(id);
-      setEndSlotId(null);
-    } else {
-      const startIdx   = slots.findIndex(s => s.time === startSlotId);
-      const currentIdx = slots.findIndex(s => s.time === id);
-      if (currentIdx < startIdx) {
-        setStartSlotId(id);
-        setEndSlotId(null);
-      } else {
-        setEndSlotId(id);
-      }
+  // Reset selections when date changes
+  useEffect(() => {
+    setSessionIndex(null);
+    setStartTime(null);
+    setEndTime(null);
+    setStage('SELECT');
+    setPreviewResult(null);
+  }, [selectedDate]);
+
+  const availableSessions = useMemo(() => {
+    if (!doctor || !doctor.availabilitySlots) return [];
+    const dayOfWeek = format(selectedDate, 'EEEE');
+    const dayAvailability = doctor.availabilitySlots.find((s: any) => s.day === dayOfWeek);
+    return dayAvailability ? dayAvailability.timeSlots : [];
+  }, [doctor, selectedDate]);
+
+  const timeIntervals = useMemo(() => {
+    if (sessionIndex === null || !availableSessions[sessionIndex]) return [];
+    const session = availableSessions[sessionIndex];
+    const intervals: string[] = [];
+    
+    // Strict IST Compliance
+    const baseDate = parseClinicDate(format(selectedDate, 'yyyy-MM-dd'));
+    let current = parseClinicTime(session.from, baseDate);
+    const end = parseClinicTime(session.to, baseDate);
+    const step = doctor?.averageConsultingTime || 15;
+    
+    while (current <= end) {
+      intervals.push(getClinicTimeString(current));
+      current = addMinutes(current, step);
     }
-  }, [startSlotId, endSlotId, slots]);
+    return intervals;
+  }, [sessionIndex, availableSessions, selectedDate, doctor]);
 
-  const selectedRange = useMemo(() => {
-    if (!startSlotId) return [];
-    if (!endSlotId)   return [startSlotId];
-    const startIdx = slots.findIndex(s => s.time === startSlotId);
-    const endIdx   = slots.findIndex(s => s.time === endSlotId);
-    return slots.slice(startIdx, endIdx + 1).map(s => s.time);
-  }, [startSlotId, endSlotId, slots]);
+  const endIntervals = useMemo(() => {
+    if (!startTime) return timeIntervals;
+    const startIndex = timeIntervals.indexOf(startTime);
+    return startIndex >= 0 ? timeIntervals.slice(startIndex + 1) : [];
+  }, [startTime, timeIntervals]);
 
   const buildPayload = useCallback((dry: boolean) => {
-    const startSlot = slots.find(s => s.time === startSlotId);
-    const endSlot   = slots.find(s => s.time === endSlotId);
-    if (!startSlot || !endSlot) return null;
+    if (sessionIndex === null || !startTime || !endTime) return null;
 
     return {
       doctorId,
       clinicId,
       date:         format(selectedDate, 'd MMMM yyyy'),
-      startTime:    getClinicTimeString(new Date(startSlot.time)),
-      endTime:      getClinicTimeString(new Date(endSlot.time)),
-      sessionIndex: startSlot.sessionIndex,
-      isDryRun:     dry,
-      compensationMode
+      startTime,
+      endTime,
+      sessionIndex,
+      isDryRun:     dry
     };
-  }, [slots, startSlotId, endSlotId, selectedDate, doctorId, clinicId, compensationMode]);
+  }, [sessionIndex, startTime, endTime, selectedDate, doctorId, clinicId]);
 
   const handlePreview = async () => {
     const payload = buildPayload(true);
@@ -157,18 +165,20 @@ export function useScheduleBreak() {
     setStage,
     selectedDate,
     setSelectedDate,
-    slots,
-    loadingSlots,
-    startSlotId,
-    endSlotId,
-    selectedRange,
+    doctor,
+    availableSessions,
+    timeIntervals,
+    endIntervals,
+    sessionIndex,
+    setSessionIndex,
+    startTime,
+    setStartTime,
+    endTime,
+    setEndTime,
     previewResult,
     isLoadingPreview,
     isConfirming,
-    compensationMode,
-    setCompensationMode,
     dates,
-    handleSlotClick,
     handlePreview,
     handleConfirm
   };

@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Doctor, BreakPeriod, Role } from '@kloqo/shared';
-import { format, isSameDay, addDays } from "date-fns";
+import { format, isSameDay, addDays, addMinutes } from "date-fns";
 import { Calendar as CalendarComp } from "@/components/ui/calendar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/api-client";
-import { getClinicTimeString, getClinic12hTimeString } from '@kloqo/shared-core';
+import { getClinicTimeString, getClinic12hTimeString, parseClinicDate, parseClinicTime } from '@kloqo/shared-core';
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -53,17 +53,10 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   
-  // Slot selection state
-  const [slots, setSlots] = useState<any[]>([]);
-  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [startSlotId, setStartSlotId] = useState<string | null>(null);
-  const [endSlotId, setEndSlotId] = useState<string | null>(null);
-  
   // Stage management for Add Break flow
   const [stage, setStage] = useState<'SELECT' | 'PREVIEW'>('SELECT');
   const [previewResult, setPreviewResult] = useState<DryRunResult | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
-  const [compensationMode, setCompensationMode] = useState<'GAP_ABSORPTION' | 'FULL_COMPENSATION'>('GAP_ABSORPTION');
 
   const dateKey = format(leaveDate, "yyyy-MM-dd");
   const dateStrForDisplay = format(leaveDate, "d MMMM yyyy");
@@ -74,95 +67,65 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
     
   const breaksForToday = breakPeriodsRecord[dateKey] || [];
   
-  // ── Calculate Expected Finish Time ──
-  const expectedFinishTime = useMemo(() => {
-    if (!previewResult || !doctor.availabilitySlots) return null;
+  // ── Calculate Dropdowns ──
+  const [sessionIndex, setSessionIndex] = useState<number | null>(null);
+  const [startTime, setStartTime] = useState<string | null>(null);
+  const [endTime, setEndTime] = useState<string | null>(null);
+
+  const availableSessions = useMemo(() => {
+    if (!doctor || !doctor.availabilitySlots) return [];
     const dayOfWeek = format(leaveDate, 'EEEE');
-    const availability = doctor.availabilitySlots.find(s => s.day === dayOfWeek);
-    if (!availability) return null;
+    const dayAvailability = doctor.availabilitySlots.find((s: any) => s.day === dayOfWeek);
+    return dayAvailability ? dayAvailability.timeSlots : [];
+  }, [doctor, leaveDate]);
 
-    const startSlot = slots.find(s => s.id === startSlotId);
-    if (!startSlot) return null;
-
-    const sessionIndex = startSlot.sessionIndex;
-    const sessionSlot = availability.timeSlots[sessionIndex];
-    if (!sessionSlot) return null;
-
-    const [h, m] = sessionSlot.to.split(':').map(Number);
-    const d = new Date(leaveDate);
-    d.setHours(h, m, 0, 0);
-    return getClinic12hTimeString(new Date(d.getTime() + previewResult.delayMinutes * 60000));
-  }, [previewResult, doctor.availabilitySlots, leaveDate, slots, startSlotId]);
-
-  // ── Fetch Slots ──
-  const fetchSlots = useCallback(async () => {
-    if (!doctor.id || !leaveDate) return;
-    setIsLoadingSlots(true);
-    setStartSlotId(null);
-    setEndSlotId(null);
-    setStage('SELECT');
-    setPreviewResult(null);
-    try {
-      const dateStr = format(leaveDate, 'yyyy-MM-dd');
-      const response = await apiRequest<any>(
-        `/appointments/available-slots?doctorId=${doctor.id}&clinicId=${doctor.clinicId}&date=${encodeURIComponent(dateStr)}`
-      );
-      setSlots(response.slots || []);
-    } catch {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not load slots.' });
-    } finally {
-      setIsLoadingSlots(false);
+  const timeIntervals = useMemo(() => {
+    if (sessionIndex === null || !availableSessions[sessionIndex]) return [];
+    const session = availableSessions[sessionIndex];
+    const intervals: string[] = [];
+    
+    // Strict IST Compliance
+    const baseDate = parseClinicDate(dateStrForDisplay);
+    let current = parseClinicTime(session.from, baseDate);
+    const end = parseClinicTime(session.to, baseDate);
+    const step = doctor?.averageConsultingTime || 15;
+    
+    while (current <= end) {
+      intervals.push(getClinicTimeString(current));
+      current = addMinutes(current, step);
     }
-  }, [doctor.id, doctor.clinicId, leaveDate, toast]);
+    return intervals;
+  }, [sessionIndex, availableSessions, dateStrForDisplay, doctor]);
+
+  const endIntervals = useMemo(() => {
+    if (!startTime) return timeIntervals;
+    const startIndex = timeIntervals.indexOf(startTime);
+    return startIndex >= 0 ? timeIntervals.slice(startIndex + 1) : [];
+  }, [startTime, timeIntervals]);
 
   useEffect(() => {
-    if (isSheetOpen) fetchSlots();
-  }, [isSheetOpen, fetchSlots]);
-
-  // ── Slot Selection ──
-  const handleSlotClick = (id: string) => {
-    if (!startSlotId || (startSlotId && endSlotId)) {
-      setStartSlotId(id);
-      setEndSlotId(null);
-    } else {
-      const startIdx = slots.findIndex(s => s.time === startSlotId);
-      const currentIdx = slots.findIndex(s => s.time === id);
-      if (currentIdx < startIdx) {
-        setStartSlotId(id);
-        setEndSlotId(null);
-      } else {
-        setEndSlotId(id);
-      }
-    }
-  };
-
-  const selectedRange = useMemo(() => {
-    if (!startSlotId) return [];
-    if (!endSlotId) return [startSlotId];
-    const startIdx = slots.findIndex(s => s.time === startSlotId);
-    const endIdx = slots.findIndex(s => s.time === endSlotId);
-    return slots.slice(startIdx, endIdx + 1).map(s => s.time);
-  }, [startSlotId, endSlotId, slots]);
+    setSessionIndex(null);
+    setStartTime(null);
+    setEndTime(null);
+    setStage('SELECT');
+    setPreviewResult(null);
+  }, [leaveDate, isSheetOpen]);
 
   // ── Actions ──
   const handlePreview = async () => {
-    if (!startSlotId || !endSlotId) return;
+    if (sessionIndex === null || !startTime || !endTime) return;
     setIsScheduling(true);
     try {
-      const startSlot = slots.find(s => s.time === startSlotId);
-      const endSlot = slots.find(s => s.time === endSlotId);
-      
       const res = await apiRequest<DryRunResult>('/breaks/schedule', {
         method: 'POST',
         body: JSON.stringify({
           doctorId: doctor.id,
           clinicId: doctor.clinicId,
           date: dateStrForDisplay,
-          startTime: getClinicTimeString(new Date(startSlot.time)),
-          endTime: getClinicTimeString(new Date(endSlot.time)),
-          sessionIndex: startSlot.sessionIndex,
-          isDryRun: true,
-          compensationMode
+          startTime,
+          endTime,
+          sessionIndex,
+          isDryRun: true
         })
       });
       setPreviewResult(res);
@@ -175,22 +138,19 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
   };
 
   const handleConfirmSchedule = async () => {
+    if (sessionIndex === null || !startTime || !endTime) return;
     setIsScheduling(true);
     try {
-      const startSlot = slots.find(s => s.time === startSlotId);
-      const endSlot = slots.find(s => s.time === endSlotId);
-      
       await apiRequest('/breaks/schedule', {
         method: 'POST',
         body: JSON.stringify({
           doctorId: doctor.id,
           clinicId: doctor.clinicId,
           date: dateStrForDisplay,
-          startTime: getClinicTimeString(new Date(startSlot.time)),
-          endTime: getClinicTimeString(new Date(endSlot.time)),
-          sessionIndex: startSlot.sessionIndex,
-          isDryRun: false,
-          compensationMode
+          startTime,
+          endTime,
+          sessionIndex,
+          isDryRun: false
         })
       });
       toast({ title: 'Success', description: 'Break scheduled and appointments shifted.' });
@@ -282,71 +242,93 @@ export function BreakTab({ doctor, leaveDate, onDateChange, onUpdate, isPending 
                 <div className="p-8 space-y-6">
                   {stage === 'SELECT' ? (
                     <>
-                      {isLoadingSlots ? (
-                        <div className="flex flex-col items-center justify-center py-24 space-y-4">
-                          <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scanning schedule...</p>
-                        </div>
-                      ) : slots.length === 0 ? (
+                      {availableSessions.length === 0 ? (
                         <div className="py-24 flex flex-col items-center justify-center text-slate-400 text-center">
-                          <Clock className="h-12 w-12 mb-4 opacity-10" />
-                          <p className="text-[10px] font-black uppercase tracking-widest">No available slots for this date</p>
+                          <Calendar className="h-12 w-12 mb-4 opacity-10" />
+                          <p className="text-[10px] font-black uppercase tracking-widest">No available sessions for this date</p>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {slots.map((slot, idx) => {
-                            const isSelected = selectedRange.includes(slot.time);
-                            const t = new Date(slot.time);
-                            return (
-                              <button
-                                key={idx}
-                                onClick={() => handleSlotClick(slot.time)}
-                                className={cn(
-                                  "p-4 rounded-2xl border-2 transition-all text-left",
-                                  isSelected 
-                                    ? "bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/20" 
-                                    : "bg-white border-slate-100 text-slate-600 hover:border-amber-200"
-                                )}
-                              >
-                                <p className="text-sm font-black leading-none mb-1">
-                                  {format(t, 'hh:mm')} 
-                                  <span className="text-[8px] ml-0.5 opacity-60">{format(t, 'a')}</span>
-                                </p>
-                                <p className={cn("text-[8px] font-black uppercase tracking-widest", isSelected ? "text-amber-100" : "text-slate-400")}>
-                                  {startSlotId === slot.time ? 'Start' : endSlotId === slot.time ? 'End' : 'Slot'}
-                                </p>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {startSlotId && endSlotId && (
-                        <div className="space-y-4 animate-in slide-in-from-bottom-2">
-                          <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100">
-                            <div className="flex-1 pr-4">
-                              <Label htmlFor="comp-mode-admin" className="text-sm font-black text-slate-800 uppercase tracking-tight block mb-0.5">
-                                Compensate Break?
-                              </Label>
-                              <p className="text-[10px] text-slate-400 font-bold leading-tight">
-                                {compensationMode === 'FULL_COMPENSATION' 
-                                  ? 'YES: Doctor gets full rest; clinic end time shifts.' 
-                                  : 'NO: Minimize patient delay; swallow gaps.'}
-                              </p>
-                            </div>
-                            <Switch 
-                              id="comp-mode-admin"
-                              checked={compensationMode === 'FULL_COMPENSATION'}
-                              onCheckedChange={(checked) => setCompensationMode(checked ? 'FULL_COMPENSATION' : 'GAP_ABSORPTION')}
-                            />
+                        <div className="space-y-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">1. Select Session</label>
+                            <select 
+                              className="w-full h-14 bg-white border-2 border-slate-100 rounded-2xl px-4 text-sm font-black text-slate-800 outline-none focus:border-amber-500 transition-all"
+                              value={sessionIndex === null ? '' : sessionIndex}
+                              onChange={(e) => {
+                                setSessionIndex(e.target.value === '' ? null : Number(e.target.value));
+                                setStartTime(null);
+                                setEndTime(null);
+                              }}
+                            >
+                              <option value="" disabled>Choose a session...</option>
+                              {availableSessions.map((session: any, idx: number) => (
+                                <option key={idx} value={idx}>
+                                  Session {idx + 1}: {formatTimeStr(session.from)} - {formatTimeStr(session.to)}
+                                </option>
+                              ))}
+                            </select>
                           </div>
-                          <Button 
-                            onClick={handlePreview} 
-                            disabled={isScheduling}
-                            className="w-full bg-amber-900 text-white hover:bg-amber-800 rounded-2xl h-14 font-black uppercase text-xs tracking-widest transition-all"
-                          >
-                            {isScheduling ? <Loader2 className="h-4 w-4 animate-spin" /> : <><span className="mr-2">Preview Impact</span> <ArrowRight className="h-4 w-4" /></>}
-                          </Button>
+
+                          {sessionIndex !== null && (
+                            <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">2. Start Time</label>
+                                <div className="relative">
+                                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                                  <select 
+                                    className={cn(
+                                      "w-full h-14 bg-white border-2 rounded-2xl pl-12 pr-4 text-sm font-black text-slate-800 outline-none transition-all",
+                                      startTime ? "border-amber-500 shadow-sm shadow-amber-500/10" : "border-slate-100 focus:border-amber-500"
+                                    )}
+                                    value={startTime || ''}
+                                    onChange={(e) => {
+                                      setStartTime(e.target.value);
+                                      setEndTime(null);
+                                    }}
+                                  >
+                                    <option value="" disabled>Start...</option>
+                                    {timeIntervals.slice(0, -1).map((time) => (
+                                      <option key={time} value={time}>{formatTimeStr(time)}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">3. End Time</label>
+                                <div className="relative">
+                                  <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
+                                  <select 
+                                    disabled={!startTime}
+                                    className={cn(
+                                      "w-full h-14 bg-white border-2 rounded-2xl pl-12 pr-4 text-sm font-black text-slate-800 outline-none transition-all",
+                                      !startTime ? "opacity-50 cursor-not-allowed bg-slate-50" :
+                                      endTime ? "border-amber-500 shadow-sm shadow-amber-500/10" : "border-slate-100 focus:border-amber-500"
+                                    )}
+                                    value={endTime || ''}
+                                    onChange={(e) => setEndTime(e.target.value)}
+                                  >
+                                    <option value="" disabled>End...</option>
+                                    {endIntervals.map((time) => (
+                                      <option key={time} value={time}>{formatTimeStr(time)}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {sessionIndex !== null && startTime && endTime && (
+                            <div className="space-y-4 pt-4 animate-in slide-in-from-bottom-2">
+                              <Button 
+                                onClick={handlePreview} 
+                                disabled={isScheduling}
+                                className="w-full bg-amber-900 text-white hover:bg-amber-800 rounded-2xl h-14 font-black uppercase text-xs tracking-widest transition-all shadow-lg"
+                              >
+                                {isScheduling ? <Loader2 className="h-4 w-4 animate-spin" /> : <><span className="mr-2">Preview Impact</span> <ArrowRight className="h-4 w-4" /></>}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
