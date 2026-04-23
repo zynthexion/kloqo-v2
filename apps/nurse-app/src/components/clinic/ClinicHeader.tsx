@@ -192,7 +192,7 @@ export default function ClinicHeader({
                                 </Avatar>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
-                                {doctors.map(doctor => (
+                                {doctors.length > 1 && doctors.map(doctor => (
                                     <DropdownMenuItem key={doctor.id} onSelect={() => onDoctorChange(doctor.id)}>
                                         Dr. {doctor.name}
                                     </DropdownMenuItem>

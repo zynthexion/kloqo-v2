@@ -37,10 +37,13 @@ export function DailyReminderHandler() {
             console.log(`Running Daily Reminder Check (${currentWindow}) at ${API_URL}...`);
             
             try {
+                const token = localStorage.getItem('token');
                 const response = await fetch(`${API_URL}/notifications/batch`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'ngrok-skip-browser-warning': 'true'
                     },
                     body: JSON.stringify({
                         clinicId,

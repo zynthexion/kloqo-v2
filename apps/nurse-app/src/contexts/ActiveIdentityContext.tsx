@@ -44,8 +44,14 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
     async function hydrateClinicalProfile() {
       if (user?.id && RBACUtils.hasRole(user, 'doctor')) {
         try {
+          const token = localStorage.getItem('token');
           // 🚀 This call triggers the "Read-Repair" on the backend if userId mapping is missing
-          const res = await fetch(`${API_URL}/api/doctors/${user.id}`);
+          const res = await fetch(`${API_URL}/api/doctors/${user.id}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'ngrok-skip-browser-warning': 'true'
+            }
+          });
           if (res.ok) {
             const data = await res.json();
             setClinicalProfile(data.doctor);
@@ -64,14 +70,11 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!user || activeRole) return;
 
-    const storedRole = localStorage.getItem('activeRole') as Role | null;
-    const verifiedRoles: Role[] = user.roles && user.roles.length > 0 ? user.roles : (user.role ? [user.role] : []) as Role[];
+    // 🚀 TACTICAL PRIORITY: In the Nurse App, if the user is a doctor, 
+    // we ALWAYS prioritize the 'doctor' role over a saved 'clinicAdmin' role 
+    // to ensure the clinical profile (name/photo) is correctly hydrated.
+    const savedRole = localStorage.getItem('activeRole') as Role;
     
-    if (storedRole && verifiedRoles.includes(storedRole)) {
-      setActiveRole(storedRole);
-      return;
-    }
-
     // Default Fallback Logic
     let defaultRole: Role | null = null;
     if (RBACUtils.hasRole(user, 'doctor')) {
@@ -123,7 +126,7 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
    */
   const displayName = useMemo(() => {
     if (activeRole === 'doctor' && clinicalProfile?.name) {
-      return `Dr. ${clinicalProfile.name}`;
+      return clinicalProfile.name;
     }
     return user?.name || 'User';
   }, [activeRole, clinicalProfile, user]);

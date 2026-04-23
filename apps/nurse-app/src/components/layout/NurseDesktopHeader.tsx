@@ -103,39 +103,41 @@ export function NurseDesktopHeader() {
         </div>
       </div>
 
-      {/* Doctor Selection Strip */}
-      <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mr-2">Assign:</span>
-        {data?.doctors.map((doc) => (
-          <button
-            key={doc.id}
-            onClick={() => handleDoctorChange(doc.id)}
-            className={cn(
-              "flex items-center gap-3 p-1.5 pr-4 rounded-full transition-all duration-300 border-2",
-              selectedDoctorId === doc.id
-                ? "bg-white border-primary shadow-md scale-105"
-                : "bg-slate-100/50 border-transparent hover:bg-slate-100 hover:border-slate-200"
-            )}
-          >
-            <div className="relative">
-              <Avatar className="h-8 w-8 border border-white">
-                <AvatarImage src={doc.avatar} />
-                <AvatarFallback className="bg-slate-200 text-[10px]">{doc.name.substring(0, 2)}</AvatarFallback>
-              </Avatar>
-              <div className={cn(
-                "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white",
-                doc.consultationStatus === 'In' ? "bg-emerald-500" : "bg-slate-300"
-              )} />
-            </div>
-            <span className={cn(
-              "text-xs font-bold whitespace-nowrap",
-              selectedDoctorId === doc.id ? "text-slate-900" : "text-slate-500"
-            )}>
-              Dr. {doc.name}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Doctor Selection Strip - Hidden when only one doctor (Self-Managed Mode) */}
+      {data?.doctors && data.doctors.length > 1 && (
+        <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mr-2">Assign:</span>
+          {data?.doctors.map((doc) => (
+            <button
+              key={doc.id}
+              onClick={() => handleDoctorChange(doc.id)}
+              className={cn(
+                "flex items-center gap-3 p-1.5 pr-4 rounded-full transition-all duration-300 border-2",
+                selectedDoctorId === doc.id
+                  ? "bg-white border-primary shadow-md scale-105"
+                  : "bg-slate-100/50 border-transparent hover:bg-slate-100 hover:border-slate-200"
+              )}
+            >
+              <div className="relative">
+                <Avatar className="h-8 w-8 border border-white">
+                  <AvatarImage src={doc.avatar} />
+                  <AvatarFallback className="bg-slate-200 text-[10px]">{doc.name.substring(0, 2)}</AvatarFallback>
+                </Avatar>
+                <div className={cn(
+                  "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white",
+                  doc.consultationStatus === 'In' ? "bg-emerald-500" : "bg-slate-300"
+                )} />
+              </div>
+              <span className={cn(
+                "text-xs font-bold whitespace-nowrap",
+                selectedDoctorId === doc.id ? "text-slate-900" : "text-slate-500"
+              )}>
+                Dr. {doc.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </header>
   );
 }

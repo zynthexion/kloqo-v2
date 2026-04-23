@@ -352,15 +352,17 @@ export default function AvailabilityManager() {
 
   return (
     <div className="p-4 space-y-6">
-      <div className="space-y-2">
-        <Label>Select Doctor</Label>
-        <Select onValueChange={handleDoctorChange} value={selectedDoctor?.id}>
-          <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-          <SelectContent>
-            {doctors.map(doc => <SelectItem key={doc.id} value={doc.id}>Dr. {doc.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      {doctors.length > 1 && (
+        <div className="space-y-2">
+          <Label>Select Doctor</Label>
+          <Select onValueChange={handleDoctorChange} value={selectedDoctor?.id}>
+            <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+            <SelectContent>
+              {doctors.map(doc => <SelectItem key={doc.id} value={doc.id}>Dr. {doc.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {selectedDoctor && (
         <Card>

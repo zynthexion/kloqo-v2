@@ -27,6 +27,14 @@ export class SaveDoctorUseCase {
     const existingDoctor = await this.doctorRepo.findById(doctor.id);
     const isNewDoctor = !existingDoctor;
 
+    // 🛡️ EMAIL UNIQUENESS GUARD: Ensure no other doctor already uses this email
+    if (doctor.email) {
+      const doctorWithSameEmail = await this.doctorRepo.findByEmail(doctor.email);
+      if (doctorWithSameEmail && doctorWithSameEmail.id !== doctor.id) {
+        throw new Error(`The email address ${doctor.email} is already registered to another doctor (ID: ${doctorWithSameEmail.id}).`);
+      }
+    }
+
     // 2. Extract roles/access before saving (Clinical normalization)
     const { roles, role, accessibleMenus, ...doctorDataOnly } = doctor as any;
     

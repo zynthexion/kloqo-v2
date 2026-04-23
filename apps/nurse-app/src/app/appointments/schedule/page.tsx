@@ -85,28 +85,10 @@ function ScheduleContent() {
             </p>
           </div>
 
-          <div className="flex items-center gap-4 bg-white p-2 rounded-[2rem] shadow-xl shadow-black/5 border border-slate-100 overflow-x-auto no-scrollbar max-w-full">
+          <div className="hidden">
+             {/* Hidden selector to keep state logic intact but remove UI clutter */}
              {filteredDoctors.map(doc => (
-               <button
-                 key={doc.id}
-                 onClick={() => setSelectedDoctorId(doc.id)}
-                 className={cn(
-                   "flex items-center gap-3 px-6 py-3 rounded-2xl transition-all duration-300 shrink-0",
-                   selectedDoctorId === doc.id 
-                    ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 scale-105" 
-                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                 )}
-               >
-                 <div className={cn(
-                   "w-8 h-8 rounded-full flex items-center justify-center font-black text-xs",
-                   selectedDoctorId === doc.id ? "bg-white/20" : "bg-slate-100"
-                 )}>
-                   {doc.name?.[0]}
-                 </div>
-                 <span className="font-black text-xs uppercase tracking-widest">
-                   Dr. {doc.name}
-                 </span>
-               </button>
+               <button key={doc.id} onClick={() => setSelectedDoctorId(doc.id)} />
              ))}
           </div>
         </div>

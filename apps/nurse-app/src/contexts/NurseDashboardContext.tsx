@@ -53,17 +53,31 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         `/appointments/dashboard?clinicId=${clinicId}&date=${date}`
       );
 
-      // Apply assigned-doctor filtering for nurse/receptionist users
-      if (user?.assignedDoctorIds && user.assignedDoctorIds.length > 0) {
+      // Filter doctors based on role and assignments
+      let filteredDoctors = dashData.doctors || [];
+      
+      // 1. If user is a doctor, they should ONLY see themselves in the nurse app (privacy/focus)
+      const isDoctor = user?.roles?.includes('doctor') || user?.role === 'doctor';
+      const isNurseOrAdmin = user?.roles?.some(r => ['nurse', 'clinicAdmin', 'superadmin'].includes(r)) || 
+                             ['nurse', 'clinicAdmin', 'superadmin'].includes(user?.role as string);
+
+      if (isDoctor && !isNurseOrAdmin) {
+        // Find the doctor record that belongs to this user
+        filteredDoctors = filteredDoctors.filter((doc: Doctor) => doc.userId === user?.id || doc.userId === user?.uid);
+      } 
+      // 2. Otherwise apply assigned-doctor filtering for nurse/receptionist users if configured
+      else if (user?.assignedDoctorIds && user.assignedDoctorIds.length > 0) {
         const assignedIds = new Set(user.assignedDoctorIds);
-        dashData = {
-          ...dashData,
-          doctors: (dashData.doctors || []).filter((doc: Doctor) => assignedIds.has(doc.id)),
-          appointments: (dashData.appointments || []).filter((appt: Appointment) =>
-            assignedIds.has(appt.doctorId)
-          ),
-        };
+        filteredDoctors = filteredDoctors.filter((doc: Doctor) => assignedIds.has(doc.id));
       }
+
+      dashData = {
+        ...dashData,
+        doctors: filteredDoctors,
+        appointments: (dashData.appointments || []).filter((appt: Appointment) =>
+          filteredDoctors.some(d => d.id === appt.doctorId)
+        ),
+      };
 
       setData(dashData);
       setError(null);
