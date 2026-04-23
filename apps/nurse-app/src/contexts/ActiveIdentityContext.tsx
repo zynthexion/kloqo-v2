@@ -12,6 +12,7 @@ interface ActiveIdentityContextType {
   isLoading: boolean;
   clinicalProfile: any | null;
   displayName: string;
+  displayAvatar: string;
 }
 
 const ActiveIdentityContext = createContext<ActiveIdentityContextType | undefined>(undefined);
@@ -122,10 +123,14 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
    */
   const displayName = useMemo(() => {
     if (activeRole === 'doctor' && clinicalProfile?.name) {
-      return `Dr. ${clinicalProfile.name.split(' ')[0]}`;
+      return `Dr. ${clinicalProfile.name}`;
     }
-    return user?.name?.split(' ')[0] || 'User';
+    return user?.name || 'User';
   }, [activeRole, clinicalProfile, user]);
+
+  const displayAvatar = useMemo(() => {
+    return clinicalProfile?.avatar || user?.avatar || 'https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e';
+  }, [clinicalProfile, user]);
 
   const value = {
     activeRole,
@@ -133,7 +138,8 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
     availableRoles,
     isLoading: !activeRole && !!user,
     clinicalProfile,
-    displayName
+    displayName,
+    displayAvatar
   };
 
   return (

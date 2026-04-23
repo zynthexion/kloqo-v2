@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,6 +23,7 @@ import { NurseDateOverrideManager } from "@/components/appointments/NurseDateOve
 
 function ScheduleContent() {
   const { user, loading: authLoading } = useAuth();
+  const { activeRole, clinicalProfile } = useActiveIdentity();
   const { data, loading: dashboardLoading } = useNurseDashboardContext();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -31,9 +33,17 @@ function ScheduleContent() {
   );
   const [activeTab, setActiveTab] = useState('daily');
 
+  const filteredDoctors = useMemo(() => {
+    if (!data?.doctors) return [];
+    if (activeRole === 'doctor' && clinicalProfile) {
+      return data.doctors.filter(d => d.id === clinicalProfile.id);
+    }
+    return data.doctors;
+  }, [data?.doctors, activeRole, clinicalProfile]);
+
   const selectedDoctor = useMemo(() => {
-    return data?.doctors.find(d => d.id === selectedDoctorId) || data?.doctors[0];
-  }, [data, selectedDoctorId]);
+    return filteredDoctors.find(d => d.id === selectedDoctorId) || filteredDoctors[0];
+  }, [filteredDoctors, selectedDoctorId]);
 
   useEffect(() => {
     if (selectedDoctor && selectedDoctor.id !== selectedDoctorId) {
@@ -76,7 +86,7 @@ function ScheduleContent() {
           </div>
 
           <div className="flex items-center gap-4 bg-white p-2 rounded-[2rem] shadow-xl shadow-black/5 border border-slate-100 overflow-x-auto no-scrollbar max-w-full">
-             {data?.doctors.map(doc => (
+             {filteredDoctors.map(doc => (
                <button
                  key={doc.id}
                  onClick={() => setSelectedDoctorId(doc.id)}
@@ -94,7 +104,7 @@ function ScheduleContent() {
                    {doc.name?.[0]}
                  </div>
                  <span className="font-black text-xs uppercase tracking-widest">
-                   Dr. {doc.name?.split(' ')[0]}
+                   Dr. {doc.name}
                  </span>
                </button>
              ))}

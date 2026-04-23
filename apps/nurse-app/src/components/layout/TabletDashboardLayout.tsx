@@ -35,7 +35,7 @@ export function TabletDashboardLayout({
 }: TabletDashboardLayoutProps) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const { activeRole, availableRoles, displayName, clinicalProfile } = useActiveIdentity();
+  const { activeRole, availableRoles, displayName, displayAvatar, clinicalProfile } = useActiveIdentity();
   
   // Custom interactive collapse state
   const isDashboard = pathname.startsWith('/dashboard');
@@ -123,13 +123,9 @@ export function TabletDashboardLayout({
               
               <div className="w-full px-4 pb-8 flex flex-col items-center gap-4 group">
                   <Avatar className="h-16 w-16 rounded-2xl shadow-sm border-2 border-white group-hover:scale-105 transition-transform duration-500">
-                      <AvatarImage src={clinicalProfile?.avatar || user?.avatar} />
+                      <AvatarImage src={displayAvatar} />
                       <AvatarFallback className="bg-primary/5 p-0 overflow-hidden">
-                        <img 
-                          src="https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e" 
-                          alt="Fallback" 
-                          className="w-full h-full object-cover"
-                        />
+                        <User className="w-8 h-8 text-slate-300" />
                       </AvatarFallback>
                   </Avatar>
                   <div className="text-center overflow-hidden w-full">
@@ -187,6 +183,7 @@ export function TabletDashboardLayout({
                     user={user} 
                     clinicalProfile={clinicalProfile}
                     displayName={displayName}
+                    displayAvatar={displayAvatar}
                     specialty={clinicalProfile?.specialty || (activeRole === 'nurse' ? 'Clinical Nurse' : 'Practitioner')} 
                   />
               )}
@@ -204,7 +201,7 @@ export function TabletDashboardLayout({
   );
 }
 
-function PatientContextPanel({ user, clinicalProfile, displayName, specialty }: { user: any, clinicalProfile: any, displayName: string, specialty: string }) {
+function PatientContextPanel({ user, clinicalProfile, displayName, displayAvatar, specialty }: { user: any, clinicalProfile: any, displayName: string, displayAvatar: string, specialty: string }) {
     return (
         <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
             {/* Identity Badge */}
@@ -213,13 +210,9 @@ function PatientContextPanel({ user, clinicalProfile, displayName, specialty }: 
                     <Zap className="h-6 w-6 text-primary/20" />
                 </div>
                 <Avatar className="h-32 w-32 border-8 border-white shadow-xl mb-8 group-hover:scale-105 transition-transform duration-500">
-                    <AvatarImage src={clinicalProfile?.avatar || user?.avatar} />
+                    <AvatarImage src={displayAvatar} />
                     <AvatarFallback className="bg-primary/10 p-0 overflow-hidden">
-                      <img 
-                        src="https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e" 
-                        alt="Fallback" 
-                        className="w-full h-full object-cover"
-                      />
+                      <User className="w-12 h-12 text-slate-200" />
                     </AvatarFallback>
                 </Avatar>
                 <div className="text-center">
