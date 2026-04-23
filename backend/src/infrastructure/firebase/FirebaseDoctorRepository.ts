@@ -171,4 +171,9 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
     cacheService.del(CACHE_KEY.doctor(id));
     if (clinicId) cacheService.del(CACHE_KEY.doctorsByClinic(clinicId));
   }
+
+  invalidateCache(id: string, clinicId?: string): void {
+    cacheService.del(CACHE_KEY.doctor(id));
+    if (clinicId) cacheService.del(CACHE_KEY.doctorsByClinic(clinicId));
+  }
 }

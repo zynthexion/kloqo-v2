@@ -118,6 +118,9 @@ export class UpdateDoctorAvailabilityUseCase {
         // 3. Commit Everything
         await batch.commit();
 
+        // 3.0 Invalidate Cache (Crucial since we bypassed the repository save/update methods)
+        this.doctorRepo.invalidateCache(doctor.id, doctor.clinicId);
+
         // 3.1 Emit SSE event for real-time dashboard refresh
         // We use 'walk_in_created' as a global refresh trigger as frontend apps 
         // are already wired to re-fetch on this event.

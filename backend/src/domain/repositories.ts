@@ -63,6 +63,7 @@ export interface IDoctorRepository {
   update(id: string, data: Partial<Doctor>): Promise<void>;
   save(doctor: Doctor): Promise<void>;
   delete(id: string, soft?: boolean): Promise<void>;
+  invalidateCache(id: string, clinicId?: string): void;
 }
 
 export interface IClinicRepository {

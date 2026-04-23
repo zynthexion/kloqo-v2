@@ -6,7 +6,7 @@ import { getClinicISODateString } from '@kloqo/shared-core';
 import { useToast } from '@/hooks/use-toast';
 import type { Doctor, DoctorOverride } from '@kloqo/shared';
 
-export function useDateOverrides(doctor: Doctor, onUpdate: () => Promise<void>) {
+export function useDateOverrides(doctor: Doctor, onUpdate: (newOverrides: Record<string, DoctorOverride> | null) => Promise<void>) {
   const [isPending, setIsPending] = useState(false);
   const { toast } = useToast();
 
@@ -21,7 +21,7 @@ export function useDateOverrides(doctor: Doctor, onUpdate: () => Promise<void>) 
           forceCancelConflicts: force
         }),
       });
-      await onUpdate();
+      await onUpdate(newOverrides);
       toast({
         title: "Success",
         description: force ? "Conflicts resolved and overrides updated." : "Availability overrides updated successfully.",

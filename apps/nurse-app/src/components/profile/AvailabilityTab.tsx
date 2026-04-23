@@ -224,7 +224,17 @@ export function AvailabilityTab({ doctor, onUpdate, isPending, mode = 'full' }: 
         </CardContent>
       </Card>
 
-      <DateOverrideManager doctor={doctor} onUpdate={() => onUpdate('updatedAt', new Date())} mode={mode} />
+      <DateOverrideManager 
+        doctor={doctor} 
+        onUpdate={async (newOverrides) => {
+          if (newOverrides) {
+            await onUpdate('dateOverrides', newOverrides);
+          } else {
+            await onUpdate('updatedAt', new Date());
+          }
+        }} 
+        mode={mode} 
+      />
     </div>
   );
 }

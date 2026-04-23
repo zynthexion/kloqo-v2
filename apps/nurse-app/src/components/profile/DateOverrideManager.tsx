@@ -20,7 +20,7 @@ import type { Doctor, DoctorOverride } from '@kloqo/shared';
 
 interface DateOverrideManagerProps {
   doctor: Doctor;
-  onUpdate: () => Promise<void>;
+  onUpdate: (newOverrides: Record<string, DoctorOverride> | null) => Promise<void>;
   mode?: 'tactical' | 'full';
 }
 
@@ -38,9 +38,13 @@ export function DateOverrideManager({ doctor, onUpdate, mode = 'full' }: DateOve
     try {
       if (isOff) {
         await markLeave(selectedDate, undefined, force);
+        // markLeave updates the entire map in backend, but we don't have the updated map here easily.
+        // The parent will refetch if we pass null.
+        await onUpdate(null);
       } else {
         const override: DoctorOverride = { isOff: false, slots: sessions };
         await addOverride(selectedDate, override, force);
+        setSessions([{ from: '09:00', to: '17:00' }]); // Prevent session bleed to next date
       }
     } catch (err: any) {
       if (err.message?.includes('ORPHANED_TOKENS_DETECTED')) {
@@ -54,6 +58,8 @@ export function DateOverrideManager({ doctor, onUpdate, mode = 'full' }: DateOve
     setConflictError(null);
     try {
       await markLeave(dateRange.from, dateRange.to, force);
+      await onUpdate(null);
+      setDateRange({ from: new Date(), to: undefined });
     } catch (err: any) {
       if (err.message?.includes('ORPHANED_TOKENS_DETECTED')) {
         setConflictError(err.message);
