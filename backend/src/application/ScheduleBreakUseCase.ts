@@ -5,7 +5,8 @@ import {
     getClinicDayOfWeek,
     parseClinicTime,
     addMinutes,
-    getClinicTimeString
+    getClinicTimeString,
+    getClinicISODateString
 } from '../domain/services/DateUtils';
 import { BreakPeriod, KloqoRole, Appointment, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { db } from '../infrastructure/firebase/config';
@@ -124,7 +125,9 @@ export class ScheduleBreakUseCase {
         }
 
         // ── 4. VALIDATE SESSION EXISTS & BULKHEAD CHECK ──────────────────────
-        const dateKey = format(baseDate, 'yyyy-MM-dd');
+        // ✅ TIMEZONE PROTECTION: Use getClinicISODateString to ensure we match '2026-04-23' 
+        // correctly in IST, regardless of server local time.
+        const dateKey = getClinicISODateString(baseDate);
         const override = doctor.dateOverrides?.[dateKey];
         
         let sessionSlot: { from: string; to: string };

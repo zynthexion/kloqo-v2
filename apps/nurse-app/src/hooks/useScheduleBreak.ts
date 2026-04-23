@@ -4,7 +4,7 @@ import { format, addDays, addMinutes } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';
-import { getClinicTimeString, parseClinicDate, parseClinicTime } from '@kloqo/shared-core';
+import { getClinicTimeString, parseClinicDate, parseClinicTime, getClinicISODateString } from '@kloqo/shared-core';
 import type { Doctor } from '@kloqo/shared';
 
 export type Stage = 'SELECT' | 'PREVIEW' | 'DONE';
@@ -79,7 +79,7 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     if (!doctor) return [];
     
     // 🛡️ DATE OVERRIDE PRIORITY: Check if there's a tactical override for this specific date
-    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    const dateKey = getClinicISODateString(selectedDate);
     const override = doctor.dateOverrides?.[dateKey];
 
     if (override) {
