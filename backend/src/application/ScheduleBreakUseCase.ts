@@ -116,12 +116,26 @@ export class ScheduleBreakUseCase {
         }
 
         // ── 4. VALIDATE SESSION EXISTS & BULKHEAD CHECK ──────────────────────
-        const dayOfWeekLabel = getClinicDayOfWeek(baseDate);
-        const availability   = doctor.availabilitySlots.find(s => s.day === dayOfWeekLabel);
-        if (!availability || !availability.timeSlots[sessionIndex]) {
-            throw new Error('No availability for this session');
+        const dateKey = format(baseDate, 'yyyy-MM-dd');
+        const override = doctor.dateOverrides?.[dateKey];
+        
+        let sessionSlot: { from: string; to: string };
+
+        if (override) {
+            if (override.isOff) throw new Error('Doctor is marked as OFF for this date');
+            if (!override.slots || !override.slots[sessionIndex]) {
+                throw new Error('No availability for this session (Date Override)');
+            }
+            sessionSlot = override.slots[sessionIndex];
+        } else {
+            const dayOfWeekLabel = getClinicDayOfWeek(baseDate);
+            const availability   = doctor.availabilitySlots.find(s => s.day === dayOfWeekLabel);
+            if (!availability || !availability.timeSlots[sessionIndex]) {
+                throw new Error('No availability for this session');
+            }
+            sessionSlot = availability.timeSlots[sessionIndex];
         }
-        const sessionSlot = availability.timeSlots[sessionIndex];
+
         const sessionEnd  = parseClinicTime(sessionSlot.to, baseDate);
 
         const batch = db.batch(); // Global batch for all mutations

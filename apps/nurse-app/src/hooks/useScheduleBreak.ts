@@ -76,7 +76,19 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
   }, [selectedDate]);
 
   const availableSessions = useMemo(() => {
-    if (!doctor || !doctor.availabilitySlots) return [];
+    if (!doctor) return [];
+    
+    // 🛡️ DATE OVERRIDE PRIORITY: Check if there's a tactical override for this specific date
+    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    const override = doctor.dateOverrides?.[dateKey];
+
+    if (override) {
+      if (override.isOff) return [];
+      return override.slots || [];
+    }
+
+    // Fallback: Recurring Weekly Availability
+    if (!doctor.availabilitySlots) return [];
     const dayOfWeek = format(selectedDate, 'EEEE');
     const dayAvailability = doctor.availabilitySlots.find((s: any) => s.day === dayOfWeek);
     return dayAvailability ? dayAvailability.timeSlots : [];
