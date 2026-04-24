@@ -363,9 +363,8 @@ export class ScheduleBreakUseCase {
             });
 
             // ── 9. AUDIT LOG ─────────────────────────────────────────────────
-            const activityRef = db.collection('activity_logs').doc();
-            batch.set(activityRef, {
-                id:          activityRef.id,
+            await this.activityRepo.save({
+                id:          '', // Repository will generate if missing or add via collection.add
                 type:        'SCHEDULING_CHANGE',
                 action:      'SCHEDULE_BREAK',
                 doctorId,

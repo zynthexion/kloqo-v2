@@ -116,6 +116,9 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
   async findAllByPatientAndClinic(_patientId: string, _clinicId: string): Promise<Appointment[]> { return []; }
   async findLatestByPatientIds(_patientIds: string[], _clinicId: string): Promise<Map<string, Appointment>> { return new Map(); }
   async findByPatientId(_patientId: string): Promise<Appointment[]> { return []; }
+  async findByPatientIds(patientIds: string[]): Promise<Appointment[]> {
+    return this.appointments.filter(a => patientIds.includes(a.patientId));
+  }
   async countByStatus(_clinicId: string, _status: string): Promise<number> { return 0; }
   async countByPharmacyStatus(_clinicId: string, _status: string): Promise<number> { return 0; }
   async findCompletedByClinic(_clinicId: string, _filters: any): Promise<Appointment[]> { return []; }

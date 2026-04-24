@@ -236,6 +236,7 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         doctorStatusInfo: {
             isBreak: currentDoctor?.consultationStatus === 'Break',
             isLate: liveDelay > 15,
+            isAffected: false, // Defaulting to false as it was missing
             awayReason: (currentDoctor as any)?.awayReason || '',
         }
     };

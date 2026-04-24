@@ -51,7 +51,7 @@ export interface LiveTokenContextValue {
     formattedDate: string;
 
     // Doctor status computed
-    doctorStatusInfo: { isLate: boolean; isBreak: boolean; isAffected: boolean };
+    doctorStatusInfo: { isLate: boolean; isBreak: boolean; isAffected: boolean; awayReason?: string };
     isDoctorIn: boolean;
 
     // Break/delay
