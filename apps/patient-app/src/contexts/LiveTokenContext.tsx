@@ -95,6 +95,9 @@ export interface LiveTokenContextValue {
     // Family / Multi-patient
     uniquePatientAppointments: Appointment[];
 
+    // 4-Quadrant Logic
+    quadrant: 'IN_CLINIC' | 'OUT_CLINIC' | 'IN_HOME' | 'OUT_HOME';
+
     // i18n
     t: any;
     language: 'en' | 'ml';
