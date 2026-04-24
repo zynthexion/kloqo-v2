@@ -442,50 +442,37 @@ export function usePrescriptionDrawing({
       // 1. Draw Template (Letterhead + Patient Info)
       // Only for the first page or if explicitly requested
       if (i === 0) {
-        // Header Background
+        // Header Background - Robust Rectangle
         fctx.fillStyle = '#3ebfb2';
-        fctx.beginPath();
-        fctx.moveTo(0, 0);
-        fctx.lineTo(A4_WIDTH * 0.75, 0);
-        fctx.lineTo(A4_WIDTH * 0.65, 250);
-        fctx.lineTo(0, 250);
-        fctx.closePath();
-        fctx.fill();
+        fctx.fillRect(0, 0, A4_WIDTH, 250);
 
         // Doctor Info
         fctx.fillStyle = '#ffffff';
-        fctx.font = 'bold 50px sans-serif';
-        fctx.fillText(`Dr. ${doctor.name}`, 80, 100);
+        fctx.font = 'bold 60px sans-serif';
+        fctx.fillText(`Dr. ${doctor.name || 'Doctor'}`, 80, 110);
         
-        fctx.font = 'bold 24px sans-serif';
-        fctx.fillStyle = 'rgba(255,255,255,0.9)';
-        fctx.fillText((doctor.department || 'OB/GYN').toUpperCase(), 80, 140);
+        fctx.font = 'bold 30px sans-serif';
+        fctx.fillStyle = 'rgba(255,255,255,0.95)';
+        fctx.fillText((doctor.department || 'OB/GYN').toUpperCase(), 80, 160);
         
-        fctx.font = 'bold 18px sans-serif';
-        fctx.fillStyle = 'rgba(255,255,255,0.7)';
-        fctx.fillText((doctor.specialty || 'SPECIALTY').toUpperCase(), 80, 170);
-
-        // Logo Space (Approximate)
-        fctx.fillStyle = '#f8fafc';
-        fctx.beginPath();
-        fctx.moveTo(A4_WIDTH * 0.7, 0);
-        fctx.lineTo(A4_WIDTH, 0);
-        fctx.lineTo(A4_WIDTH, 250);
-        fctx.lineTo(A4_WIDTH * 0.6, 250);
-        fctx.closePath();
-        fctx.fill();
+        fctx.font = '500 22px sans-serif';
+        fctx.fillStyle = 'rgba(255,255,255,0.85)';
+        fctx.fillText((doctor.specialty || '').toUpperCase(), 80, 200);
 
         // Patient Grid
-        fctx.fillStyle = '#f1f5f9';
-        fctx.fillRect(80, 300, A4_WIDTH - 160, 200);
+        fctx.fillStyle = '#f8fafc';
+        fctx.fillRect(80, 300, A4_WIDTH - 160, 220);
+        fctx.strokeStyle = '#e2e8f0';
+        fctx.lineWidth = 1;
+        fctx.strokeRect(80, 300, A4_WIDTH - 160, 220);
 
         fctx.fillStyle = '#64748b';
-        fctx.font = 'bold 16px sans-serif';
+        fctx.font = 'bold 18px sans-serif';
         const labels = ['NAME:', 'AGE:', 'GENDER:', 'WEIGHT:', 'HEIGHT:', 'DATE:'];
         const values = [
-          patient.name, 
-          `${patient.age ?? appointment.age ?? 'N/A'} Y`,
-          patient.sex ?? (appointment as any).sex ?? 'N/A',
+          patient.name,
+          `${patient.age ?? appointment.age ?? '-'}`,
+          patient.sex ?? (appointment as any).sex ?? '-',
           patient.weight ? `${patient.weight} Kg` : '-',
           patient.height ? `${patient.height} cm` : '-',
           new Date().toLocaleDateString('en-GB')
@@ -494,39 +481,41 @@ export function usePrescriptionDrawing({
         for (let j = 0; j < labels.length; j++) {
           const col = j % 2;
           const row = Math.floor(j / 2);
-          const x = 100 + col * (A4_WIDTH / 2 - 80);
-          const y = 350 + row * 50;
+          const x = 120 + col * (A4_WIDTH / 2 - 60);
+          const y = 360 + row * 60;
           fctx.fillText(labels[j], x, y);
           fctx.fillStyle = '#1e293b';
-          fctx.fillText(values[j], x + 100, y);
+          fctx.font = 'bold 22px sans-serif';
+          fctx.fillText(values[j], x + 120, y);
           fctx.fillStyle = '#64748b';
+          fctx.font = 'bold 18px sans-serif';
         }
 
         // Rx Watermark
-        fctx.fillStyle = 'rgba(241, 245, 249, 0.6)';
-        fctx.font = 'black 600px serif';
+        fctx.fillStyle = 'rgba(241, 245, 249, 0.4)';
+        fctx.font = '900 600px serif';
         fctx.textAlign = 'center';
         fctx.fillText('Rx', A4_WIDTH / 2, A4_HEIGHT * 0.6);
         fctx.textAlign = 'left';
 
         // Footer
         fctx.fillStyle = '#ffffff';
-        fctx.fillRect(0, A4_HEIGHT - 150, A4_WIDTH, 150);
-        fctx.strokeStyle = '#f1f5f9';
+        fctx.fillRect(0, A4_HEIGHT - 160, A4_WIDTH, 160);
+        fctx.strokeStyle = '#e2e8f0';
         fctx.lineWidth = 2;
         fctx.beginPath();
-        fctx.moveTo(80, A4_HEIGHT - 150);
-        fctx.lineTo(A4_WIDTH - 80, A4_HEIGHT - 150);
+        fctx.moveTo(80, A4_HEIGHT - 160);
+        fctx.lineTo(A4_WIDTH - 80, A4_HEIGHT - 160);
         fctx.stroke();
 
         fctx.fillStyle = '#0f172a';
-        fctx.font = 'black 30px sans-serif';
-        fctx.fillText(clinic.name.toUpperCase(), 100, A4_HEIGHT - 80);
+        fctx.font = '900 36px sans-serif';
+        fctx.fillText(clinic.name.toUpperCase(), 100, A4_HEIGHT - 90);
 
         if (clinic.address) {
           fctx.fillStyle = '#64748b';
-          fctx.font = 'bold 18px sans-serif';
-          fctx.fillText(clinic.address, 100, A4_HEIGHT - 40);
+          fctx.font = '500 20px sans-serif';
+          fctx.fillText(clinic.address, 100, A4_HEIGHT - 50);
         }
       }
 
@@ -542,27 +531,22 @@ export function usePrescriptionDrawing({
       }
 
       page.strokes.forEach(s => {
-        const scaleX = A4_WIDTH / s.canvasWidth;
-        const scaleY = A4_HEIGHT / s.canvasHeight;
+        const scaleX = A4_WIDTH / (s.canvasWidth || 1);
+        const scaleY = A4_HEIGHT / (s.canvasHeight || 1);
         
         const outlinePoints = getStroke(s.points, exportOptions);
         if (!outlinePoints.length) return;
 
-        const pathData = outlinePoints.reduce(
-          (acc, [x, y], idx) => {
-            const sx = x * scaleX;
-            const sy = y * scaleY;
-            if (idx === 0) acc.push('M', sx, sy);
-            else acc.push('L', sx, sy);
-            return acc;
-          },
-          [] as any[]
-        );
-        pathData.push('Z');
-
-        const path = new Path2D(pathData.join(' '));
         fctx!.fillStyle = '#1e1b4b';
-        fctx!.fill(path);
+        fctx!.beginPath();
+        outlinePoints.forEach(([x, y], idx) => {
+          const sx = x * scaleX;
+          const sy = y * scaleY;
+          if (idx === 0) fctx!.moveTo(sx, sy);
+          else fctx!.lineTo(sx, sy);
+        });
+        fctx!.closePath();
+        fctx!.fill();
       });
 
       fctx.restore();
