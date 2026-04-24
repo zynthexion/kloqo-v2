@@ -423,7 +423,7 @@ export function usePrescriptionDrawing({
     if (!fctx) return null;
 
     const exportOptions = {
-      size: 1.2,
+      size: 3.5,
       thinning: 0.6,
       smoothing: 0.5,
       streamline: 0.85,
@@ -533,17 +533,24 @@ export function usePrescriptionDrawing({
       page.strokes.forEach(s => {
         const scaleX = A4_WIDTH / (s.canvasWidth || 1);
         const scaleY = A4_HEIGHT / (s.canvasHeight || 1);
+        const avgScale = (scaleX + scaleY) / 2;
+
+        // ✅ Scale points BEFORE passing to getStroke
+        const scaledPoints = s.points.map(([x, y, p]) => [x * scaleX, y * scaleY, p]);
+
+        const outlinePoints = getStroke(scaledPoints, {
+          ...exportOptions,
+          size: exportOptions.size * avgScale, // ✅ Scale stroke width too
+        });
         
-        const outlinePoints = getStroke(s.points, exportOptions);
         if (!outlinePoints.length) return;
 
         fctx!.fillStyle = '#1e1b4b';
         fctx!.beginPath();
         outlinePoints.forEach(([x, y], idx) => {
-          const sx = x * scaleX;
-          const sy = y * scaleY;
-          if (idx === 0) fctx!.moveTo(sx, sy);
-          else fctx!.lineTo(sx, sy);
+          // ✅ No manual scaling needed here anymore — points are already in A4 space
+          if (idx === 0) fctx!.moveTo(x, y);
+          else fctx!.lineTo(x, y);
         });
         fctx!.closePath();
         fctx!.fill();
