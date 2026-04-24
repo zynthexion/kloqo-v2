@@ -444,9 +444,17 @@ export function usePrescriptionDrawing({
       // 1. Draw Template (Letterhead + Patient Info)
       // Only for the first page or if explicitly requested
       if (i === 0) {
-        // Header Background - Robust Rectangle
+        // Header Background - Diagonal Shape
+        fctx.save();
+        fctx.beginPath();
+        fctx.moveTo(0, 0);
+        fctx.lineTo(A4_WIDTH * 0.65, 0);       // matches clip-path: 100% top
+        fctx.lineTo(A4_WIDTH * 0.57, 250);     // matches clip-path: 85% bottom
+        fctx.lineTo(0, 250);
+        fctx.closePath();
         fctx.fillStyle = '#3ebfb2';
-        fctx.fillRect(0, 0, A4_WIDTH, 250);
+        fctx.fill();
+        fctx.restore();
 
         // Doctor Info
         fctx.fillStyle = '#ffffff';
@@ -460,6 +468,25 @@ export function usePrescriptionDrawing({
         fctx.font = '500 22px sans-serif';
         fctx.fillStyle = 'rgba(255,255,255,0.85)';
         fctx.fillText((doctor.specialty || '').toUpperCase(), 80, 200);
+
+        // Draw Kloqo logo in top-right of header
+        try {
+          const logo = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = '/Kloqo_Logo_full (2) (1).webp';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+          });
+          // Position matches the HTML: right side of header, ~30% width
+          const logoW = 280;
+          const logoH = 100;
+          const logoX = A4_WIDTH - logoW - 80;
+          const logoY = (250 - logoH) / 2; // vertically centered in header
+          fctx.drawImage(logo, logoX, logoY, logoW, logoH);
+        } catch {
+          // logo failed to load — skip silently
+        }
 
         // Patient Grid
         fctx.fillStyle = '#f8fafc';
