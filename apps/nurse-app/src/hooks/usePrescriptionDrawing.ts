@@ -14,6 +14,7 @@ interface Stroke {
 
 interface PageData {
   strokes: Stroke[];
+  backgroundUrl?: string;
 }
 
 interface UsePrescriptionDrawingOptions {
@@ -69,41 +70,54 @@ export function usePrescriptionDrawing({
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
     const idx = pageIndex ?? currentPageIndexRef.current;
-    const strokes = pagesRef.current[idx]?.strokes ?? [];
+    const page = pagesRef.current[idx];
+    const strokes = page?.strokes ?? [];
+    const backgroundUrl = page?.backgroundUrl;
 
-    strokes.forEach(stroke => {
-      const pts = stroke.points;
-      if (pts.length < 1) return;
+    const draw = () => {
+      strokes.forEach(stroke => {
+        const pts = stroke.points;
+        if (pts.length < 1) return;
 
-      const scaleX = canvas.getBoundingClientRect().width > 0 ? 1 : 1;
-      const scaleY = 1;
+        ctx.fillStyle = '#1e1b4b';
+        for (let i = 0; i < pts.length; i++) {
+          const [x, y, p] = pts[i];
+          const r = pressureToRadius(p);
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
 
-      ctx.fillStyle = '#1e1b4b';
-      // Redraw every point as a filled circle (matches live engine)
-      for (let i = 0; i < pts.length; i++) {
-        const [x, y, p] = pts[i];
-        const r = pressureToRadius(p);
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Connect to previous point to avoid gaps at low sample rates
-        if (i > 0) {
-          const prev = pts[i - 1];
-          const dist = Math.hypot(x - prev[0], y - prev[1]);
-          const steps = Math.ceil(dist / (r * 0.5));
-          for (let s = 1; s < steps; s++) {
-            const t = s / steps;
-            const ix = prev[0] + (x - prev[0]) * t;
-            const iy = prev[1] + (y - prev[1]) * t;
-            const ir = pressureToRadius(prev[2] + (p - prev[2]) * t);
-            ctx.beginPath();
-            ctx.arc(ix, iy, ir, 0, Math.PI * 2);
-            ctx.fill();
+          if (i > 0) {
+            const prev = pts[i - 1];
+            const dist = Math.hypot(x - prev[0], y - prev[1]);
+            const steps = Math.ceil(dist / (r * 0.5));
+            for (let s = 1; s < steps; s++) {
+              const t = s / steps;
+              const ix = prev[0] + (x - prev[0]) * t;
+              const iy = prev[1] + (y - prev[1]) * t;
+              const ir = pressureToRadius(prev[2] + (p - prev[2]) * t);
+              ctx.beginPath();
+              ctx.arc(ix, iy, ir, 0, Math.PI * 2);
+              ctx.fill();
+            }
           }
         }
-      }
-    });
+      });
+    };
+
+    if (backgroundUrl) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = backgroundUrl;
+      img.onload = () => {
+        const dpr = window.devicePixelRatio || 1;
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+        ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
+        draw();
+      };
+    } else {
+      draw();
+    }
   }, []);
 
   // SETUP CANVAS — Configure DPR scaling
@@ -381,6 +395,23 @@ export function usePrescriptionDrawing({
     });
   };
 
+  const addPageFromUrl = (url: string) => {
+    setPages(prev => {
+      // If the current page is empty, we can just set its background
+      const currentIdx = currentPageIndexRef.current;
+      if (prev[currentIdx].strokes.length === 0 && !prev[currentIdx].backgroundUrl) {
+         const next = [...prev];
+         next[currentIdx] = { ...next[currentIdx], backgroundUrl: url };
+         return next;
+      }
+      
+      // Otherwise add a new page with the background
+      const next = [...prev, { strokes: [], backgroundUrl: url }];
+      setCurrentPageIndex(next.length - 1);
+      return next;
+    });
+  };
+
   const getBlob = async (): Promise<Blob | null> => {
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
@@ -399,38 +430,143 @@ export function usePrescriptionDrawing({
       simulatePressure: false,
     };
 
-    pages.forEach((page, i) => {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       fctx.save();
       fctx.translate(0, i * A4_HEIGHT);
 
+      // Draw Paper Background
+      fctx.fillStyle = '#ffffff';
+      fctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+
+      // 1. Draw Template (Letterhead + Patient Info)
+      // Only for the first page or if explicitly requested
+      if (i === 0) {
+        // Header Background
+        fctx.fillStyle = '#3ebfb2';
+        fctx.beginPath();
+        fctx.moveTo(0, 0);
+        fctx.lineTo(A4_WIDTH * 0.75, 0);
+        fctx.lineTo(A4_WIDTH * 0.65, 250);
+        fctx.lineTo(0, 250);
+        fctx.closePath();
+        fctx.fill();
+
+        // Doctor Info
+        fctx.fillStyle = '#ffffff';
+        fctx.font = 'bold 50px sans-serif';
+        fctx.fillText(`Dr. ${doctor.name}`, 80, 100);
+        
+        fctx.font = 'bold 24px sans-serif';
+        fctx.fillStyle = 'rgba(255,255,255,0.9)';
+        fctx.fillText((doctor.department || 'OB/GYN').toUpperCase(), 80, 140);
+        
+        fctx.font = 'bold 18px sans-serif';
+        fctx.fillStyle = 'rgba(255,255,255,0.7)';
+        fctx.fillText((doctor.specialty || 'SPECIALTY').toUpperCase(), 80, 170);
+
+        // Logo Space (Approximate)
+        fctx.fillStyle = '#f8fafc';
+        fctx.beginPath();
+        fctx.moveTo(A4_WIDTH * 0.7, 0);
+        fctx.lineTo(A4_WIDTH, 0);
+        fctx.lineTo(A4_WIDTH, 250);
+        fctx.lineTo(A4_WIDTH * 0.6, 250);
+        fctx.closePath();
+        fctx.fill();
+
+        // Patient Grid
+        fctx.fillStyle = '#f1f5f9';
+        fctx.fillRect(80, 300, A4_WIDTH - 160, 200);
+
+        fctx.fillStyle = '#64748b';
+        fctx.font = 'bold 16px sans-serif';
+        const labels = ['NAME:', 'AGE:', 'GENDER:', 'WEIGHT:', 'HEIGHT:', 'DATE:'];
+        const values = [
+          patient.name, 
+          `${patient.age ?? appointment.age ?? 'N/A'} Y`,
+          patient.sex ?? (appointment as any).sex ?? 'N/A',
+          patient.weight ? `${patient.weight} Kg` : '-',
+          patient.height ? `${patient.height} cm` : '-',
+          new Date().toLocaleDateString('en-GB')
+        ];
+
+        for (let j = 0; j < labels.length; j++) {
+          const col = j % 2;
+          const row = Math.floor(j / 2);
+          const x = 100 + col * (A4_WIDTH / 2 - 80);
+          const y = 350 + row * 50;
+          fctx.fillText(labels[j], x, y);
+          fctx.fillStyle = '#1e293b';
+          fctx.fillText(values[j], x + 100, y);
+          fctx.fillStyle = '#64748b';
+        }
+
+        // Rx Watermark
+        fctx.fillStyle = 'rgba(241, 245, 249, 0.6)';
+        fctx.font = 'black 600px serif';
+        fctx.textAlign = 'center';
+        fctx.fillText('Rx', A4_WIDTH / 2, A4_HEIGHT * 0.6);
+        fctx.textAlign = 'left';
+
+        // Footer
+        fctx.fillStyle = '#ffffff';
+        fctx.fillRect(0, A4_HEIGHT - 150, A4_WIDTH, 150);
+        fctx.strokeStyle = '#f1f5f9';
+        fctx.lineWidth = 2;
+        fctx.beginPath();
+        fctx.moveTo(80, A4_HEIGHT - 150);
+        fctx.lineTo(A4_WIDTH - 80, A4_HEIGHT - 150);
+        fctx.stroke();
+
+        fctx.fillStyle = '#0f172a';
+        fctx.font = 'black 30px sans-serif';
+        fctx.fillText(clinic.name.toUpperCase(), 100, A4_HEIGHT - 80);
+
+        if (clinic.address) {
+          fctx.fillStyle = '#64748b';
+          fctx.font = 'bold 18px sans-serif';
+          fctx.fillText(clinic.address, 100, A4_HEIGHT - 40);
+        }
+      }
+
+      if (page.backgroundUrl) {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.crossOrigin = 'anonymous';
+          image.src = page.backgroundUrl!;
+          image.onload = () => resolve(image);
+          image.onerror = reject;
+        });
+        fctx.drawImage(img, 0, 0, A4_WIDTH, A4_HEIGHT);
+      }
+
       page.strokes.forEach(s => {
-        // Correct scaling using snapshot dimensions
         const scaleX = A4_WIDTH / s.canvasWidth;
         const scaleY = A4_HEIGHT / s.canvasHeight;
         
         const outlinePoints = getStroke(s.points, exportOptions);
         if (!outlinePoints.length) return;
 
-        const d = outlinePoints.reduce(
+        const pathData = outlinePoints.reduce(
           (acc, [x, y], idx) => {
-            // Apply scale to points during export
             const sx = x * scaleX;
             const sy = y * scaleY;
-            if (idx === 0) acc.push('M', sx, sy, 'Q');
-            else acc.push(sx, sy);
+            if (idx === 0) acc.push('M', sx, sy);
+            else acc.push('L', sx, sy);
             return acc;
           },
           [] as any[]
         );
-        d.push('Z');
+        pathData.push('Z');
 
-        const path = new Path2D(d.join(' '));
+        const path = new Path2D(pathData.join(' '));
         fctx!.fillStyle = '#1e1b4b';
         fctx!.fill(path);
       });
 
       fctx.restore();
-    });
+    }
 
     return new Promise(resolve => {
       finalCanvas.toBlob(blob => resolve(blob), 'image/png');
@@ -443,9 +579,10 @@ export function usePrescriptionDrawing({
     undo,
     getBlob,
     addPage,
+    addPageFromUrl,
     currentPageIndex,
     totalPages: pages.length,
     setCurrentPageIndex,
-    hasDrawing: pages[currentPageIndex]?.strokes.length > 0,
+    hasDrawing: pages[currentPageIndex]?.strokes.length > 0 || !!pages[currentPageIndex]?.backgroundUrl,
   };
 }

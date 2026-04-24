@@ -7,7 +7,7 @@ import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
 import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
 import { TabletFocusLayout } from '@/components/layout/TabletFocusLayout';
 import { TabletQueue } from '@/components/prescription/TabletQueue';
-import { PrescriptionCanvas } from '@/components/prescription/PrescriptionCanvas';
+import { PrescriptionCanvas, PrescriptionCanvasHandle } from '@/components/prescription/PrescriptionCanvas';
 import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { PatientHistoryOverlay } from '@/components/prescription/PatientHistoryOverlay';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const { activeRole } = useActiveIdentity();
   const { toast } = useToast();
+  const canvasRef = React.useRef<PrescriptionCanvasHandle>(null);
 
   const arrivedQueue = React.useMemo(() => {
     if (!data?.appointments) return [];
@@ -103,6 +104,13 @@ export default function DashboardPage() {
             <PatientHistoryOverlay
               selectedAppointment={selectedAppointment || null}
               clinicId={user.clinicId}
+              onAttach={(url) => {
+                canvasRef.current?.addPageFromUrl(url);
+                toast({
+                  title: "Prescription Attached",
+                  description: "The selected prescription has been added as a new page.",
+                });
+              }}
             />
           </div>
         )}
@@ -139,6 +147,7 @@ export default function DashboardPage() {
             currentDoctor.consultationStatus === 'In' ? (
               <PrescriptionCanvas
                 key={selectedAppointment.id} 
+                ref={canvasRef}
                 doctor={currentDoctor}
                 clinic={data.clinic}
                 appointment={selectedAppointment}

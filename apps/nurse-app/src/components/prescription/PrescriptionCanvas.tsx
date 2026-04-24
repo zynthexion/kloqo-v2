@@ -4,6 +4,10 @@ import { cn } from '@/lib/utils';
 import { Doctor, Clinic, Patient, Appointment } from '@kloqo/shared';
 import { usePrescriptionDrawing } from '@/hooks/usePrescriptionDrawing';
 
+export interface PrescriptionCanvasHandle {
+  addPageFromUrl: (url: string) => void;
+}
+
 interface PrescriptionCanvasProps {
   onComplete: (blob: Blob) => void;
   onSkip?: () => void;
@@ -15,7 +19,7 @@ interface PrescriptionCanvasProps {
   isSubmitting?: boolean;
 }
 
-export function PrescriptionCanvas({ 
+export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, PrescriptionCanvasProps>(({ 
   onComplete, 
   onSkip, 
   onPrint, 
@@ -24,7 +28,7 @@ export function PrescriptionCanvas({
   patient,
   appointment,
   isSubmitting 
-}: PrescriptionCanvasProps) {
+}, ref) => {
   const [isToolbarOpen, setIsToolbarOpen] = useState(true);
   const {
     canvasRef,
@@ -33,6 +37,7 @@ export function PrescriptionCanvas({
     getBlob,
     hasDrawing,
     addPage,
+    addPageFromUrl,
     currentPageIndex,
     totalPages,
     setCurrentPageIndex
@@ -42,6 +47,10 @@ export function PrescriptionCanvas({
     patient,
     appointment
   });
+
+  React.useImperativeHandle(ref, () => ({
+    addPageFromUrl
+  }));
 
   const handleSaveAction = async (type: 'complete' | 'print' = 'complete') => {
     if (!hasDrawing) {
@@ -250,4 +259,4 @@ export function PrescriptionCanvas({
       </div>
     </div>
   );
-}
+});
