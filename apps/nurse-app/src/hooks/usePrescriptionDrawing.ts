@@ -416,9 +416,11 @@ export function usePrescriptionDrawing({
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
 
+    const currentPages = pagesRef.current; // ✅ Always fresh, never stale
+
     const finalCanvas = document.createElement('canvas');
     finalCanvas.width = A4_WIDTH;
-    finalCanvas.height = A4_HEIGHT * pages.length;
+    finalCanvas.height = A4_HEIGHT * currentPages.length;
     const fctx = finalCanvas.getContext('2d');
     if (!fctx) return null;
 
@@ -430,8 +432,8 @@ export function usePrescriptionDrawing({
       simulatePressure: false,
     };
 
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
+    for (let i = 0; i < currentPages.length; i++) {
+      const page = currentPages[i];
       fctx.save();
       fctx.translate(0, i * A4_HEIGHT);
 
