@@ -63,7 +63,9 @@ export const RBACUtils = {
           '/patients', 
           '/prescriptions', 
           '/live-status', 
-          '/slot-visualizer'
+          '/slot-visualizer',
+          '/day-snapshot',
+          '/settings'
         ];
       case 'nurse':
         return [
@@ -102,7 +104,7 @@ export const RBACUtils = {
       case 'superAdmin':
         return ['desktop', 'tablet', 'mobile'];
       case 'doctor':
-        return ['desktop', 'tablet'];
+        return ['desktop', 'tablet', 'mobile'];
       case 'nurse':
         return ['desktop', 'tablet', 'mobile'];
       case 'receptionist':

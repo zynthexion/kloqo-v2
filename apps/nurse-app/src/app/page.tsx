@@ -25,10 +25,20 @@ export default function HomePage() {
   const clinicId = user?.clinicId;
   const { data, loading: dashLoading, updateDoctorStatus } = useNurseDashboard(clinicId);
 
-  // Auth guard
+  // Auth guard and role-based mobile redirect
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login');
+      return;
+    }
+
+    // If doctor is on mobile, redirect to day-snapshot as default home
+    if (user && !authLoading) {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const activeRole = localStorage.getItem('activeRole') || user.role;
+      if (isMobile && activeRole === 'doctor') {
+        router.replace('/day-snapshot');
+      }
     }
   }, [user, authLoading, router]);
 

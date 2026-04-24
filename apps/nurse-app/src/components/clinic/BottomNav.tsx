@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, List, Radio, User, FileText, Bell } from 'lucide-react';
+import { Home, List, Radio, User, FileText, Bell, BarChart3 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
@@ -12,6 +12,7 @@ import { Role } from '@kloqo/shared';
 const ALL_NAV_ITEMS = [
   { href: '/', icon: Home, label: 'Home', menuKey: '/', roles: ['nurse', 'doctor', 'receptionist', 'clinicAdmin'] },
   { href: '/dashboard', icon: Radio, label: 'Live', menuKey: '/dashboard', roles: ['nurse', 'doctor', 'receptionist', 'clinicAdmin'] },
+  { href: '/day-snapshot', icon: BarChart3, label: 'Stats', menuKey: '/day-snapshot', roles: ['nurse', 'doctor', 'clinicAdmin'] },
   { href: '/appointments', icon: List, label: 'Bookings', menuKey: '/appointments', roles: ['nurse', 'doctor', 'receptionist', 'clinicAdmin'] },
   { href: '/prescriptions', icon: FileText, label: 'Fulfillment', menuKey: '/prescriptions', roles: ['pharmacist', 'clinicAdmin'] },
   { href: '/settings', icon: User, label: 'Profile', menuKey: '/settings', roles: ['nurse', 'doctor', 'receptionist', 'pharmacist', 'clinicAdmin'] },

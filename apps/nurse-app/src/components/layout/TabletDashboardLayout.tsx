@@ -77,8 +77,8 @@ export function TabletDashboardLayout({
   const hardcodedRoles: Role[] = ['nurse', 'doctor', 'clinicAdmin', 'superAdmin'];
   
   const navItems = hardcodedRoles.includes(activeRole as Role)
-    ? ALL_NAV_ITEMS.filter(item => activeRole === 'nurse' || activeRole === 'doctor' ? item.menuKey !== '/prescriptions' : true)
-      );
+    ? ALL_NAV_ITEMS.filter(item => (activeRole === 'nurse' || activeRole === 'doctor') ? item.menuKey !== '/prescriptions' : true)
+    : ALL_NAV_ITEMS;
 
   const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
   const consultationStatus = selectedDoctor?.consultationStatus || 'Out';

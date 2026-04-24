@@ -40,7 +40,7 @@ import { AddRelativeDialog } from '../patients/AddRelativeDialog';
 export function NurseDesktopDashboard() {
   const { data, loading, selectedDoctorId, updateAppointmentStatus } = useNurseDashboardContext();
   const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
-  const consultationStatus = selectedDoctor?.consultationStatus || 'Out';
+  const consultationStatus = (selectedDoctor?.consultationStatus || 'Out') as 'In' | 'Out';
   
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('arrived');
