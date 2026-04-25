@@ -104,7 +104,15 @@ export class PrescriptionPDFService {
 
     // 6. HANDWRITING OVERLAY (INK)
     try {
-      const inkImage = await pdfDoc.embedPng(inkBuffer);
+      let inkImage;
+      // Simple magic number check for PNG
+      if (inkBuffer[0] === 0x89 && inkBuffer[1] === 0x50 && inkBuffer[2] === 0x4E && inkBuffer[3] === 0x47) {
+        inkImage = await pdfDoc.embedPng(inkBuffer);
+      } else {
+        // Fallback to JPG
+        inkImage = await pdfDoc.embedJpg(inkBuffer);
+      }
+      
       page.drawImage(inkImage, {
         x: 0,
         y: 0,

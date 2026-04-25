@@ -24,7 +24,7 @@ interface NurseDashboardContextType {
   refresh: () => Promise<void>;
   updateDoctorStatus: (doctorId: string, status: 'In' | 'Out', sessionIndex?: number) => Promise<void>;
   updateAppointmentStatus: (appointmentId: string, status: string) => Promise<void>;
-  completeWithPrescription: (appointmentId: string, patientId: string, imageBlob: Blob) => Promise<void>;
+  completeWithPrescription: (appointmentId: string, patientId: string, fullBlob: Blob, inkBlob: Blob) => Promise<void>;
   selectedDoctorId: string | null;
   setSelectedDoctorId: (id: string) => void;
 }
@@ -233,7 +233,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const completeWithPrescription = async (appointmentId: string, patientId: string, imageBlob: Blob) => {
+  const completeWithPrescription = async (appointmentId: string, patientId: string, fullBlob: Blob, inkBlob: Blob) => {
     // Safety Check: Ensure doctor session is active
     const appt = data?.appointments.find(a => a.id === appointmentId);
     const doctor = data?.doctors.find(d => d.id === (appt?.doctorId || selectedDoctorId));
@@ -244,13 +244,21 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
 
     try {
       const imageCompression = (await import('browser-image-compression')).default;
-      const compressedFile = await imageCompression(
-        new File([imageBlob], 'prescription.png', { type: 'image/png' }),
-        { maxSizeMB: 2, maxWidthOrHeight: 10000, useWebWorker: true, fileType: 'image/png' }
+      const compressionOptions = { maxSizeMB: 2, maxWidthOrHeight: 10000, useWebWorker: true, fileType: 'image/png' as const };
+      
+      const compressedFull = await imageCompression(
+        new File([fullBlob], 'prescription.png', { type: 'image/png' }),
+        compressionOptions
+      );
+      
+      const compressedInk = await imageCompression(
+        new File([inkBlob], 'ink.png', { type: 'image/png' }),
+        compressionOptions
       );
 
       const formData = new FormData();
-      formData.append('file', compressedFile);
+      formData.append('fullFile', compressedFull);
+      formData.append('inkFile', compressedInk);
       formData.append('appointmentId', appointmentId);
       formData.append('patientId', patientId);
 

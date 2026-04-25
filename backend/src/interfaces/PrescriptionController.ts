@@ -15,20 +15,24 @@ export class PrescriptionController {
     try {
       const { appointmentId, patientId } = req.body;
       const clinicId = req.user?.clinicId;
-      const file = req.file;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const fullFile = files?.['fullFile']?.[0];
+      const inkFile = files?.['inkFile']?.[0];
 
-      if (!appointmentId || !patientId || !clinicId || !file) {
+      if (!appointmentId || !patientId || !clinicId || !fullFile || !inkFile) {
         return res.status(400).json({ 
           error: 'Missing required fields',
-          received: { hasApptId: !!appointmentId, hasPatientId: !!patientId, hasClinicId: !!clinicId, hasFile: !!file }
+          received: { hasApptId: !!appointmentId, hasPatientId: !!patientId, hasClinicId: !!clinicId, hasFullFile: !!fullFile, hasInkFile: !!inkFile }
         });
       }
 
       const result = await this.completeAppointmentWithPrescriptionUseCase.execute({
         appointmentId,
         clinicId,
-        fileBuffer: file.buffer,
-        fileMimeType: file.mimetype,
+        fullFileBuffer: fullFile.buffer,
+        fullFileMimeType: fullFile.mimetype,
+        inkFileBuffer: inkFile.buffer,
+        inkFileMimeType: inkFile.mimetype,
         patientId
       });
 

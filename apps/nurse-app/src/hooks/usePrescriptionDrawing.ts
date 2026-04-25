@@ -396,23 +396,22 @@ export function usePrescriptionDrawing({
   };
 
   const addPageFromUrl = (url: string) => {
-    setPages(prev => {
-      // If the current page is empty, we can just set its background
-      const currentIdx = currentPageIndexRef.current;
-      if (prev[currentIdx].strokes.length === 0 && !prev[currentIdx].backgroundUrl) {
-         const next = [...prev];
-         next[currentIdx] = { ...next[currentIdx], backgroundUrl: url };
-         return next;
-      }
-      
-      // Otherwise add a new page with the background
-      const next = [...prev, { strokes: [], backgroundUrl: url }];
-      setCurrentPageIndex(next.length - 1);
-      return next;
-    });
+    const nextPages = [...pagesRef.current, { strokes: [], backgroundUrl: url }];
+    pagesRef.current = nextPages; // Manual ref sync
+    setPages(nextPages);
+    setCurrentPageIndex(nextPages.length - 1);
   };
 
-  const getBlob = async (): Promise<Blob | null> => {
+  const loadUrlToCurrentPage = (url: string) => {
+    const nextPages = [...pagesRef.current];
+    const idx = currentPageIndexRef.current;
+    nextPages[idx] = { ...nextPages[idx], backgroundUrl: url };
+    pagesRef.current = nextPages; // Manual ref sync
+    setPages(nextPages);
+    redrawPage(idx);
+  };
+
+  const getFullBlob = async (): Promise<Blob | null> => {
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
 
@@ -593,13 +592,85 @@ export function usePrescriptionDrawing({
     });
   };
 
+  const getInkBlob = async (): Promise<Blob | null> => {
+    const A4_WIDTH = 1240;
+    const A4_HEIGHT = 1754;
+
+    const currentPages = pagesRef.current;
+
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = A4_WIDTH;
+    finalCanvas.height = A4_HEIGHT * currentPages.length;
+    const fctx = finalCanvas.getContext('2d');
+    if (!fctx) return null;
+
+    const exportOptions = {
+      size: 3.5,
+      thinning: 0.6,
+      smoothing: 0.5,
+      streamline: 0.85,
+      simulatePressure: false,
+    };
+
+    for (let i = 0; i < currentPages.length; i++) {
+      const page = currentPages[i];
+      fctx.save();
+      fctx.translate(0, i * A4_HEIGHT);
+
+      if (page.backgroundUrl) {
+        try {
+          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.src = page.backgroundUrl!;
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+          });
+          fctx.drawImage(img, 0, 0, A4_WIDTH, A4_HEIGHT);
+        } catch {}
+      }
+
+      page.strokes.forEach(s => {
+        const scaleX = A4_WIDTH / (s.canvasWidth || 1);
+        const scaleY = A4_HEIGHT / (s.canvasHeight || 1);
+        const avgScale = (scaleX + scaleY) / 2;
+
+        const scaledPoints = s.points.map(([x, y, p]) => [x * scaleX, y * scaleY, p]);
+
+        const outlinePoints = getStroke(scaledPoints, {
+          ...exportOptions,
+          size: exportOptions.size * avgScale,
+        });
+        
+        if (!outlinePoints.length) return;
+
+        fctx!.fillStyle = '#1e1b4b';
+        fctx!.beginPath();
+        outlinePoints.forEach(([x, y], idx) => {
+          if (idx === 0) fctx!.moveTo(x, y);
+          else fctx!.lineTo(x, y);
+        });
+        fctx!.closePath();
+        fctx!.fill();
+      });
+
+      fctx.restore();
+    }
+
+    return new Promise(resolve => {
+      finalCanvas.toBlob(blob => resolve(blob), 'image/png');
+    });
+  };
+
   return {
     canvasRef,
     clearCanvas,
     undo,
-    getBlob,
+    getFullBlob,
+    getInkBlob,
     addPage,
     addPageFromUrl,
+    loadUrlToCurrentPage,
     currentPageIndex,
     totalPages: pages.length,
     setCurrentPageIndex,

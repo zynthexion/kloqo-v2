@@ -18,11 +18,13 @@ export class CompleteAppointmentWithPrescriptionUseCase {
   async execute(params: {
     appointmentId: string;
     clinicId: string;
-    fileBuffer: Buffer; // Raw Handwriting PNG
-    fileMimeType: string;
+    fullFileBuffer: Buffer;
+    fullFileMimeType: string;
+    inkFileBuffer: Buffer;
+    inkFileMimeType: string;
     patientId: string;
   }): Promise<Appointment> {
-    const { appointmentId, clinicId, fileBuffer, fileMimeType, patientId } = params;
+    const { appointmentId, clinicId, fullFileBuffer, fullFileMimeType, inkFileBuffer, inkFileMimeType, patientId } = params;
 
     // 1. Validate Entities
     const appointment = await this.appointmentRepo.findById(appointmentId);
@@ -43,18 +45,20 @@ export class CompleteAppointmentWithPrescriptionUseCase {
     // 2. AUDIT TRAIL: Upload Raw Handwriting (PNG)
     const rawPath = `raw-ink/${clinicId}/${dateStr}/${patientId}_${appointmentId}.png`;
     const rawFileRef = bucket.file(rawPath);
-    await rawFileRef.save(fileBuffer, {
-      contentType: fileMimeType,
+    await rawFileRef.save(inkFileBuffer, {
+      contentType: inkFileMimeType,
       public: true,
       metadata: { appointmentId, clinicId, patientId, type: 'raw-handwriting' }
     });
+
+    const rawInkUrl = `https://storage.googleapis.com/${bucket.name}/${rawPath}`;
 
     // 3. GENERATION: Composite High-Fidelity PDF
     const pdfBuffer = await this.pdfService.generate({
       appointment,
       clinic,
       doctor,
-      inkBuffer: fileBuffer
+      inkBuffer: fullFileBuffer
     });
 
     // 4. DELIVERY: Upload Final Merged PDF
@@ -72,6 +76,8 @@ export class CompleteAppointmentWithPrescriptionUseCase {
     const updatedData: Partial<Appointment> = {
       status: 'Completed',
       prescriptionUrl: downloadURL,
+      rawInkUrl: rawInkUrl,
+      isInkIsolated: true,
       pharmacyStatus: 'pending',
       completedAt: new Date(),
     };

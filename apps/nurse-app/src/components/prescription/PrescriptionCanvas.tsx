@@ -6,10 +6,11 @@ import { usePrescriptionDrawing } from '@/hooks/usePrescriptionDrawing';
 
 export interface PrescriptionCanvasHandle {
   addPageFromUrl: (url: string) => void;
+  loadUrlToCurrentPage: (url: string) => void;
 }
 
 interface PrescriptionCanvasProps {
-  onComplete: (blob: Blob) => void;
+  onComplete: (fullBlob: Blob, inkBlob: Blob) => void;
   onSkip?: () => void;
   onPrint?: (blob: Blob) => void;
   doctor: Doctor;
@@ -34,10 +35,12 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
     canvasRef,
     clearCanvas,
     undo,
-    getBlob,
+    getFullBlob,
+    getInkBlob,
     hasDrawing,
     addPage,
     addPageFromUrl,
+    loadUrlToCurrentPage,
     currentPageIndex,
     totalPages,
     setCurrentPageIndex
@@ -49,7 +52,8 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
   });
 
   React.useImperativeHandle(ref, () => ({
-    addPageFromUrl
+    addPageFromUrl,
+    loadUrlToCurrentPage
   }));
 
   const handleSaveAction = async (type: 'complete' | 'print' = 'complete') => {
@@ -58,13 +62,14 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
       return;
     }
 
-    const blob = await getBlob();
-    if (!blob) return;
+    const fullBlob = await getFullBlob();
+    const inkBlob = await getInkBlob();
+    if (!fullBlob || !inkBlob) return;
 
     if (type === 'complete') {
-      onComplete(blob);
+      onComplete(fullBlob, inkBlob);
     } else if (onPrint) {
-      onPrint(blob);
+      onPrint(fullBlob);
     }
   };
 

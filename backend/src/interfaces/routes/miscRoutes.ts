@@ -24,7 +24,7 @@ router.post('/breaks/edit', auth, (req, res) => doctorController.editBreak(req, 
 router.post('/breaks/cancel', auth, (req, res) => doctorController.cancelBreak(req, res));
 
 // ── Prescriptions ─────────────────────────────────────────────────────────
-router.post('/prescriptions/upload', auth, checkRole(NURSE, DOCTOR, CLINIC_ADMIN, SUPER_ADMIN), upload.single('file'), (req, res) => prescriptionController.upload(req, res));
+router.post('/prescriptions/upload', auth, checkRole(NURSE, DOCTOR, CLINIC_ADMIN, SUPER_ADMIN), upload.fields([{ name: 'fullFile', maxCount: 1 }, { name: 'inkFile', maxCount: 1 }]), (req, res) => prescriptionController.upload(req, res));
 router.get('/prescriptions/patient/:patientId', auth, (req, res) => prescriptionController.getByPatient(req, res));
 router.patch('/prescriptions/:appointmentId/dispense', auth, checkRole(PHARMACIST, CLINIC_ADMIN, SUPER_ADMIN), (req, res) => prescriptionController.dispense(req, res));
 router.patch('/prescriptions/:appointmentId/abandon', auth, checkRole(PHARMACIST, CLINIC_ADMIN, SUPER_ADMIN), (req, res) => prescriptionController.abandon(req, res));

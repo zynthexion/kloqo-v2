@@ -202,6 +202,8 @@ export interface Appointment {
   place?: string;
   communicationPhone?: string;
   prescriptionUrl?: string;
+  rawInkUrl?: string;
+  isInkIsolated?: boolean;
   pharmacyStatus?: 'pending' | 'dispensed' | 'abandoned';
   dispensedBy?: string;
   dispensedAt?: any;

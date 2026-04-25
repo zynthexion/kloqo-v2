@@ -52,11 +52,11 @@ export default function DashboardPage() {
     }
   }, [arrivedQueue, selectedAppointment]);
 
-  const handleComplete = async (blob: Blob) => {
+  const handleComplete = async (fullBlob: Blob, inkBlob: Blob) => {
     if (!selectedAppointment) return;
     setIsSubmitting(true);
     try {
-      await completeWithPrescription(selectedAppointment.id, selectedAppointment.patientId, blob);
+      await completeWithPrescription(selectedAppointment.id, selectedAppointment.patientId, fullBlob, inkBlob);
       toast({
         title: "Success",
         description: `Prescription sent for ${selectedAppointment.patientName}`,
@@ -109,6 +109,13 @@ export default function DashboardPage() {
                 toast({
                   title: "Prescription Attached",
                   description: "The selected prescription has been added as a new page.",
+                });
+              }}
+              onDuplicate={(url) => {
+                canvasRef.current?.loadUrlToCurrentPage(url);
+                toast({
+                  title: "Prescription Duplicated",
+                  description: "The previous handwriting has been loaded onto the current prescription.",
                 });
               }}
             />

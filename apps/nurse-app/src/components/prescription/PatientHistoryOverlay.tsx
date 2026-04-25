@@ -12,7 +12,10 @@ import {
   ChevronRight,
   X,
   Link,
-  Plus
+  Plus,
+  Copy,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import { Appointment, Doctor } from '@kloqo/shared';
 import { cn } from '@/lib/utils';
@@ -33,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { apiRequest } from '@/lib/api-client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { format, isValid, isSameDay } from 'date-fns';
 import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
 
@@ -40,6 +44,7 @@ interface PatientHistoryOverlayProps {
   selectedAppointment: Appointment | null;
   clinicId: string;
   onAttach?: (url: string) => void;
+  onDuplicate?: (url: string) => void;
 }
 
 function toDate(val: any): Date | null {
@@ -59,18 +64,14 @@ function toDate(val: any): Date | null {
   }
 }
 
-export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach }: PatientHistoryOverlayProps) {
+export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach, onDuplicate }: PatientHistoryOverlayProps) {
   const { user } = useAuth();
+  const { activeRole, clinicalProfile } = useActiveIdentity();
   const { data: dashboardData } = useNurseDashboardContext();
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
-  
-  // Filters
-  const [doctorFilter, setDoctorFilter] = useState<string>('all');
-  const [deptFilter, setDeptFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedHistoryAppt, setSelectedHistoryAppt] = useState<Appointment | null>(null);
 
   const patientId = selectedAppointment?.patientId;
   const patientName = selectedAppointment?.patientName;
@@ -95,40 +96,58 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach 
     if (isOpen) {
       fetchHistory();
     } else {
-      // Reset filters on close
-      setDoctorFilter('all');
-      setDeptFilter('all');
-      setSearchTerm('');
+      setSelectedHistoryAppt(null);
     }
   }, [isOpen, fetchHistory]);
 
   const filteredHistory = useMemo(() => {
+    const userId = user?.id || user?.uid;
+    const currentDoctorId = activeRole === 'doctor' ? clinicalProfile?.id : null;
+
     return history.filter(appt => {
-      const matchesDoctor = doctorFilter === 'all' || appt.doctorId === doctorFilter;
-      const matchesDept = deptFilter === 'all' || appt.department === deptFilter;
-      const matchesSearch = !searchTerm || 
-        appt.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appt.department?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      return matchesDoctor && matchesDept && matchesSearch;
-    });
-  }, [history, doctorFilter, deptFilter, searchTerm]);
+      // 1. If active role is DOCTOR, they ONLY see their own prescriptions
+      if (activeRole === 'doctor') {
+        const isAuthor = appt.doctorId === currentDoctorId || appt.doctorId === userId;
+        if (!isAuthor) return false;
+      }
 
-  const departments = useMemo(() => {
-    const depts = new Set<string>();
-    history.forEach(a => {
-      if (a.department) depts.add(a.department);
-    });
-    return Array.from(depts);
-  }, [history]);
+      // 2. Status filter (Case-insensitive check)
+      const status = appt.status?.toLowerCase();
+      if (status !== 'prescribed' && status !== 'completed') return false;
 
-  const uniqueDoctors = useMemo(() => {
-    const docs = new Map<string, string>();
-    history.forEach(a => {
-      if (a.doctorId && a.doctorName) docs.set(a.doctorId, a.doctorName);
+      return true;
     });
-    return Array.from(docs.entries()).map(([id, name]) => ({ id, name }));
-  }, [history]);
+  }, [history, user, activeRole, clinicalProfile]);
+
+  const handleDuplicateAction = (appt: Appointment) => {
+    if (!appt.rawInkUrl || appt.rawInkUrl.toLowerCase().endsWith('.pdf')) {
+      alert("This is a legacy PDF prescription. Digital duplication (copying handwriting) is only available for newer prescriptions.\n\nYou can still view this record in the archive.");
+      return;
+    }
+    if (!onDuplicate) return;
+
+    if (!appt.isInkIsolated) {
+      const proceed = window.confirm("This prescription was created before isolated ink was supported. Duplicating may show an old date or patient info.\n\nDo you want to proceed?");
+      if (!proceed) return;
+    }
+    onDuplicate(appt.rawInkUrl);
+    setIsOpen(false);
+  };
+
+  const handleAttachAction = (appt: Appointment) => {
+    if (!appt.rawInkUrl || appt.rawInkUrl.toLowerCase().endsWith('.pdf')) {
+      alert("Legacy PDF prescriptions cannot be attached to the current canvas. Only digital handwriting can be attached.");
+      return;
+    }
+    if (!onAttach) return;
+
+    if (!appt.isInkIsolated) {
+      const proceed = window.confirm("Note: This is an older prescription. Attaching it will include the old date and patient info.\n\nContinue?");
+      if (!proceed) return;
+    }
+    onAttach(appt.rawInkUrl);
+    setIsOpen(false);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -157,7 +176,9 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach 
                 <ClipboardList className="h-8 w-8 text-primary" />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Clinical Archive</h1>
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">Clinical Archive</DialogTitle>
+                </DialogHeader>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
                   History for <span className="text-primary">{patientName}</span>
                 </p>
@@ -178,62 +199,7 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach 
             </div>
           </div>
 
-          {/* Filter Bar */}
-          <div className="flex flex-wrap items-center gap-4">
-             <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input 
-                  type="text"
-                  placeholder="Search by doctor or dept..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-12 pl-12 pr-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-             </div>
 
-             <Select value={doctorFilter} onValueChange={setDoctorFilter}>
-                <SelectTrigger className="w-[180px] h-12 rounded-2xl bg-slate-50 border-slate-100 font-bold text-slate-600">
-                   <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 opacity-50" />
-                      <SelectValue placeholder="Doctor" />
-                   </div>
-                </SelectTrigger>
-                <SelectContent>
-                   <SelectItem value="all">All Doctors</SelectItem>
-                   {uniqueDoctors.map(doc => (
-                     <SelectItem key={doc.id} value={doc.id}>{doc.name}</SelectItem>
-                   ))}
-                </SelectContent>
-             </Select>
-
-             <Select value={deptFilter} onValueChange={setDeptFilter}>
-                <SelectTrigger className="w-[180px] h-12 rounded-2xl bg-slate-50 border-slate-100 font-bold text-slate-600">
-                   <div className="flex items-center gap-2">
-                      <Activity className="h-4 w-4 opacity-50" />
-                      <SelectValue placeholder="Department" />
-                   </div>
-                </SelectTrigger>
-                <SelectContent>
-                   <SelectItem value="all">All Depts</SelectItem>
-                   {departments.map(dept => (
-                     <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                   ))}
-                </SelectContent>
-             </Select>
-
-             <Button 
-              variant="outline" 
-              onClick={() => {
-                setDoctorFilter('all');
-                setDeptFilter('all');
-                setSearchTerm('');
-              }}
-              className="h-12 w-12 rounded-2xl border-slate-100 hover:bg-slate-50 p-0"
-              title="Reset Filters"
-             >
-                <Filter className="h-4 w-4 text-slate-400" />
-             </Button>
-          </div>
         </div>
 
         {/* Content Area */}
@@ -252,85 +218,30 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
                {filteredHistory.map((appt) => {
                   const completedAt = toDate(appt.completedAt);
-                  const isOwnRx = appt.doctorId === user?.id;
-                  
                   return (
                     <div 
                       key={appt.id}
-                      className={cn(
-                        "group bg-white rounded-[2rem] border-2 border-transparent p-6 transition-all duration-500 hover:shadow-xl hover:shadow-slate-200/50 flex flex-col relative",
-                        isOwnRx ? "hover:border-primary/20" : "hover:border-slate-200"
-                      )}
+                      className="group bg-white rounded-[2rem] border-2 border-slate-100/50 p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-slate-200/50 flex flex-col relative overflow-hidden"
                     >
-                      {isOwnRx && (
-                        <div className="absolute top-0 right-8 px-3 py-1 bg-primary text-white text-[8px] font-black uppercase tracking-widest rounded-b-xl shadow-lg shadow-primary/20">
-                           Your Rx
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center group-hover:bg-primary/5 transition-colors">
+                           <Calendar className="h-6 w-6 text-slate-400 group-hover:text-primary transition-colors" />
                         </div>
-                      )}
-
-                      <div className="flex items-start justify-between mb-6">
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center">
-                              <User className="h-5 w-5 text-slate-400" />
-                           </div>
-                           <div>
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Physician</p>
-                              <h4 className="font-black text-slate-800 text-sm tracking-tight">Dr. {appt.doctorName}</h4>
-                           </div>
+                        <div>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Prescribed On</p>
+                           <h4 className="font-black text-slate-800 text-lg tracking-tight">
+                              {completedAt ? format(completedAt, 'MMMM d, yyyy') : 'N/A'}
+                           </h4>
                         </div>
-                        <div className="flex gap-2">
-                           {isOwnRx && onAttach && (
-                             <Button 
-                              size="icon" 
-                              variant="outline" 
-                              title="Attach to Current Rx"
-                              onClick={() => {
-                                if (appt.prescriptionUrl) onAttach(appt.prescriptionUrl);
-                              }}
-                              className="h-8 w-8 rounded-lg border-slate-100 text-primary hover:bg-primary/5 hover:border-primary/20"
-                             >
-                               <Plus className="h-4 w-4" />
-                             </Button>
-                           )}
-                           <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            onClick={() => setViewerUrl(appt.prescriptionUrl || null)}
-                            className="h-8 w-8 rounded-lg bg-slate-50 hover:bg-primary/10 hover:text-primary"
-                           >
-                             <Download className="h-4 w-4" />
-                           </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 mb-6">
-                         <div className="p-3 bg-slate-50 rounded-xl">
-                            <div className="flex items-center gap-2 text-slate-400 mb-1">
-                               <Calendar className="h-3 w-3" />
-                               <span className="text-[8px] font-black uppercase tracking-widest">Date</span>
-                            </div>
-                            <p className="text-xs font-black text-slate-700">
-                               {completedAt ? format(completedAt, 'MMM d, yyyy') : 'N/A'}
-                            </p>
-                         </div>
-                         <div className="p-3 bg-slate-50 rounded-xl">
-                            <div className="flex items-center gap-2 text-slate-400 mb-1">
-                               <Activity className="h-3 w-3" />
-                               <span className="text-[8px] font-black uppercase tracking-widest">Dept</span>
-                            </div>
-                            <p className="text-xs font-black text-slate-700 truncate">
-                               {appt.department || 'General'}
-                            </p>
-                         </div>
                       </div>
 
                       <Button 
-                        onClick={() => setViewerUrl(appt.prescriptionUrl || null)}
-                        className="w-full rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 font-black uppercase tracking-widest text-[9px] gap-2 border-none"
+                        onClick={() => setSelectedHistoryAppt(appt)}
+                        className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-black text-white font-black uppercase tracking-widest text-[10px] gap-3 shadow-xl shadow-slate-200 transition-all active:scale-95"
                       >
-                         <FileText className="h-3 w-3" />
+                         <FileText className="h-4 w-4 text-blue-400" />
                          Preview Archive
-                         <ChevronRight className="h-3 w-3 ml-auto opacity-30" />
+                         <ChevronRight className="h-4 w-4 ml-auto opacity-30" />
                       </Button>
                     </div>
                   );
@@ -340,40 +251,106 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach 
         </div>
 
         {/* Prescription Viewer Layer */}
-        {viewerUrl && (
+        {selectedHistoryAppt && (
           <div className="absolute inset-0 z-[100] bg-slate-900/95 backdrop-blur-2xl flex flex-col animate-in fade-in duration-300">
-             <div className="flex items-center justify-between p-8">
-                <div className="flex items-center gap-4">
-                   <div className="p-3 bg-white/10 rounded-2xl">
-                      <FileText className="h-6 w-6 text-white" />
-                   </div>
-                   <h2 className="text-xl font-black text-white tracking-tight">Prescription Review</h2>
-                </div>
-                <div className="flex items-center gap-4">
-                   {onAttach && (
-                     <Button 
-                      onClick={() => {
-                        onAttach(viewerUrl);
-                        setViewerUrl(null);
-                      }}
-                      className="bg-primary text-white h-12 px-6 rounded-2xl font-black uppercase tracking-widest text-[10px] gap-2"
-                     >
-                       <Plus className="h-4 w-4" /> Attach to New Rx
-                     </Button>
-                   )}
-                   <Button 
-                    variant="ghost" 
-                    onClick={() => setViewerUrl(null)}
-                    className="h-12 w-12 rounded-2xl bg-white/10 text-white hover:bg-white/20"
-                   >
-                     <X className="h-5 w-5" />
-                   </Button>
-                </div>
-             </div>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center px-6 py-4 border-b border-white/10 flex-shrink-0 bg-slate-900/50">
+                 {/* Left: Info */}
+                 <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="p-2.5 bg-white/10 rounded-xl hidden md:flex flex-shrink-0">
+                       <FileText className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="overflow-hidden">
+                       <h2 className="text-base font-black text-white tracking-tight leading-none truncate">Prescription Review</h2>
+                       <div className="flex items-center gap-2 mt-1.5">
+                          <p className="text-[9px] font-black text-white/40 uppercase tracking-widest truncate">
+                             {selectedHistoryAppt.completedAt ? format(toDate(selectedHistoryAppt.completedAt)!, 'MMMM d, yyyy') : 'N/A'}
+                          </p>
+                          <span className={cn(
+                            "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter",
+                            (!selectedHistoryAppt.rawInkUrl || selectedHistoryAppt.rawInkUrl.toLowerCase().endsWith('.pdf'))
+                              ? "bg-amber-500/10 text-amber-500" 
+                              : "bg-emerald-500/10 text-emerald-500"
+                          )}>
+                            {(!selectedHistoryAppt.rawInkUrl || selectedHistoryAppt.rawInkUrl.toLowerCase().endsWith('.pdf')) ? 'Legacy PDF' : 'Digital Ink'}
+                          </span>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Center: Navigation */}
+                 <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10 mx-4">
+                    <Button 
+                     variant="ghost" 
+                     size="icon"
+                     disabled={filteredHistory.indexOf(selectedHistoryAppt) <= 0}
+                     onClick={() => {
+                       const idx = filteredHistory.indexOf(selectedHistoryAppt);
+                       if (idx > 0) setSelectedHistoryAppt(filteredHistory[idx - 1]);
+                     }}
+                     className="h-8 w-8 rounded-xl text-white hover:bg-white/10 disabled:opacity-10 transition-all"
+                    >
+                      <ChevronRight className="h-4 w-4 rotate-180" />
+                    </Button>
+                    <div className="flex flex-col items-center min-w-[50px]">
+                       <span className="text-[10px] font-black text-primary px-2 tracking-widest">
+                          {filteredHistory.indexOf(selectedHistoryAppt) + 1} / {filteredHistory.length}
+                       </span>
+                    </div>
+                    <Button 
+                     variant="ghost" 
+                     size="icon"
+                     disabled={filteredHistory.indexOf(selectedHistoryAppt) >= filteredHistory.length - 1}
+                     onClick={() => {
+                       const idx = filteredHistory.indexOf(selectedHistoryAppt);
+                       if (idx < filteredHistory.length - 1) setSelectedHistoryAppt(filteredHistory[idx + 1]);
+                     }}
+                     className="h-8 w-8 rounded-xl text-white hover:bg-white/10 disabled:opacity-10 transition-all"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                 </div>
+
+                 {/* Right: Actions */}
+                 <div className="flex items-center gap-2 justify-end">
+                    {onDuplicate && (
+                      <Button 
+                       onClick={() => handleDuplicateAction(selectedHistoryAppt)}
+                       disabled={!selectedHistoryAppt.rawInkUrl || selectedHistoryAppt.rawInkUrl.toLowerCase().endsWith('.pdf')}
+                       className="bg-white text-slate-900 hover:bg-slate-50 h-10 px-4 rounded-xl font-black uppercase tracking-widest text-[8px] gap-1.5 border-none shadow-lg transition-all active:scale-95 disabled:opacity-30 disabled:bg-white/10 disabled:text-white"
+                      >
+                         {!selectedHistoryAppt.rawInkUrl || selectedHistoryAppt.rawInkUrl.toLowerCase().endsWith('.pdf') ? (
+                           <Lock className="h-3 w-3 text-white/30" />
+                         ) : !selectedHistoryAppt.isInkIsolated ? (
+                           <AlertTriangle className="h-3 w-3 text-orange-500" />
+                         ) : (
+                           <Copy className="h-3 w-3 text-primary" />
+                         )}
+                         Duplicate
+                      </Button>
+                    )}
+                    {onAttach && (
+                      <Button 
+                       onClick={() => handleAttachAction(selectedHistoryAppt)}
+                       disabled={!selectedHistoryAppt.rawInkUrl || selectedHistoryAppt.rawInkUrl.toLowerCase().endsWith('.pdf')}
+                       className="bg-primary text-white hover:bg-primary/90 h-10 px-4 rounded-xl font-black uppercase tracking-widest text-[8px] gap-1.5 shadow-lg shadow-primary/20 transition-all active:scale-95 disabled:opacity-30"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Attach
+                      </Button>
+                    )}
+                    <Button 
+                     variant="ghost" 
+                     size="icon"
+                     onClick={() => setSelectedHistoryAppt(null)}
+                     className="h-10 w-10 rounded-xl bg-white/10 text-white hover:bg-white/20 ml-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                 </div>
+              </div>
              <div className="flex-1 overflow-hidden p-8 flex items-center justify-center">
                 <div className="relative h-full aspect-[1/1.414] bg-white rounded-xl shadow-2xl overflow-hidden w-full max-w-4xl">
                    <iframe 
-                    src={viewerUrl} 
+                    src={selectedHistoryAppt.prescriptionUrl} 
                     className="w-full h-full border-none"
                     title="Prescription Preview"
                    />
