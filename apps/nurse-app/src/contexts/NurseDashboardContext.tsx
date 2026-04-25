@@ -245,8 +245,8 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
     try {
       const imageCompression = (await import('browser-image-compression')).default;
       const compressedFile = await imageCompression(
-        new File([imageBlob], 'prescription.jpg', { type: 'image/jpeg' }),
-        { maxSizeMB: 0.5, maxWidthOrHeight: 1920, useWebWorker: true }
+        new File([imageBlob], 'prescription.png', { type: 'image/png' }),
+        { maxSizeMB: 2, maxWidthOrHeight: 10000, useWebWorker: true, fileType: 'image/png' }
       );
 
       const formData = new FormData();
