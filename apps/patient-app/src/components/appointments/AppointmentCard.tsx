@@ -27,6 +27,7 @@ import dynamic from 'next/dynamic';
 import type { Appointment, Doctor, Clinic } from '@kloqo/shared';
 
 const ReviewPrompt = dynamic(() => import('@/components/review-prompt').then(mod => mod.ReviewPrompt), { ssr: false });
+const RxViewer = dynamic(() => import('@/components/prescriptions/Modals').then(mod => mod.RxViewer), { ssr: false });
 
 interface AppointmentCardProps {
     appointment: Appointment;
@@ -47,6 +48,7 @@ export function AppointmentCard({
     const router = useRouter();
     const [isCancelling, setIsCancelling] = useState(false);
     const [showReview, setShowReview] = useState(false);
+    const [showViewer, setShowViewer] = useState(false);
 
     let dateObj: Date;
     try {
@@ -146,15 +148,29 @@ export function AppointmentCard({
                                 <p className="text-sm font-bold text-white truncate max-w-[100px]">{appointment.patientName}</p>
                             </div>
                             
-                            {appointment.status === 'Completed' && !appointment.reviewed && (
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white transition-all" 
-                                    onClick={() => setShowReview(true)}
-                                >
-                                    <Star className="h-3 w-3 mr-1.5" /> Review
-                                </Button>
+                            {appointment.status === 'Completed' && (
+                                <div className="flex flex-col gap-2">
+                                    {appointment.prescriptionUrl && (
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest bg-primary/10 border-primary/20 text-primary hover:bg-primary hover:text-white transition-all" 
+                                            onClick={() => setShowViewer(true)}
+                                        >
+                                            <FileText className="h-3 w-3 mr-1.5" /> View Rx
+                                        </Button>
+                                    )}
+                                    {!appointment.reviewed && (
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white transition-all" 
+                                            onClick={() => setShowReview(true)}
+                                        >
+                                            <Star className="h-3 w-3 mr-1.5" /> Review
+                                        </Button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -199,6 +215,9 @@ export function AppointmentCard({
                     )}
 
                     {showReview && <ReviewPrompt appointment={appointment} onClose={() => setShowReview(false)} />}
+                    {showViewer && appointment.prescriptionUrl && (
+                        <RxViewer url={appointment.prescriptionUrl} onClose={() => setShowViewer(false)} />
+                    )}
                 </CardContent>
             </Card>
         </motion.div>

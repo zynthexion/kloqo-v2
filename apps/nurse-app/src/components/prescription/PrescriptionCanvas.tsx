@@ -7,6 +7,7 @@ import { usePrescriptionDrawing } from '@/hooks/usePrescriptionDrawing';
 export interface PrescriptionCanvasHandle {
   addPageFromUrl: (url: string) => void;
   loadUrlToCurrentPage: (url: string) => void;
+  setText: (text: string) => void;
 }
 
 interface PrescriptionCanvasProps {
@@ -41,9 +42,11 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
     addPage,
     addPageFromUrl,
     loadUrlToCurrentPage,
+    setText,
     currentPageIndex,
     totalPages,
-    setCurrentPageIndex
+    setCurrentPageIndex,
+    pages
   } = usePrescriptionDrawing({
     doctor,
     clinic,
@@ -53,8 +56,16 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
 
   React.useImperativeHandle(ref, () => ({
     addPageFromUrl,
-    loadUrlToCurrentPage
+    loadUrlToCurrentPage,
+    setText
   }));
+
+  const [isDesktop] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !('ontouchstart' in window) && navigator.maxTouchPoints === 0;
+  });
+
+  const currentText = pages[currentPageIndex]?.text || '';
 
   const handleSaveAction = async (type: 'complete' | 'print' = 'complete') => {
     if (!hasDrawing) {
@@ -133,19 +144,34 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
                 )}
               </div>
             </div>
-            
           </div>
 
           {/* SINGLE CANVAS — Incremental drawing, zero race conditions */}
           <canvas
             ref={canvasRef}
             style={{ touchAction: 'none', userSelect: 'none' }}
-            className="touch-none select-none cursor-crosshair block w-full h-full absolute inset-0 z-10 bg-transparent"
+            className={cn(
+                "touch-none select-none cursor-crosshair block w-full h-full absolute inset-0 z-10 bg-transparent",
+                isDesktop && "pointer-events-none"
+            )}
           />
+
+          {/* DESKTOP TYPING OVERLAY */}
+          {isDesktop && (
+            <div className="absolute inset-0 z-20 px-16 pt-[320px] pb-32 pointer-events-none">
+              <textarea
+                value={currentText}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Type prescription here..."
+                className="w-full h-full bg-transparent border-none outline-none resize-none font-sans text-lg font-medium text-slate-900 placeholder:text-slate-200 pointer-events-auto leading-relaxed"
+                autoFocus
+              />
+            </div>
+          )}
           
           {/* PAGE INDICATOR OVERLAY */}
           {totalPages > 1 && (
-            <div className="absolute top-4 right-4 bg-slate-900/5 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black text-slate-500 tracking-widest uppercase pointer-events-none">
+            <div className="absolute top-4 right-4 bg-slate-900/5 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black text-slate-500 tracking-widest uppercase pointer-events-none z-30">
               Sheet {currentPageIndex + 1} of {totalPages}
             </div>
           )}
@@ -208,15 +234,17 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
           </button>
         </div>
 
-        <button
-          onClick={undo}
-          disabled={!hasDrawing}
-          className="flex flex-col items-center justify-center w-16 h-14 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all disabled:opacity-20"
-          title="Undo Last Stroke"
-        >
-          <RotateCcw className="h-5 w-5 mb-1" />
-          <span className="text-[9px] font-black uppercase tracking-tighter">Undo</span>
-        </button>
+        {!isDesktop && (
+          <button
+            onClick={undo}
+            disabled={!hasDrawing}
+            className="flex flex-col items-center justify-center w-16 h-14 rounded-2xl hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all disabled:opacity-20"
+            title="Undo Last Stroke"
+          >
+            <RotateCcw className="h-5 w-5 mb-1" />
+            <span className="text-[9px] font-black uppercase tracking-tighter">Undo</span>
+          </button>
+        )}
 
         <button
           onClick={clearCanvas}

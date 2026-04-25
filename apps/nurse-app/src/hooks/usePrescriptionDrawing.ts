@@ -14,6 +14,7 @@ interface Stroke {
 
 interface PageData {
   strokes: Stroke[];
+  text?: string;
   backgroundUrl?: string;
 }
 
@@ -75,6 +76,7 @@ export function usePrescriptionDrawing({
     const backgroundUrl = page?.backgroundUrl;
 
     const draw = () => {
+      // 1. Draw Strokes
       strokes.forEach(stroke => {
         const pts = stroke.points;
         if (pts.length < 1) return;
@@ -411,6 +413,17 @@ export function usePrescriptionDrawing({
     redrawPage(idx);
   };
 
+  const setText = (text: string) => {
+    setPages(prev => {
+      const next = [...prev];
+      const idx = currentPageIndexRef.current;
+      next[idx] = { ...next[idx], text };
+      pagesRef.current = next;
+      redrawPage(idx);
+      return next;
+    });
+  };
+
   const getFullBlob = async (): Promise<Blob | null> => {
     const A4_WIDTH = 1240;
     const A4_HEIGHT = 1754;
@@ -489,21 +502,22 @@ export function usePrescriptionDrawing({
 
         // Patient Grid
         fctx.fillStyle = '#f8fafc';
-        fctx.fillRect(80, 300, A4_WIDTH - 160, 220);
+        fctx.fillRect(80, 300, A4_WIDTH - 160, 280);
         fctx.strokeStyle = '#e2e8f0';
         fctx.lineWidth = 1;
-        fctx.strokeRect(80, 300, A4_WIDTH - 160, 220);
+        fctx.strokeRect(80, 300, A4_WIDTH - 160, 280);
 
         fctx.fillStyle = '#64748b';
         fctx.font = 'bold 18px sans-serif';
-        const labels = ['NAME:', 'AGE:', 'GENDER:', 'WEIGHT:', 'HEIGHT:', 'DATE:'];
+        const labels = ['NAME:', 'AGE:', 'GENDER:', 'WEIGHT:', 'HEIGHT:', 'DATE:', 'CONTACT:'];
         const values = [
           patient.name,
           `${patient.age ?? appointment.age ?? '-'}`,
           patient.sex ?? (appointment as any).sex ?? '-',
           patient.weight ? `${patient.weight} Kg` : '-',
           patient.height ? `${patient.height} cm` : '-',
-          new Date().toLocaleDateString('en-GB')
+          new Date().toLocaleDateString('en-GB'),
+          patient.communicationPhone || patient.phone || '-'
         ];
 
         for (let j = 0; j < labels.length; j++) {
@@ -584,6 +598,19 @@ export function usePrescriptionDrawing({
         fctx!.fill();
       });
 
+      // Draw Text if any
+      if (page.text) {
+        const scaleX = A4_WIDTH / (canvasRef.current?.getBoundingClientRect().width || 1);
+        const scaleY = A4_HEIGHT / (canvasRef.current?.getBoundingClientRect().height || 1);
+        
+        fctx.fillStyle = '#1e1b4b';
+        fctx.font = `500 ${Math.round(24 * scaleY)}px sans-serif`;
+        const lines = page.text.split('\n');
+        lines.forEach((line, idx) => {
+          fctx.fillText(line, 80 * scaleX, 580 * scaleY + (idx * 36 * scaleY));
+        });
+      }
+
       fctx.restore();
     }
 
@@ -654,6 +681,19 @@ export function usePrescriptionDrawing({
         fctx!.fill();
       });
 
+      // Draw Text if any
+      if (page.text) {
+        const scaleX = A4_WIDTH / (canvasRef.current?.getBoundingClientRect().width || 1);
+        const scaleY = A4_HEIGHT / (canvasRef.current?.getBoundingClientRect().height || 1);
+        
+        fctx.fillStyle = '#1e1b4b';
+        fctx.font = `500 ${Math.round(24 * scaleY)}px sans-serif`;
+        const lines = page.text.split('\n');
+        lines.forEach((line, idx) => {
+          fctx.fillText(line, 80 * scaleX, 580 * scaleY + (idx * 36 * scaleY));
+        });
+      }
+
       fctx.restore();
     }
 
@@ -671,9 +711,11 @@ export function usePrescriptionDrawing({
     addPage,
     addPageFromUrl,
     loadUrlToCurrentPage,
+    setText,
     currentPageIndex,
     totalPages: pages.length,
     setCurrentPageIndex,
-    hasDrawing: pages[currentPageIndex]?.strokes.length > 0 || !!pages[currentPageIndex]?.backgroundUrl,
+    hasDrawing: pages[currentPageIndex]?.strokes.length > 0 || !!pages[currentPageIndex]?.backgroundUrl || !!pages[currentPageIndex]?.text,
+    pages
   };
 }

@@ -95,7 +95,16 @@ export default function DashboardPage() {
       sex: (selectedAppointment as any).sex || 'Other',
       weight: (selectedAppointment as any).weight,
       height: (selectedAppointment as any).height,
+      communicationPhone: selectedAppointment.communicationPhone,
+      phone: (selectedAppointment as any).phone || '',
     } : null;
+
+    if (selectedAppointment) {
+      console.log('--- PRESCRIPTION DATA DEBUG ---');
+      console.log('Selected Appointment raw data:', selectedAppointment);
+      console.log('Mapped currentPatient data:', currentPatient);
+      console.log('-------------------------------');
+    }
 
     const headerActions = (
       <div className="flex items-center gap-4">

@@ -269,7 +269,7 @@ const deleteDepartmentUseCase = new DeleteDepartmentUseCase(departmentRepo);
 
 // Appointments
 const getAllAppointmentsUseCase = new GetAllAppointmentsUseCase(appointmentRepo);
-const getNurseDashboardUseCase = new GetNurseDashboardUseCase(clinicRepo, doctorRepo, appointmentRepo, syncClinicStatusesUseCase);
+const getNurseDashboardUseCase = new GetNurseDashboardUseCase(clinicRepo, doctorRepo, appointmentRepo, syncClinicStatusesUseCase, patientRepo);
 const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, queueBubblingService);
 const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
 const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);

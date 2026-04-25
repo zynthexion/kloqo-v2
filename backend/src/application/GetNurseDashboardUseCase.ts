@@ -1,5 +1,5 @@
 import { Clinic, Doctor, Appointment, QueueState, compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
-import { IAppointmentRepository, IDoctorRepository, IClinicRepository } from '../domain/repositories';
+import { IAppointmentRepository, IDoctorRepository, IClinicRepository, IPatientRepository } from '../domain/repositories';
 import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
 
 export interface NurseDashboardData {
@@ -17,7 +17,8 @@ export class GetNurseDashboardUseCase {
     private clinicRepo: IClinicRepository,
     private doctorRepo: IDoctorRepository,
     private appointmentRepo: IAppointmentRepository,
-    private syncStatusUseCase: SyncClinicStatusesUseCase
+    private syncStatusUseCase: SyncClinicStatusesUseCase,
+    private patientRepo?: IPatientRepository
   ) {}
 
   async execute(clinicId: string, date: string, assignedDoctorIds?: string[]): Promise<NurseDashboardData> {
@@ -32,6 +33,24 @@ export class GetNurseDashboardUseCase {
 
     if (!clinic) {
       throw new Error('Clinic not found');
+    }
+
+    if (this.patientRepo && appointments && appointments.length > 0) {
+      const patientIds = [...new Set(appointments.map(a => a.patientId))];
+      const patients = await Promise.all(patientIds.map(id => this.patientRepo!.findById(id)));
+      const patientMap = new Map(patients.filter(p => p).map(p => [p!.id, p]));
+
+      for (const apt of appointments) {
+        const p = patientMap.get(apt.patientId);
+        if (p) {
+          if (!apt.age && p.age) apt.age = p.age;
+          if (!apt.sex && p.sex) apt.sex = p.sex as any;
+          if (!apt.weight && p.weight) apt.weight = p.weight;
+          if (!apt.height && p.height) apt.height = p.height;
+          if (!apt.communicationPhone && p.communicationPhone) apt.communicationPhone = p.communicationPhone;
+          if (!(apt as any).phone && p.phone) (apt as any).phone = p.phone;
+        }
+      }
     }
 
     // 🔒 SECURITY: BKP-01 Staff Blinding
