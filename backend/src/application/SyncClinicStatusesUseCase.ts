@@ -77,6 +77,13 @@ export class SyncClinicStatusesUseCase {
                     }
                 }
             }
+            // 3. Lazy Cleanup: Prune past overrides to save space
+            const expiredKeys = Object.keys(doctor.dateOverrides || {})
+                .filter(key => key < isoDate);
+            
+            if (expiredKeys.length > 0) {
+                await this.doctorRepo.prunePastOverrides(doctor.id, expiredKeys);
+            }
 
             if (doctor.consultationStatus !== newStatus) {
                 await this.doctorRepo.update(doctor.id, {
@@ -133,6 +140,13 @@ export class SyncClinicStatusesUseCase {
                     newStatus = 'In';
                 }
             }
+        }
+        // 3. Lazy Cleanup
+        const expiredKeys = Object.keys(doctor.dateOverrides || {})
+            .filter(key => key < isoDate);
+        
+        if (expiredKeys.length > 0) {
+            await this.doctorRepo.prunePastOverrides(doctor.id, expiredKeys);
         }
 
         if (doctor.consultationStatus !== newStatus) {

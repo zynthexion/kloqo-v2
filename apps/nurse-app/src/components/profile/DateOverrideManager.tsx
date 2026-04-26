@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar as CalendarIcon, Clock, Trash2, PlusCircle, AlertCircle, Loader2, Users, Edit } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Trash2, PlusCircle, AlertCircle, Loader2, Users, Edit3 } from "lucide-react";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
@@ -84,11 +84,11 @@ export function DateOverrideManager({ doctor, onUpdate, mode = 'full' }: DateOve
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           <Tabs defaultValue="day" className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-slate-100/50 p-1 rounded-xl h-12 mb-8">
-              <TabsTrigger value="day" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">
+              <TabsTrigger value="day" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
                 <Clock className="w-3 h-3 mr-2" /> Specific Day
               </TabsTrigger>
               {mode === 'full' && (
-                <TabsTrigger value="range" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <TabsTrigger value="range" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
                   <Users className="w-3 h-3 mr-2" /> Vacation / Range
                 </TabsTrigger>
               )}

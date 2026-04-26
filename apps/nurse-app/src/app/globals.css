@@ -184,6 +184,12 @@ html {
     --theme-blue: 210 80% 26%;
     --theme-blue-foreground: 210 40% 98%;
   }
+
+  /* Global Accessibility Patch: Contrast for active white backgrounds */
+  [data-state="active"].bg-white,
+  [data-state="active"].bg-white * {
+    color: hsl(var(--foreground)) !important;
+  }
 }
 
 @layer base {

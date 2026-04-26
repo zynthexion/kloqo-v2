@@ -56,6 +56,24 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     return this.appointments.filter(a => a.clinicId === clinicId && a.date === date);
   }
 
+  async findPaginatedByClinicAndDate(clinicId: string, date: string, params: PaginationParams): Promise<PaginatedResponse<Appointment>> {
+    const filtered = this.appointments.filter(a => a.clinicId === clinicId && a.date === date);
+    const start = (params.page - 1) * params.limit;
+    const end = start + params.limit;
+    const data = filtered.slice(start, end);
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / params.limit);
+
+    return {
+      data,
+      total,
+      page: params.page,
+      limit: params.limit,
+      totalPages,
+      hasMore: end < total
+    };
+  }
+
   async findById(id: string): Promise<Appointment | null> {
     return this.appointments.find(a => a.id === id) || null;
   }

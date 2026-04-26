@@ -7,6 +7,7 @@ import { GetProviderPerformanceUseCase } from '../application/GetProviderPerform
 import { LogErrorUseCase } from '../application/LogErrorUseCase';
 import { GetInvestorMetricsUseCase } from '../application/GetInvestorMetricsUseCase';
 import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
+import { RBACUtils, KLOQO_ROLES } from '@kloqo/shared';
 
 export class AnalyticsController {
   constructor(
@@ -42,7 +43,26 @@ export class AnalyticsController {
       const clinicId = user?.clinicId;
       if (!clinicId) return res.status(403).json({ error: 'Clinic ID not found in session' });
 
-      const { start, end, doctorId } = req.query;
+      const { start, end } = req.query;
+      let { doctorId } = req.query as any;
+
+      // 🛡️ SECURITY: Enforce Doctor-Only View for non-admins
+      const isAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN]);
+      const isDoctor = RBACUtils.hasRole(user, KLOQO_ROLES.DOCTOR);
+
+      if (!isAdmin) {
+        if (isDoctor) {
+          // Doctors can only see their own performance data
+          doctorId = user.doctorId || user.id;
+        } else if (user.assignedDoctorIds && user.assignedDoctorIds.length > 0) {
+          // Nurses/Staff can only see their assigned doctors' data if they provide an ID
+          // otherwise we default to the first assigned doctor to prevent cross-doctor visibility.
+          if (!doctorId || !user.assignedDoctorIds.includes(doctorId)) {
+            doctorId = user.assignedDoctorIds[0];
+          }
+        }
+      }
+
       const data = await this.getClinicDashboardUseCase.execute(clinicId, {
         startDate: start as string,
         endDate: end as string,

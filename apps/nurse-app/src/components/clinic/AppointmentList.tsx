@@ -52,6 +52,7 @@ type AppointmentListProps = {
   breaks?: Array<{ id: string; startTime: string; endTime: string; note?: string }>;
   onTogglePriority?: (appointment: Appointment) => void;
   tokenDistribution?: 'classic' | 'advanced';
+  onViewPrescription?: (url: string) => void;
 };
 
 // Local parser removed in favor of shared-core parseClinicTime
@@ -74,7 +75,8 @@ export default function AppointmentList({
   estimatedTimes = [],
   breaks = [],
   onTogglePriority,
-  tokenDistribution = 'advanced'
+  tokenDistribution = 'advanced',
+  onViewPrescription
 }: AppointmentListProps) {
   const { theme } = useTheme();
   const router = useRouter();
@@ -507,6 +509,14 @@ export default function AppointmentList({
                           if (isPhoneMode && ['Confirmed', 'Skipped'].includes(appt.status)) {
                             triggerCamera(appt.id);
                           } else {
+                            setSelectedAppointmentId(appt.id);
+                          }
+                        } else if (appt.status === 'Completed') {
+                          // Allow viewing prescription for completed appointments
+                          if (appt.prescriptionUrl && onViewPrescription) {
+                            onViewPrescription(appt.prescriptionUrl);
+                          } else {
+                            // Fallback: select it to show details if we add a details panel later
                             setSelectedAppointmentId(appt.id);
                           }
                         }

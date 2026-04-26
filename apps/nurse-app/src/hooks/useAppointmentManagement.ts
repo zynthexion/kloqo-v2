@@ -18,6 +18,10 @@ export function useAppointmentManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateAppointments, setDateAppointments] = useState<Appointment[]>([]);
   const [dateLoading, setDateLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const limit = 10;
 
   const { data, loading: dashLoading, updateAppointmentStatus } = useNurseDashboard(clinicId);
 
@@ -40,6 +44,10 @@ export function useAppointmentManagement() {
     if (!clinicId || !selectedDoctor) return;
     const isToday = isSameDay(selectedDate, new Date());
     
+    // For today on real-time dash, we might want everything, 
+    // but the user specifically asked for pagination on /appointments list.
+    // So we apply it here.
+    
 
     if (isToday && data?.appointments) {
       setDateAppointments(data.appointments);
@@ -52,12 +60,14 @@ export function useAppointmentManagement() {
         const dateStr = getClinicISODateString(selectedDate);
         const token = localStorage.getItem('token');
 
-        const res = await fetch(`${API_URL}/appointments/dashboard?clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`, {
+        const res = await fetch(`${API_URL}/appointments/dashboard?clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}&page=${page}&limit=${limit}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const json = await res.json();
           setDateAppointments(json.appointments ?? []);
+          setTotalCount(json.totalCount ?? 0);
+          setHasMore(json.hasMore ?? false);
         }
       } catch (e) {
         console.error('[Appointments] Fetch Error:', e);
@@ -66,7 +76,12 @@ export function useAppointmentManagement() {
       }
     };
     fetchForDate();
-  }, [clinicId, selectedDate, selectedDoctor, data?.appointments]);
+  }, [clinicId, selectedDate, selectedDoctor, data?.appointments, page]);
+
+  // Reset page when date or doctor changes
+  useEffect(() => {
+    setPage(1);
+  }, [selectedDate, selectedDoctor]);
 
   const handleDoctorChange = useCallback((id: string) => {
     setSelectedDoctor(id);
@@ -89,18 +104,22 @@ export function useAppointmentManagement() {
 
   const dates = useMemo(() => {
     const today = new Date();
-    const baseStart = subDays(today, 90);
-    const baseEnd = addDays(today, 275);
+    // Default to 7 days if not set, or use the doctor's specific setting
+    const range = currentDoctor?.advanceBookingDays ?? 7;
     
-    // If selected date is within our standard 1-year window, keep the range stable
-    if (selectedDate >= baseStart && selectedDate <= baseEnd) {
-      return Array.from({ length: 365 }, (_, i) => addDays(baseStart, i));
-    }
+    // Always include Today + Next N Days
+    const standardDates = Array.from({ length: range + 1 }, (_, i) => addDays(today, i));
     
-    // If we jump further via calendar, center a new 1-year window around that date
-    const jumpStart = subDays(selectedDate, 182);
-    return Array.from({ length: 365 }, (_, i) => addDays(jumpStart, i));
-  }, [selectedDate]);
+    // If the selected date is already in our standard range, just return it
+    const isSelectedInStandard = standardDates.some(d => isSameDay(d, selectedDate));
+    if (isSelectedInStandard) return standardDates;
+    
+    // If selected date is NOT in standard range (e.g. past or far future via calendar),
+    // we prepend/append it to show it in the horizontal list, or just center it.
+    // For simplicity, if it's a past date, we show a 3-day window around it.
+    const customWindow = Array.from({ length: 7 }, (_, i) => addDays(subDays(selectedDate, 3), i));
+    return customWindow;
+  }, [selectedDate, currentDoctor?.advanceBookingDays]);
 
   return {
     user,
@@ -117,6 +136,11 @@ export function useAppointmentManagement() {
     currentDoctor,
     filteredAppointments,
     dates,
-    updateAppointmentStatus
+    updateAppointmentStatus,
+    page,
+    setPage,
+    totalCount,
+    hasMore,
+    limit
   };
 }

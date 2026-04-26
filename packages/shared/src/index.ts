@@ -26,6 +26,7 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   totalPages: number;
+  hasMore?: boolean;
 }
 
 export interface BaseEntity {
@@ -271,6 +272,8 @@ export interface Clinic {
   name: string;
   type?: ClinicType;
   category?: ClinicCategory;
+  phone?: string;
+  email?: string;
   address?: string;
   addressDetails?: {
     line1?: string;
@@ -843,7 +846,7 @@ export interface Prescription {
   fulfilledAt?: any;
 }
 
-import { format, parse, addMinutes, isAfter, differenceInMinutes, parseISO } from 'date-fns';
+import { format, parse, addMinutes, isAfter, differenceInMinutes, parseISO, endOfDay } from 'date-fns';
 
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters

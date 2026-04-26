@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { RoleSwitcher } from './RoleSwitcher';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { Role } from '@kloqo/shared';
-import { FileText, Home, Radio, List, User, Settings, Bell, Search, ChevronRight, LogOut, Calendar, Activity, Zap } from 'lucide-react';
+import { FileText, Home, Radio, List, User, Settings, Bell, Search, ChevronRight, LogOut, Calendar, Activity, Zap, Users, Clock, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -278,6 +278,17 @@ export function TabletDashboardLayout({
 }
 
 function PatientContextPanel({ user, clinicalProfile, displayName, displayAvatar, specialty }: { user: any, clinicalProfile: any, displayName: string, displayAvatar: string, specialty: string }) {
+    const { data, selectedDoctorId } = useNurseDashboardContext();
+
+    const appointments = data?.appointments || [];
+    const doctorAppointments = selectedDoctorId 
+        ? appointments.filter(a => a.doctorId === selectedDoctorId)
+        : appointments;
+
+    const arrivedCount = doctorAppointments.filter(a => a.status === 'Confirmed').length;
+    const pendingCount = doctorAppointments.filter(a => a.status === 'Pending').length;
+    const completedCount = doctorAppointments.filter(a => a.status === 'Completed').length;
+
     return (
         <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-700">
             {/* Identity Badge */}
@@ -299,7 +310,7 @@ function PatientContextPanel({ user, clinicalProfile, displayName, displayAvatar
                 </div>
             </div>
 
-            {/* Quick Clinical Context Placeholder */}
+            {/* Real-time Clinical Stats (from Snapshot) */}
             <div className="space-y-8">
                 <div className="flex items-center justify-between px-2">
                     <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest">Clinical Snapshot</h4>
@@ -307,24 +318,40 @@ function PatientContextPanel({ user, clinicalProfile, displayName, displayAvatar
                 </div>
 
                 <div className="space-y-4">
-                    <div className="p-8 rounded-[2.5rem] bg-rose-50 border border-rose-100/50 group hover:bg-rose-100 transition-colors shadow-sm">
+                    {/* Arrived Card */}
+                    <div className="p-8 rounded-[2.5rem] bg-emerald-50 border border-emerald-100/50 group hover:bg-emerald-100 transition-colors shadow-sm">
                         <div className="flex items-center gap-4 mb-3">
                             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <Activity className="h-5 w-5 text-rose-500" />
+                                <Users className="h-5 w-5 text-emerald-500" />
                             </div>
-                            <span className="text-xs font-black text-rose-600 uppercase tracking-widest">Major Allergies</span>
+                            <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Arrived</span>
                         </div>
-                        <p className="text-sm font-bold text-rose-400 px-1 italic">No patient selected</p>
+                        <p className="text-3xl font-black text-emerald-700">{arrivedCount}</p>
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-1">Waiting in clinic</p>
                     </div>
 
-                    <div className="p-8 rounded-[2.5rem] bg-indigo-50 border border-indigo-100/50 group hover:bg-indigo-100 transition-colors shadow-sm">
+                    {/* Pending Card */}
+                    <div className="p-8 rounded-[2.5rem] bg-amber-50 border border-amber-100/50 group hover:bg-amber-100 transition-colors shadow-sm">
                         <div className="flex items-center gap-4 mb-3">
                             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <Zap className="h-5 w-5 text-indigo-500" />
+                                <Clock className="h-5 w-5 text-amber-500" />
                             </div>
-                            <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Active Meds</span>
+                            <span className="text-xs font-black text-amber-600 uppercase tracking-widest">Pending</span>
                         </div>
-                        <div className="h-2 w-1/2 bg-indigo-100 rounded-full mx-1" />
+                        <p className="text-3xl font-black text-amber-700">{pendingCount}</p>
+                        <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mt-1">Yet to arrive</p>
+                    </div>
+
+                    {/* Completed Card */}
+                    <div className="p-8 rounded-[2.5rem] bg-blue-50 border border-blue-100/50 group hover:bg-blue-100 transition-colors shadow-sm">
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                                <CheckCircle2 className="h-5 w-5 text-blue-500" />
+                            </div>
+                            <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Completed</span>
+                        </div>
+                        <p className="text-3xl font-black text-blue-700">{completedCount}</p>
+                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-1">Consultations done</p>
                     </div>
                 </div>
             </div>

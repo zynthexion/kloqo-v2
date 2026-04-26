@@ -8,8 +8,17 @@ import {
   TrendingUp, 
   ArrowUpRight, 
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Activity,
+  Calendar,
+  XCircle,
+  Clock,
+  ChevronDown
 } from 'lucide-react';
+import { 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Legend
+} from 'recharts';
 
 interface StatCardProps {
   title: string;
@@ -97,29 +106,39 @@ export function EfficiencyGauge({ percentage, label }: { percentage: number, lab
   );
 }
 
-export function VolumeChart({ data }: { data: number[] }) {
+export function VolumeChart({ 
+  data, 
+  labels, 
+  title = "Patient Volume", 
+  subtitle = "Last 6 Months Overview" 
+}: { 
+  data: number[], 
+  labels?: string[],
+  title?: string,
+  subtitle?: string
+}) {
+  const maxVal = Math.max(...data, 1);
+  
   return (
     <div className="p-8 rounded-[2.5rem] bg-white shadow-premium border border-slate-50 flex flex-col group hover:shadow-2xl transition-all duration-500 col-span-1 lg:col-span-2">
       <div className="flex justify-between items-center mb-10">
         <div>
-          <h3 className="text-xl font-black text-slate-900 tracking-tight">Patient Volume</h3>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Last 6 Months Overview</p>
+          <h3 className="text-xl font-black text-slate-900 tracking-tight">{title}</h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{subtitle}</p>
         </div>
-        <select className="bg-slate-50 border-none rounded-xl text-xs font-bold px-4 py-2 text-slate-600 focus:ring-1 focus:ring-primary/20">
-          <option>Year 2026</option>
-          <option>Year 2025</option>
-        </select>
+        <div className="p-2 rounded-xl bg-slate-50">
+            <Activity className="h-4 w-4 text-slate-400" />
+        </div>
       </div>
 
       <div className="flex-1 flex items-end justify-between gap-2 min-h-[220px] px-2">
         {data.map((val, i) => {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-          const barHeight = (val / Math.max(...data)) * 100;
+          const barHeight = (val / maxVal) * 100;
           return (
             <div key={i} className="flex-1 flex flex-col items-center group/bar max-w-[60px]">
               <div 
                 className="w-full bg-slate-50 rounded-2xl relative transition-all duration-500 hover:bg-primary/5 cursor-pointer overflow-hidden" 
-                style={{ height: `${barHeight}%`, minHeight: '20px' }}
+                style={{ height: `${barHeight}%`, minHeight: '8px' }}
               >
                 <div 
                   className={cn(
@@ -129,8 +148,8 @@ export function VolumeChart({ data }: { data: number[] }) {
                   style={{ height: '100%' }} 
                 />
               </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4 group-hover/bar:text-slate-900 transition-colors">
-                {months[i]}
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-4 group-hover/bar:text-slate-900 transition-colors whitespace-nowrap">
+                {labels ? labels[i] : (i + 1)}
               </span>
             </div>
           );
@@ -139,3 +158,153 @@ export function VolumeChart({ data }: { data: number[] }) {
     </div>
   );
 }
+
+export function AppointmentOverviewChart({ data, loading }: { data: any, loading: boolean }) {
+  const COLORS = {
+    completed: "#10b981", // emerald-500
+    upcoming: "#f59e0b", // amber-500
+    cancelled: "#ef4444", // red-500
+    noshow: "#94a3b8", // slate-400
+  };
+
+  const chartData = React.useMemo(() => {
+    if (!data?.current) return [];
+    const { completedAppointments, upcomingAppointments, cancelledAppointments, noShowAppointments } = data.current;
+    return [
+      { name: "Completed", value: completedAppointments, color: COLORS.completed },
+      { name: "Upcoming", value: upcomingAppointments, color: COLORS.upcoming },
+      { name: "Cancelled", value: cancelledAppointments, color: COLORS.cancelled },
+      { name: "No-show", value: noShowAppointments, color: COLORS.noshow },
+    ].filter(item => item.value > 0);
+  }, [data]);
+
+  return (
+    <div className="p-8 rounded-[2.5rem] bg-white shadow-premium border border-slate-50 flex flex-col group hover:shadow-2xl transition-all duration-500 h-full">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-2">Appointment Overview</h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Status Distribution</p>
+        </div>
+      </div>
+      
+      <div className="flex-1 flex items-center justify-center min-h-[250px]">
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <RechartsTooltip 
+                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}
+              />
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={85}
+                paddingAngle={8}
+                dataKey="value"
+                stroke="none"
+              >
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="text-center py-10">
+            <Calendar className="h-12 w-12 text-slate-100 mx-auto mb-4" />
+            <p className="text-xs font-bold text-slate-300 uppercase tracking-widest">No data available</p>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mt-6">
+        {["Completed", "Upcoming", "Cancelled", "No-show"].map((status) => (
+          <div key={status} className="flex items-center gap-3">
+            <div className={cn("w-3 h-3 rounded-full", 
+              status === "Completed" ? "bg-emerald-500" : 
+              status === "Upcoming" ? "bg-amber-500" : 
+              status === "Cancelled" ? "bg-red-500" : "bg-slate-400"
+            )} />
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function AnalyticsOverviewChart({ data, loading }: { data: any, loading: boolean }) {
+  const chartData = data?.timeSeries || [];
+
+  return (
+    <div className="p-8 rounded-[2.5rem] bg-white shadow-premium border border-slate-50 flex flex-col group hover:shadow-2xl transition-all duration-500 col-span-1 lg:col-span-2">
+      <div className="flex justify-between items-center mb-10">
+        <div>
+          <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-2">Analytics Overview</h3>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Patient visits and revenue trend</p>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-[300px]">
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#256cad" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#256cad" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorPatients" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis 
+                dataKey="label" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 900, fill: '#94a3b8' }} 
+                dy={10}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 900, fill: '#94a3b8' }} 
+              />
+              <RechartsTooltip 
+                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase' }}
+              />
+              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.05em' }} />
+              <Area 
+                type="monotone" 
+                dataKey="revenue" 
+                stroke="#256cad" 
+                strokeWidth={4} 
+                fillOpacity={1} 
+                fill="url(#colorRevenue)" 
+                name="Revenue (₹)"
+              />
+              <Area 
+                type="monotone" 
+                dataKey="newPatients" 
+                stroke="#10b981" 
+                strokeWidth={4} 
+                fillOpacity={1} 
+                fill="url(#colorPatients)" 
+                name="New Patients"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-slate-300">
+             <Activity className="h-12 w-12 mb-4 opacity-20" />
+             <p className="text-[10px] font-black uppercase tracking-[0.2em]">Insufficient data for trend analysis</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

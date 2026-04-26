@@ -14,8 +14,10 @@ import DailyProgress from '@/components/clinic/DailyProgress';
 import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
 import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
-import { StatCard, EfficiencyGauge, VolumeChart } from '@/components/analytics/AnalyticsCards';
+import { StatCard, EfficiencyGauge, VolumeChart, AppointmentOverviewChart, AnalyticsOverviewChart } from '@/components/analytics/AnalyticsCards';
 import { Button } from '@/components/ui/button';
+import { useAnalytics, DateRangeType } from '@/hooks/useAnalytics';
+import { IndianRupee, Calendar, XCircle, CheckCircle2, ArrowUpRight } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
@@ -23,7 +25,16 @@ export default function HomePage() {
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
 
   const clinicId = user?.clinicId;
-  const { data, loading: dashLoading, updateDoctorStatus } = useNurseDashboard(clinicId);
+  const { data: dashData, loading: dashLoading, updateDoctorStatus } = useNurseDashboard(clinicId);
+  const { data: analytics, loading: analyticsLoading, range, setRange } = useAnalytics(selectedDoctor);
+
+  const isInitialLoading = authLoading || (user && dashLoading && !dashData);
+
+  useEffect(() => {
+    if (analytics) {
+      console.log('📊 [Analytics Data Updated]:', analytics);
+    }
+  }, [analytics]);
 
   // Auth guard and role-based mobile redirect
   useEffect(() => {
@@ -44,19 +55,19 @@ export default function HomePage() {
 
   // Auto-select first doctor
   useEffect(() => {
-    if (data?.doctors?.length && !selectedDoctor) {
+    if (dashData?.doctors?.length && !selectedDoctor) {
       const stored = localStorage.getItem('selectedDoctorId');
-      const found = data.doctors.find(d => d.id === stored);
-      setSelectedDoctor(found ? found.id : data.doctors[0].id);
+      const found = dashData.doctors.find(d => d.id === stored);
+      setSelectedDoctor(found ? found.id : dashData.doctors[0].id);
     }
-  }, [data?.doctors, selectedDoctor]);
+  }, [dashData?.doctors, selectedDoctor]);
 
   const handleDoctorChange = (id: string) => {
     setSelectedDoctor(id);
     localStorage.setItem('selectedDoctorId', id);
   };
 
-  const currentDoctor = data?.doctors.find(d => d.id === selectedDoctor);
+  const currentDoctor = dashData?.doctors.find(d => d.id === selectedDoctor);
   const consultationStatus = (currentDoctor?.consultationStatus ?? 'Out') as 'In' | 'Out';
 
   const handleStatusChange = async (newStatus: 'In' | 'Out', sessionIndex?: number) => {
@@ -71,7 +82,7 @@ export default function HomePage() {
   const { theme } = useTheme();
   const isModern = theme === 'modern';
 
-  if (authLoading || (user && dashLoading)) {
+  if (isInitialLoading) {
     return (
       <AppFrameLayout>
         <div className="flex h-full w-full items-center justify-center">
@@ -108,14 +119,14 @@ export default function HomePage() {
     <AppFrameLayout showBottomNav>
       <div className={cn("relative flex flex-col h-full transition-all duration-500", !isModern && "bg-muted/20")}>
         <ClinicHeader
-          doctors={(data?.doctors ?? []) as Doctor[]}
+          doctors={(dashData?.doctors ?? []) as Doctor[]}
           selectedDoctor={selectedDoctor}
           onDoctorChange={handleDoctorChange}
           showLogo={true}
           consultationStatus={consultationStatus}
           onStatusChange={handleStatusChange}
           hasActiveAppointments={
-            (data?.appointments ?? []).some(a =>
+            (dashData?.appointments ?? []).some(a =>
               ['Pending', 'Confirmed', 'Skipped'].includes(a.status)
             )
           }
@@ -123,7 +134,7 @@ export default function HomePage() {
 
         {isModern && selectedDoctor && (
           <DailyProgress 
-            appointments={(data?.appointments ?? []).filter(a => a.doctorId === selectedDoctor)} 
+            appointments={(dashData?.appointments ?? []).filter(a => a.doctorId === selectedDoctor)} 
             className="animate-in fade-in slide-in-from-top-4 duration-700"
           />
         )}
@@ -201,12 +212,29 @@ export default function HomePage() {
   const tabletView = (
     <TabletDashboardLayout>
       <div className="space-y-12 py-8 animate-in fade-in duration-700">
-        <header className="flex justify-between items-end">
+        <header className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-black text-slate-900 tracking-tight">Overview</h1>
             <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-2">Welcome Back, {displayName}</p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4">
+             <div className="flex bg-slate-100 p-1.5 rounded-2xl shadow-inner">
+                {(['today', '7days', 'monthly', 'yearly'] as DateRangeType[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRange(r)}
+                    className={cn(
+                      "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      range === r 
+                        ? "bg-white text-primary shadow-sm" 
+                        : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    {r === '7days' ? '7 Days' : r}
+                  </button>
+                ))}
+             </div>
              <Button className="h-14 px-8 rounded-2xl shadow-lg shadow-primary/20 bg-primary font-black uppercase tracking-widest text-xs hover:scale-105 transition-all">
                 <Zap className="mr-2 h-4 w-4" />
                 Quick Action
@@ -215,37 +243,75 @@ export default function HomePage() {
         </header>
 
         {/* Top Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <StatCard 
             title="Total Patients" 
-            value="1,240" 
-            subtitle="Patients seen this month" 
-            trend={{ value: "12%", isUp: true }}
+            value={analytics?.current.totalPatients || 0} 
+            subtitle={`Unique patients in ${range}`} 
+            trend={{ value: analytics?.comparison.patientsChange || "0%", isUp: !analytics?.comparison.patientsChange.startsWith('-') }}
             icon={Users}
             color="bg-primary shadow-lg shadow-primary/20"
           />
           <StatCard 
-            title="Avg. Wait Time" 
-            value="14 min" 
-            subtitle="Minutes per patient" 
-            trend={{ value: "5%", isUp: false }}
-            icon={Clock}
-            color="bg-purple-600 shadow-lg shadow-purple-600/20"
+            title="Completed" 
+            value={analytics?.current.completedAppointments || 0} 
+            subtitle="Successful consultations" 
+            trend={{ value: analytics?.comparison.appointmentsChange || "0%", isUp: !analytics?.comparison.appointmentsChange.startsWith('-') }}
+            icon={CheckCircle2}
+            color="bg-emerald-600 shadow-lg shadow-emerald-600/20"
           />
           <StatCard 
-            title="Todays Revenue" 
-            value="₹4,500" 
-            subtitle="Estimated earnings today" 
-            trend={{ value: "8%", isUp: true }}
-            icon={TrendingUp}
-            color="bg-pink-600 shadow-lg shadow-pink-600/20"
+            title="Upcoming" 
+            value={analytics?.current.upcomingAppointments || 0} 
+            subtitle="Scheduled consultations" 
+            icon={Calendar}
+            color="bg-amber-500 shadow-lg shadow-amber-500/20"
+          />
+          <StatCard 
+            title="Cancelled" 
+            value={analytics?.current.cancelledAppointments || 0} 
+            subtitle="Appointment drop-offs" 
+            trend={{ value: analytics?.comparison.cancelledChange || "0%", isUp: false }}
+            icon={XCircle}
+            color="bg-rose-500 shadow-lg shadow-rose-500/20"
           />
         </div>
 
+        {/* Revenue Highlight */}
+        <div className="p-10 rounded-[3rem] bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                <IndianRupee className="h-40 w-40" />
+            </div>
+            <div className="relative z-10 flex justify-between items-center">
+                <div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Total Revenue Generated</p>
+                    <div className="flex items-center gap-4">
+                        <div className="p-4 rounded-3xl bg-white/10 backdrop-blur-md">
+                            <TrendingUp className="h-8 w-8 text-emerald-400" />
+                        </div>
+                        <h2 className="text-6xl font-black tracking-tighter">
+                            <span className="text-slate-500 mr-2">₹</span>
+                            {analytics?.current.totalRevenue.toLocaleString() || 0}
+                        </h2>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <div className={cn(
+                        "inline-flex items-center gap-2 px-6 py-3 rounded-full text-lg font-black",
+                        analytics?.comparison.revenueChange.startsWith('-') ? "bg-rose-500/20 text-rose-400" : "bg-emerald-500/20 text-emerald-400"
+                    )}>
+                        {analytics?.comparison.revenueChange || "0%"}
+                        <ArrowUpRight className={cn("h-5 w-5", analytics?.comparison.revenueChange.startsWith('-') && "rotate-90")} />
+                    </div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-4">vs last period</p>
+                </div>
+            </div>
+        </div>
+
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-           <VolumeChart data={[450, 590, 800, 810, 560, 400]} />
-           <EfficiencyGauge percentage={78} label="Consultation Ratio" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
+           <AnalyticsOverviewChart data={analytics} loading={analyticsLoading} />
+           <AppointmentOverviewChart data={analytics} loading={analyticsLoading} />
         </div>
 
         {/* Menu Grid - Redesigned for modern feel */}

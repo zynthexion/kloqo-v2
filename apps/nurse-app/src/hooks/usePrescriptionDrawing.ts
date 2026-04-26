@@ -460,8 +460,8 @@ export function usePrescriptionDrawing({
         fctx.save();
         fctx.beginPath();
         fctx.moveTo(0, 0);
-        fctx.lineTo(A4_WIDTH * 0.65, 0);       // matches clip-path: 100% top
-        fctx.lineTo(A4_WIDTH * 0.57, 250);     // matches clip-path: 85% bottom
+        fctx.lineTo(A4_WIDTH * 0.75, 0);       // matches clip-path: 100% top
+        fctx.lineTo(A4_WIDTH * 0.6375, 250);   // matches clip-path: 85% bottom
         fctx.lineTo(0, 250);
         fctx.closePath();
         fctx.fillStyle = '#3ebfb2';
@@ -502,29 +502,29 @@ export function usePrescriptionDrawing({
 
         // Patient Grid
         fctx.fillStyle = '#f8fafc';
-        fctx.fillRect(80, 300, A4_WIDTH - 160, 280);
+        fctx.fillRect(80, 260, A4_WIDTH - 160, 160);
         fctx.strokeStyle = '#e2e8f0';
         fctx.lineWidth = 1;
-        fctx.strokeRect(80, 300, A4_WIDTH - 160, 280);
+        fctx.strokeRect(80, 260, A4_WIDTH - 160, 160);
 
         fctx.fillStyle = '#64748b';
         fctx.font = 'bold 18px sans-serif';
-        const labels = ['NAME:', 'AGE:', 'GENDER:', 'WEIGHT:', 'HEIGHT:', 'DATE:', 'CONTACT:'];
+        const labels = ['NAME:', 'DATE:', 'AGE:', 'CONTACT:', 'GENDER:', ''];
         const values = [
           patient.name,
-          `${patient.age ?? appointment.age ?? '-'}`,
-          patient.sex ?? (appointment as any).sex ?? '-',
-          patient.weight ? `${patient.weight} Kg` : '-',
-          patient.height ? `${patient.height} cm` : '-',
           new Date().toLocaleDateString('en-GB'),
-          patient.communicationPhone || patient.phone || '-'
+          `${patient.age ?? appointment.age ?? '-'}`,
+          patient.communicationPhone || patient.phone || '-',
+          patient.sex ?? (appointment as any).sex ?? '-',
+          ''
         ];
 
         for (let j = 0; j < labels.length; j++) {
+          if (!labels[j]) continue;
           const col = j % 2;
           const row = Math.floor(j / 2);
           const x = 120 + col * (A4_WIDTH / 2 - 60);
-          const y = 360 + row * 60;
+          const y = 300 + row * 45; // reduced row spacing
           fctx.fillText(labels[j], x, y);
           fctx.fillStyle = '#1e293b';
           fctx.font = 'bold 22px sans-serif';
@@ -540,25 +540,46 @@ export function usePrescriptionDrawing({
         fctx.fillText('Rx', A4_WIDTH / 2, A4_HEIGHT * 0.6);
         fctx.textAlign = 'left';
 
+        // Signature Area
+        fctx.strokeStyle = '#334155';
+        fctx.lineWidth = 2;
+        fctx.beginPath();
+        fctx.moveTo(A4_WIDTH - 380, A4_HEIGHT - 200);
+        fctx.lineTo(A4_WIDTH - 100, A4_HEIGHT - 200);
+        fctx.stroke();
+        fctx.fillStyle = '#334155';
+        fctx.font = 'bold 22px sans-serif';
+        fctx.textAlign = 'center';
+        fctx.fillText('Signature', A4_WIDTH - 240, A4_HEIGHT - 170);
+        fctx.textAlign = 'left';
+
         // Footer
+        const footerHeight = 120;
         fctx.fillStyle = '#ffffff';
-        fctx.fillRect(0, A4_HEIGHT - 160, A4_WIDTH, 160);
+        fctx.fillRect(0, A4_HEIGHT - footerHeight, A4_WIDTH, footerHeight);
         fctx.strokeStyle = '#e2e8f0';
         fctx.lineWidth = 2;
         fctx.beginPath();
-        fctx.moveTo(80, A4_HEIGHT - 160);
-        fctx.lineTo(A4_WIDTH - 80, A4_HEIGHT - 160);
+        fctx.moveTo(80, A4_HEIGHT - footerHeight);
+        fctx.lineTo(A4_WIDTH - 80, A4_HEIGHT - footerHeight);
         fctx.stroke();
 
+        fctx.textAlign = 'center';
         fctx.fillStyle = '#0f172a';
-        fctx.font = '900 36px sans-serif';
-        fctx.fillText(clinic.name.toUpperCase(), 100, A4_HEIGHT - 90);
+        fctx.font = 'bold 24px sans-serif';
+        fctx.fillText(clinic.name.toUpperCase(), A4_WIDTH / 2, A4_HEIGHT - 75);
 
+        fctx.fillStyle = '#64748b';
+        fctx.font = '500 18px sans-serif';
+        let footerY = A4_HEIGHT - 45;
         if (clinic.address) {
-          fctx.fillStyle = '#64748b';
-          fctx.font = '500 20px sans-serif';
-          fctx.fillText(clinic.address, 100, A4_HEIGHT - 50);
+          fctx.fillText(clinic.address, A4_WIDTH / 2, footerY);
+          footerY += 25;
         }
+        if (clinic.phone) {
+          fctx.fillText(`Ph: ${clinic.phone}`, A4_WIDTH / 2, footerY);
+        }
+        fctx.textAlign = 'left';
       }
 
       if (page.backgroundUrl) {
@@ -607,7 +628,7 @@ export function usePrescriptionDrawing({
         fctx.font = `500 ${Math.round(24 * scaleY)}px sans-serif`;
         const lines = page.text.split('\n');
         lines.forEach((line, idx) => {
-          fctx.fillText(line, 80 * scaleX, 580 * scaleY + (idx * 36 * scaleY));
+          fctx.fillText(line, 80 * scaleX, 420 * scaleY + (idx * 36 * scaleY));
         });
       }
 
@@ -690,7 +711,7 @@ export function usePrescriptionDrawing({
         fctx.font = `500 ${Math.round(24 * scaleY)}px sans-serif`;
         const lines = page.text.split('\n');
         lines.forEach((line, idx) => {
-          fctx.fillText(line, 80 * scaleX, 580 * scaleY + (idx * 36 * scaleY));
+          fctx.fillText(line, 80 * scaleX, 420 * scaleY + (idx * 36 * scaleY));
         });
       }
 

@@ -71,6 +71,17 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(doc => !doc.isDeleted);
   }
 
+  async findPaginatedByClinicAndDate(clinicId: string, dateStr: string, params: PaginationParams): Promise<PaginatedResponse<Appointment>> {
+    const date = parseClinicDate(dateStr);
+    const variations = [getClinicISODateString(date), getClinicDateString(date)];
+
+    const query = this.collection
+      .where('clinicId', '==', clinicId)
+      .where('date', 'in', variations);
+
+    return paginate<Appointment>(query, params);
+  }
+
   async findByClinicId(clinicId: string, startDate?: Date, endDate?: Date): Promise<Appointment[]> {
     let query: admin.firestore.Query = this.collection.where('clinicId', '==', clinicId);
 

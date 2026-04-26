@@ -1,6 +1,6 @@
 import { IClinicRepository, IAppointmentRepository, IDoctorRepository, IPatientRepository, IPrescriptionRepository } from '../domain/repositories';
 import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
-import { differenceInDays, parse, isWithinInterval, startOfDay, subDays, isToday, isFuture, eachDayOfInterval, format, eachMonthOfInterval, endOfMonth } from 'date-fns';
+import { differenceInDays, parse, isWithinInterval, startOfDay, subDays, isToday, isFuture, eachDayOfInterval, format, eachMonthOfInterval, endOfMonth, endOfDay } from 'date-fns';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
 
 export class GetClinicDashboardUseCase {
@@ -38,7 +38,7 @@ export class GetClinicDashboardUseCase {
       //    The old code was calling this.patientRepo.findAll() which fetched EVERY patient
       //    in the entire Firestore database on every dashboard load.
       const [appointmentsResult, doctorsResult, patientsResult, prescriptionsResult] = await Promise.all([
-        this.appointmentRepo.findByClinicId(clinicId, prevStart, endDate),
+        this.appointmentRepo.findByClinicId(clinicId),
         this.doctorRepo.findByClinicId(clinicId),
         this.patientRepo.findByClinicId(clinicId),
         this.prescriptionRepo.findByClinicAndDateRange(clinicId, startDate, endDate),
@@ -102,8 +102,22 @@ export class GetClinicDashboardUseCase {
           // filteredAppointments is already stripped above, but belt-and-suspenders.
           if (apt.isSystemBlocker) return false;
           try {
-            const aptDate = parse(apt.date, 'd MMMM yyyy', new Date());
-            return isWithinInterval(aptDate, { start: startOfDay(from), end: startOfDay(to) });
+            // Robust parsing for multiple formats (YYYY-MM-DD vs d MMMM yyyy)
+            let aptDate: Date;
+            if (apt.date.includes('-')) {
+              aptDate = parse(apt.date, 'yyyy-MM-dd', new Date());
+            } else {
+              aptDate = parse(apt.date, 'd MMMM yyyy', new Date());
+            }
+            
+            if (isNaN(aptDate.getTime())) {
+              aptDate = new Date(apt.date);
+            }
+
+            return isWithinInterval(startOfDay(aptDate), { 
+              start: startOfDay(from), 
+              end: endOfDay(to) 
+            });
           } catch { return false; }
         });
 

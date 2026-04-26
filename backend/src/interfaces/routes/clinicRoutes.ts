@@ -20,7 +20,7 @@ const adminGuard = [auth, checkRole(...adminOnlyRoles)];
 // IMPORTANT: These MUST be defined BEFORE the parameterized /:id route below
 // to prevent shadowing (Express matches routes in order of definition).
 router.get('/me', staffGuard, (req: any, res: any) => clinicController.getMyClinic(req, res));
-router.get('/dashboard', adminGuard, (req: any, res: any) => analyticsController.getClinicDashboard(req, res));
+router.get('/dashboard', staffGuard, (req: any, res: any) => analyticsController.getClinicDashboard(req, res));
 router.get('/providers/performance', adminGuard, (req: any, res: any) => analyticsController.getProviderPerformance(req, res));
 router.patch('/', adminGuard, (req: any, res: any) => clinicController.updateMyClinic(req, res));
 router.patch('/settings', adminGuard, (req: any, res: any) => clinicController.updateSettings(req, res));

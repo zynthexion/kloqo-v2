@@ -24,6 +24,7 @@ export interface IAppointmentRepository {
   findById(id: string): Promise<Appointment | null>;
   findByDoctorAndDate(doctorId: string, date: string): Promise<Appointment[]>;
   findByClinicAndDate(clinicId: string, date: string): Promise<Appointment[]>;
+  findPaginatedByClinicAndDate(clinicId: string, date: string, params: PaginationParams): Promise<PaginatedResponse<Appointment>>;
   findByClinicId(clinicId: string, startDate?: Date, endDate?: Date): Promise<Appointment[]>;
   findLatestByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment | null>;
   findAllByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
@@ -64,6 +65,7 @@ export interface IDoctorRepository {
   update(id: string, data: Partial<Doctor>): Promise<void>;
   save(doctor: Doctor): Promise<void>;
   delete(id: string, soft?: boolean): Promise<void>;
+  prunePastOverrides(id: string, keys: string[]): Promise<void>;
   invalidateCache(id: string, clinicId?: string): void;
 }
 

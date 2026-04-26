@@ -8,6 +8,8 @@ export interface NurseDashboardData {
   appointments: Appointment[];
   queues: Record<string, QueueState>;
   currentTime: string;
+  totalCount?: number;
+  hasMore?: boolean;
 }
 
 import { SyncClinicStatusesUseCase } from './SyncClinicStatusesUseCase';
@@ -21,14 +23,28 @@ export class GetNurseDashboardUseCase {
     private patientRepo?: IPatientRepository
   ) {}
 
-  async execute(clinicId: string, date: string, assignedDoctorIds?: string[]): Promise<NurseDashboardData> {
+  async execute(clinicId: string, date: string, assignedDoctorIds?: string[], pagination?: { page: number; limit: number }): Promise<NurseDashboardData> {
     // Sync statuses first to ensure fresh data
     await this.syncStatusUseCase.execute(clinicId).catch(e => {});
 
-    const [clinic, doctors, appointments] = await Promise.all([
+    let appointments: Appointment[] = [];
+    let totalCount = 0;
+    let hasMore = false;
+
+    if (pagination) {
+      const paginatedRes = await this.appointmentRepo.findPaginatedByClinicAndDate(clinicId, date, pagination as any);
+      appointments = paginatedRes.data;
+      totalCount = paginatedRes.total;
+      hasMore = !!paginatedRes.hasMore;
+    } else {
+      appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, date);
+      totalCount = appointments.length;
+      hasMore = false;
+    }
+
+    const [clinic, doctors] = await Promise.all([
       this.clinicRepo.findById(clinicId),
-      this.doctorRepo.findByClinicId(clinicId),
-      this.appointmentRepo.findByClinicAndDate(clinicId, date)
+      this.doctorRepo.findByClinicId(clinicId)
     ]);
 
     if (!clinic) {
@@ -130,7 +146,9 @@ export class GetNurseDashboardUseCase {
       doctors: doctorsList,
       appointments: filteredAppointments,
       queues,
-      currentTime: new Date().toISOString()
+      currentTime: new Date().toISOString(),
+      totalCount,
+      hasMore
     };
   }
 }

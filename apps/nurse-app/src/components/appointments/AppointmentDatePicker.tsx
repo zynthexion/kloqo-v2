@@ -36,7 +36,7 @@ export const AppointmentDatePicker: React.FC<AppointmentDatePickerProps> = ({
     }
   }, [selectedDate]);
 
-  const displayDates = isTablet ? dates.slice(85, 125) : dates;
+  const displayDates = dates;
 
   return (
     <div className={cn("p-4 bg-white", isTablet ? "p-8 rounded-[2.5rem] shadow-premium border border-slate-50 space-y-6" : "border-b pb-6")}>

@@ -15,6 +15,12 @@ interface AppointmentSearchAndListProps {
   selectedDate: Date;
   isTablet?: boolean;
   consultationStatus?: string;
+  onViewPrescription?: (url: string) => void;
+  page?: number;
+  setPage?: (p: number) => void;
+  totalCount?: number;
+  hasMore?: boolean;
+  limit?: number;
 }
 
 export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> = ({
@@ -25,7 +31,13 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
   onUpdateStatus,
   selectedDate,
   isTablet = false,
-  consultationStatus = 'Out'
+  consultationStatus = 'Out',
+  onViewPrescription,
+  page = 1,
+  setPage,
+  totalCount = 0,
+  hasMore = false,
+  limit = 10
 }) => {
   const content = (
     <div className={cn("flex flex-col h-full", isTablet && "bg-white shadow-premium rounded-[2.5rem] border border-slate-50 overflow-hidden min-h-[600px]")}>
@@ -85,10 +97,39 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
               showStatusBadge={true}
               showTopRightActions={false}
               clinicStatus={consultationStatus as 'In' | 'Out'}
+              onViewPrescription={onViewPrescription}
             />
           </div>
         )}
       </div>
+
+      {totalCount > limit && setPage && (
+        <div className="p-4 border-t bg-slate-50/50 flex items-center justify-between">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            Showing {((page - 1) * limit) + 1}-{Math.min(page * limit, totalCount)} of {totalCount}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+              className="h-8 rounded-lg text-[10px] font-black uppercase tracking-widest border-slate-200"
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasMore}
+              onClick={() => setPage(page + 1)}
+              className="h-8 rounded-lg text-[10px] font-black uppercase tracking-widest border-slate-200"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 

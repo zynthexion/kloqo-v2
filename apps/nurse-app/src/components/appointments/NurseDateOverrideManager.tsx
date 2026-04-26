@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Loader2,
   CalendarCheck,
-  Users
+  Users,
+  Edit3
 } from "lucide-react";
 import { cn, formatTime12Hour } from "@/lib/utils";
 import { format } from "date-fns";
@@ -60,6 +61,23 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
   const isSelf = user?.id === doctor.userId || user?.id === doctor.id;
   const isAdmin = user?.role === 'clinicAdmin' || user?.role === 'superAdmin';
   const hasAutonomy = isSelf || isAdmin;
+
+  const handleEdit = (dateKey: string, override: DoctorOverride) => {
+    try {
+      const parsedDate = new Date(dateKey);
+      setSelectedDate(parsedDate);
+      setIsOff(override.isOff);
+      setSessions(override.slots && override.slots.length > 0 ? override.slots : [{ from: '09:00', to: '17:00' }]);
+      setIsModalOpen(true);
+      
+      toast({
+        title: "Editing Override",
+        description: `Loaded settings for ${dateKey}. Adjust and click 'Apply'.`
+      });
+    } catch (e) {
+      console.error("Failed to parse dateKey", dateKey);
+    }
+  };
 
   const fetchOverrides = useCallback(async () => {
     try {
@@ -176,10 +194,10 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
                <Tabs defaultValue="day" className="w-full">
                  <div className="px-8 pt-6">
                     <TabsList className="grid w-full grid-cols-2 bg-slate-100/50 p-1 rounded-xl h-12">
-                      <TabsTrigger value="day" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <TabsTrigger value="day" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
                         <Clock className="w-3 h-3 mr-2" /> Specific Day
                       </TabsTrigger>
-                      <TabsTrigger value="range" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                      <TabsTrigger value="range" className="rounded-lg font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
                         <Users className="w-3 h-3 mr-2" /> Vacation / Range
                       </TabsTrigger>
                     </TabsList>
@@ -356,14 +374,24 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
                       <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tactical Active</span>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => handleDeleteOverride(dateKey)}
-                      disabled={isSubmitting}
-                      className="h-12 w-12 rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-300"
-                    >
-                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleEdit(dateKey, override)} 
+                        className="text-slate-300 hover:text-primary hover:bg-primary/5 rounded-xl"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => handleDeleteOverride(dateKey)}
+                        disabled={isSubmitting}
+                        className="h-12 w-12 rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-300"
+                      >
+                        {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

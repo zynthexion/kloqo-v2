@@ -95,32 +95,34 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
           <div className="absolute inset-0 z-0 flex flex-col pointer-events-none select-none bg-white overflow-hidden rounded-md">
             
             {/* Geometric Header Component */}
-            <div className="w-full h-40 flex items-start justify-between relative mb-8">
-              <div className="absolute top-0 right-0 w-[40%] h-full bg-slate-50 [clip-path:polygon(15%_0,100%_0,100%_100%,0_100%)] z-0" />
-              <div className="w-[65%] h-full bg-[#3ebfb2] [clip-path:polygon(0_0,100%_0,85%_100%,0_100%)] px-12 py-10 flex flex-col z-10 text-white">
-                <h1 className="text-4xl font-extrabold tracking-wide">Dr. {doctor.name}</h1>
-                <p className="text-white/90 tracking-widest text-sm mt-2 uppercase font-semibold">
+            <div className="w-full h-28 flex items-start justify-between relative mb-4">
+              <div className="absolute top-0 right-0 w-[35%] h-full bg-slate-50 [clip-path:polygon(15%_0,100%_0,100%_100%,0_100%)] z-0" />
+              <div className="w-[75%] h-full bg-[#3ebfb2] [clip-path:polygon(0_0,100%_0,85%_100%,0_100%)] px-12 py-3 flex flex-col justify-center z-10 text-white">
+                <h1 className="text-2xl font-extrabold tracking-wide whitespace-nowrap overflow-hidden text-ellipsis shrink-0">Dr. {doctor.name}</h1>
+                <p className="text-white/90 tracking-widest text-[11px] mt-1 uppercase font-semibold truncate shrink-0">
                   {doctor.department || 'OB/GYN'}
                 </p>
-                <p className="text-white/70 tracking-widest text-xs mt-1 uppercase font-semibold">
+                <p className="text-white/70 tracking-widest text-[9px] mt-0.5 uppercase font-semibold shrink-0">
                   {doctor.specialty || 'SPECIALTY'}
                 </p>
               </div>
               
               <div className="relative z-10 w-[30%] h-full flex items-center justify-end pr-12">
-                <img src="/Kloqo_Logo_full (2) (1).webp" className="w-36 object-contain mix-blend-multiply opacity-80" alt="Logo" />
+                <img src="/Kloqo_Logo_full (2) (1).webp" className="w-28 object-contain mix-blend-multiply opacity-80" alt="Logo" />
               </div>
             </div>
 
-            {/* Patient Grid Component */}
-            <div className="grid grid-cols-2 gap-x-12 gap-y-4 px-16 w-full border-b border-slate-100 pb-8 mb-8">
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Name:</span> <span className="font-semibold text-slate-900">{patient.name}</span></div>
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Weight:</span> <span className="font-semibold text-slate-900">{patient.weight ? `${patient.weight} Kg` : '-'}</span></div>
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Age:</span> <span className="font-semibold text-slate-900">{patient.age ?? appointment.age ?? 'N/A'} Y</span></div>
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Height:</span> <span className="font-semibold text-slate-900">{patient.height ? `${patient.height} cm` : '-'}</span></div>
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Gender:</span> <span className="font-semibold text-slate-900">{patient.sex ?? (appointment as any).sex ?? 'N/A'}</span></div>
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Date:</span> <span className="font-semibold text-slate-900">{new Date().toLocaleDateString('en-GB')}</span></div>
-               <div className="flex text-sm"><span className="text-slate-500 font-bold w-24 uppercase tracking-widest text-xs mt-0.5">Contact:</span> <span className="font-semibold text-slate-900">{patient.communicationPhone || patient.phone || '-'}</span></div>
+            <div className="w-full border-b border-slate-100 pb-3 mb-3 px-12">
+              <div className="grid grid-cols-2 gap-x-12 gap-y-1 w-full">
+                 <div className="flex text-xs items-center"><span className="text-slate-500 font-bold w-14 shrink-0 uppercase tracking-widest text-[10px]">Name:</span> <span className="font-semibold text-slate-900 truncate">{patient.name}</span></div>
+                 <div className="flex text-xs items-center"><span className="text-slate-500 font-bold w-14 shrink-0 uppercase tracking-widest text-[10px]">Date:</span> <span className="font-semibold text-slate-900 truncate">{new Date().toLocaleDateString('en-GB')}</span></div>
+                 
+                 <div className="flex text-xs items-center"><span className="text-slate-500 font-bold w-14 shrink-0 uppercase tracking-widest text-[10px]">Age:</span> <span className="font-semibold text-slate-900 truncate">{patient.age ?? appointment.age ?? 'N/A'} Y</span></div>
+                 <div className="flex text-xs items-center"><span className="text-slate-500 font-bold w-14 shrink-0 uppercase tracking-widest text-[10px]">Contact:</span> <span className="font-semibold text-slate-900 truncate">{patient.communicationPhone || patient.phone || '-'}</span></div>
+                 
+                 <div className="flex text-xs items-center"><span className="text-slate-500 font-bold w-14 shrink-0 uppercase tracking-widest text-[10px]">Gender:</span> <span className="font-semibold text-slate-900 truncate">{patient.sex ?? (appointment as any).sex ?? 'N/A'}</span></div>
+                 <div className="flex text-xs items-center"></div>
+              </div>
             </div>
 
             {/* Huge Rx Watermark */}
@@ -129,20 +131,19 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
             </div>
 
             {/* Signature Area */}
-            <div className="absolute bottom-32 right-16 w-48 border-t-2 border-slate-700 text-center pt-2">
+            <div className="absolute bottom-16 right-16 w-48 border-t-2 border-slate-700 text-center pt-2">
               <span className="text-sm font-semibold text-slate-700">Signature</span>
             </div>
 
             {/* Footer Bottom Block */}
-            <div className="absolute bottom-0 left-0 right-0 h-24 flex items-center px-16 border-t border-slate-100 bg-white z-0">
-              <div className="flex gap-10 items-center text-slate-600 text-xs font-semibold tracking-wider">
-                <span className="text-slate-800 font-extrabold text-lg tracking-widest uppercase">{clinic.name}</span>
-                {clinic.address && (
-                  <span className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#3ebfb2]"></div> {clinic.address}
-                  </span>
-                )}
-              </div>
+            <div className="absolute bottom-0 left-0 right-0 py-2 flex flex-col items-center justify-center border-t border-slate-100 bg-white z-0">
+              <span className="text-slate-800 font-bold text-[10px] tracking-widest uppercase">{clinic.name}</span>
+              {clinic.address && (
+                <span className="text-slate-500 text-[8px] font-medium leading-tight mt-0.5">{clinic.address}</span>
+              )}
+              {clinic.phone && (
+                <span className="text-slate-500 text-[8px] font-medium leading-tight mt-0.5">Ph: {clinic.phone}</span>
+              )}
             </div>
           </div>
 
@@ -158,7 +159,7 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
 
           {/* DESKTOP TYPING OVERLAY */}
           {isDesktop && (
-            <div className="absolute inset-0 z-20 px-16 pt-[320px] pb-32 pointer-events-none">
+            <div className="absolute inset-0 z-20 px-16 pt-[220px] pb-16 pointer-events-none">
               <textarea
                 value={currentText}
                 onChange={(e) => setText(e.target.value)}
@@ -176,16 +177,7 @@ export const PrescriptionCanvas = React.forwardRef<PrescriptionCanvasHandle, Pre
             </div>
           )}
 
-          {/* BOTTOM RIGHT NEXT PAGE TRIGGER */}
-          <button 
-            onClick={() => currentPageIndex === totalPages - 1 ? addPage() : setCurrentPageIndex(currentPageIndex + 1)}
-            className="absolute bottom-4 right-4 w-16 h-16 flex items-center justify-center bg-blue-500/5 hover:bg-blue-500/10 rounded-tl-3xl border-t border-l border-blue-500/20 group/page"
-          >
-            <div className="flex flex-col items-center gap-1 opacity-40 group-hover/page:opacity-100 transition-opacity">
-               <PlusCircle className="h-5 w-5 text-blue-600" />
-               <span className="text-[8px] font-black text-blue-600 uppercase tracking-tighter">Next Sheet</span>
-            </div>
-          </button>
+
         </div>
       </div>
 

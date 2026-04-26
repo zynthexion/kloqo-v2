@@ -172,6 +172,26 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
     if (clinicId) cacheService.del(CACHE_KEY.doctorsByClinic(clinicId));
   }
 
+  async prunePastOverrides(id: string, keys: string[]): Promise<void> {
+    if (!keys || keys.length === 0) return;
+
+    const updatePayload: Record<string, any> = {};
+    keys.forEach(key => {
+      updatePayload[`dateOverrides.${key}`] = admin.firestore.FieldValue.delete();
+    });
+
+    await this.collection.doc(id).update({
+      ...updatePayload,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // BUST CACHE
+    const doc = await this.collection.doc(id).get();
+    const clinicId = doc.data()?.clinicId;
+    cacheService.del(CACHE_KEY.doctor(id));
+    if (clinicId) cacheService.del(CACHE_KEY.doctorsByClinic(clinicId));
+  }
+
   invalidateCache(id: string, clinicId?: string): void {
     cacheService.del(CACHE_KEY.doctor(id));
     if (clinicId) cacheService.del(CACHE_KEY.doctorsByClinic(clinicId));
