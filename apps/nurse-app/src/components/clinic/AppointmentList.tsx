@@ -565,18 +565,30 @@ export default function AppointmentList({
                                     if (!displayTime) return null;
 
                                     return (
-                                      <Badge variant={isSwiping ? 'default' : 'outline'} className={cn("text-xs", isSwiping && 'bg-white/20 text-white')}>
-                                        {appt.date && `${appt.date} - `}
-                                        {displayTime}
-                                      </Badge>
+                                      <div className="flex flex-col gap-1">
+                                        <Badge variant={isSwiping ? 'default' : 'outline'} className={cn("text-xs w-fit", isSwiping && 'bg-white/20 text-white')}>
+                                          {appt.date && `${appt.date} - `}
+                                          {displayTime}
+                                        </Badge>
+                                        <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
+                                          Reporting: {format(subMinutes(parseClinicTime(displayTime, new Date()), 15), 'hh:mm a')}
+                                        </span>
+                                      </div>
                                     );
                                   }
 
                                   return (
-                                    <Badge variant={isSwiping ? 'default' : 'outline'} className={cn("text-xs", isSwiping && 'bg-white/20 text-white')}>
-                                      {appt.date && `${appt.date} - `}
-                                      {getDisplayTime(appt.time)}
-                                    </Badge>
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant={isSwiping ? 'default' : 'outline'} className={cn("text-xs w-fit", isSwiping && 'bg-white/20 text-white')}>
+                                        {appt.date && `${appt.date} - `}
+                                        {getDisplayTime(appt.time)}
+                                      </Badge>
+                                      {appt.time && (
+                                        <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
+                                          Reporting: {format(subMinutes(parseClinicTime(appt.time, new Date()), 15), 'hh:mm a')}
+                                        </span>
+                                      )}
+                                    </div>
                                   );
                                 })()}
                                 {showStatusBadge && getStatusBadge(appt)}

@@ -205,13 +205,7 @@ export function TabletDashboardLayout({
       {/* 2. Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-transparent overflow-y-auto custom-scrollbar relative">
         <header className="h-24 px-10 flex items-center justify-between sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-md z-30 border-b border-slate-100 gap-8">
-            <div className="relative flex-1 max-w-lg group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-primary transition-colors" />
-                <Input 
-                    placeholder="Search clinical records..." 
-                    className="pl-12 h-14 bg-white border-slate-200 shadow-sm rounded-2xl placeholder:font-medium placeholder:text-slate-400 focus-visible:ring-primary/20 transition-all font-bold text-slate-800 text-lg w-full"
-                />
-            </div>
+            <div className="flex-1"></div>
             {headerActions}
         </header>
 

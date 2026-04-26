@@ -90,23 +90,6 @@ export default function AppointmentsPage() {
                 Fulfillment for {format(selectedDate, 'MMMM d, yyyy')} {isToday && '(Today)'}
               </p>
             </div>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl border-slate-200 bg-white shadow-sm hover:shadow-md transition-all">
-                  <CalendarIcon className="h-5 w-5 text-slate-500" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 rounded-[2rem] overflow-hidden shadow-2xl border-slate-100" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  initialFocus
-                  className="p-4"
-                />
-              </PopoverContent>
-            </Popover>
           </div>
         </header>
 

@@ -86,6 +86,10 @@ export async function apiRequest<T>(
     }
 
     if (!response.ok) {
+      if (response.status === 403) {
+        localStorage.removeItem('token');
+        if (typeof window !== 'undefined') window.location.href = '/login';
+      }
       const errorData = await response.json().catch(() => ({}));
       const error = new Error(errorData.error || errorData.message || `API Error: ${response.status}`);
       (error as any).status = response.status;

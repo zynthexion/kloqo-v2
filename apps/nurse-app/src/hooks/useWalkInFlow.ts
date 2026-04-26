@@ -26,14 +26,14 @@ export type FormValues = z.infer<typeof formSchema>;
 
 export type WalkInStep = 'identify' | 'preview' | 'confirm';
 
-export function useWalkInFlow() {
+export function useWalkInFlow(overrides?: { doctorId?: string | null, clinicId?: string | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const doctorId = searchParams.get('doctor');
-  const clinicId = user?.clinicId || searchParams.get('clinicId');
+  const doctorId = overrides?.doctorId || searchParams.get('doctor');
+  const clinicId = overrides?.clinicId || user?.clinicId || searchParams.get('clinicId');
 
   const [currentStep, setCurrentStep] = useState<WalkInStep>('identify');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -138,7 +138,11 @@ export function useWalkInFlow() {
 
   // 🕒 Step 2: Preview Logic
   const proceedToPreview = async (patientInfo: any, skipStepChange = false) => {
-    if (!doctorId || !clinicId) return;
+    console.log("🕒 [proceedToPreview] Triggered with:", { patientInfo, doctorId, clinicId });
+    if (!doctorId || !clinicId) {
+      console.warn("⚠️ [proceedToPreview] Aborting: Missing IDs", { doctorId, clinicId });
+      return;
+    }
     setSelectedPatient(patientInfo);
     setIsPreviewLoading(true);
     if (!skipStepChange) {
@@ -164,7 +168,11 @@ export function useWalkInFlow() {
 
   // 📝 Registration Form Submission (if new patient)
   const onRegistrationSubmit = async (values: FormValues, skipPreview = false) => {
-    if (!clinicId || !doctorId) return;
+    console.log("📝 [onRegistrationSubmit] Form submitted:", { values, clinicId, doctorId });
+    if (!clinicId || !doctorId) {
+      console.warn("⚠️ [onRegistrationSubmit] Aborting: Missing IDs", { clinicId, doctorId });
+      return;
+    }
     setIsSubmitting(true);
     try {
       // First manage the patient

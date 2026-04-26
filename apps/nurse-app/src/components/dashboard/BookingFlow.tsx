@@ -1,327 +1,77 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
-import { NurseDesktopHeader } from '../layout/NurseDesktopHeader';
-import AppointmentList from '../clinic/AppointmentList';
-import { BookingDrawer } from './BookingDrawer';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import React from 'react';
+import { format, subMinutes, isSameDay } from 'date-fns';
 import { 
-  Search, 
-  UserPlus, 
-  PhoneCall, 
+  User, 
+  Hash, 
+  Clock, 
+  Ticket, 
+  CheckCircle2, 
+  Loader2, 
   Calendar, 
-  History, 
-  ChevronRight,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-  Ticket,
-  User,
-  Hash,
-  Loader2,
-  ArrowLeft,
-  ArrowRight
+  ArrowRight 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, addDays, isSameDay, subMinutes } from 'date-fns';
-import { useWalkInFlow } from '@/hooks/useWalkInFlow';
-import { PatientSearchBanner } from '../phone-booking/PatientSearchBanner';
-import { PatientMatchList } from '../phone-booking/PatientMatchList';
-import { PatientRegistrationForm } from '../phone-booking/PatientRegistrationForm';
+import { BookingDrawer } from './BookingDrawer';
+import { PatientSearchBanner } from '@/components/phone-booking/PatientSearchBanner';
+import { PatientMatchList } from '@/components/phone-booking/PatientMatchList';
+import { PatientRegistrationForm } from '@/components/phone-booking/PatientRegistrationForm';
+import { AddRelativeDialog } from '@/components/patients/AddRelativeDialog';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/api-client';
-import { getClinicNow, getClinicISOString, parseClinicDate } from '@kloqo/shared-core';
-import { AddRelativeDialog } from '../patients/AddRelativeDialog';
 
-export function NurseDesktopDashboard() {
-  const { data, loading, selectedDoctorId, updateAppointmentStatus } = useNurseDashboardContext();
-  const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
-  const consultationStatus = (selectedDoctor?.consultationStatus || 'Out') as 'In' | 'Out';
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('arrived');
-  const [isBookingDrawerOpen, setIsBookingDrawerOpen] = useState(false);
-  const [bookingMode, setBookingMode] = useState<'walk-in' | 'advanced'>('walk-in');
+interface BookingFlowProps {
+  isOpen: boolean;
+  onClose: () => void;
+  bookingMode: 'walk-in' | 'advanced';
+  advancedStep: string;
+  setAdvancedStep: (step: any) => void;
+  selectedDate: Date;
+  setSelectedDate: (date: Date) => void;
+  slots: any[];
+  selectedSlot: any | null;
+  setSelectedSlot: (slot: any) => void;
+  loadingSlots: boolean;
+  isBooking: boolean;
+  walkIn: any;
+  handleAdvancedBook: () => Promise<void>;
+  nextDates: Date[];
+  clinicId?: string;
+  fetchSlots: (date: Date) => Promise<void>;
+}
+
+export function BookingFlow({
+  isOpen,
+  onClose,
+  bookingMode,
+  advancedStep,
+  setAdvancedStep,
+  selectedDate,
+  setSelectedDate,
+  slots,
+  selectedSlot,
+  setSelectedSlot,
+  loadingSlots,
+  isBooking,
+  walkIn,
+  handleAdvancedBook,
+  nextDates,
+  clinicId,
+  fetchSlots
+}: BookingFlowProps) {
   const { toast } = useToast();
 
-  // Advanced Booking State
-  const [advancedStep, setAdvancedStep] = useState<'identify' | 'slots' | 'confirm' | 'success'>('identify');
-  const [selectedDate, setSelectedDate] = useState<Date>(getClinicNow());
-  const [slots, setSlots] = useState<any[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [isBooking, setIsBooking] = useState(false);
-
-  // Walk-in Flow Hook (with override/bridge to context state)
-  const walkIn = useWalkInFlow({ doctorId: selectedDoctorId, clinicId: data?.clinic?.id });
-  
-  // Bridge the context's selectedDoctorId to the hook's expectation
-  // Since useWalkInFlow uses searchParams, we override the core functions to use context
-  const handleWalkInOpen = () => {
-    setBookingMode('walk-in');
-    setIsBookingDrawerOpen(true);
-    // Reset walk-in state if needed
-    walkIn.setCurrentStep('identify');
-  };
-
-  const handleAdvancedOpen = () => {
-    setBookingMode('advanced');
-    setIsBookingDrawerOpen(true);
-    setAdvancedStep('identify');
-    
-    // Hard Reset identity state for a clean new booking
-    walkIn.setPhoneNumber('');
-    walkIn.selectPatient(null);
-    walkIn.setCurrentStep('identify'); 
-  };
-
-  // Advanced Booking Functions
-  const fetchSlots = async (date: Date) => {
-    if (!selectedDoctorId || !data?.clinic?.id) return;
-    setLoadingSlots(true);
-    try {
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const response = await apiRequest<any>(
-        `/appointments/available-slots?doctorId=${selectedDoctorId}&clinicId=${data.clinic.id}&date=${encodeURIComponent(dateStr)}`
-      );
-      setSlots(response.slots || []);
-      setSelectedSlot(null);
-    } catch (error) {
-      console.error("Error fetching slots:", error);
-      toast({ variant: 'destructive', title: 'Slot Error', description: 'Could not load availability.' });
-    } finally {
-      setLoadingSlots(false);
-    }
-  };
-
-  const handleAdvancedBook = async () => {
-    if (!selectedSlot || !walkIn.selectedPatient || !selectedDoctorId || !data?.clinic?.id) return;
-    setIsBooking(true);
-    try {
-      const patientId = walkIn.selectedPatient?.id || walkIn.selectedPatient?._id;
-      await apiRequest('/appointments/book', {
-        method: 'POST',
-        body: JSON.stringify({
-          doctorId: selectedDoctorId,
-          clinicId: data.clinic.id,
-          patientId,
-          date: format(selectedDate, 'd MMMM yyyy'),
-          slotTime: format(new Date(selectedSlot.time), 'hh:mm a'),
-          time: format(new Date(selectedSlot.time), 'hh:mm a'),
-          slotIndex: selectedSlot.slotIndex,
-          sessionIndex: selectedSlot.sessionIndex,
-          source: 'Desktop_Hub'
-        })
-      });
-      // Transition to success step
-      setAdvancedStep('success');
-      toast({ title: '✅ Appointment Booked', description: 'Slot locked. Queue will update in real-time.' });
-      // Remove setIsBookingDrawerOpen(false); - let the success screen handle it
-
-    } catch (error: any) {
-      const isConflict = (error as any)?.status === 409;
-      toast({
-        variant: 'destructive',
-        title: isConflict ? 'Slot Already Taken' : 'Booking Failed',
-        description: isConflict ? 'Someone just grabbed this slot. Please pick another.' : error.message
-      });
-    } finally {
-      setIsBooking(false);
-    }
-  };
-
-  const nextDates = useMemo(() => {
-    const today = getClinicNow();
-    return Array.from({ length: 14 }, (_, i) => addDays(today, i));
-  }, []);
-
-  const filteredAppointments = useMemo(() => {
-    if (!data?.appointments || !selectedDoctorId) return [];
-    let filtered = data.appointments.filter(a => a.doctorId === selectedDoctorId);
-    
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      filtered = filtered.filter(a => 
-        a.patientName.toLowerCase().includes(lowerSearch) || 
-        a.tokenNumber?.toLowerCase().includes(lowerSearch)
-      );
-    }
-    return filtered;
-  }, [data, selectedDoctorId, searchTerm]);
-
-  const arrivedAppointments = useMemo(() => 
-    filteredAppointments.filter(a => ['Confirmed', 'Skipped'].includes(a.status)),
-    [filteredAppointments]
-  );
-
-  const pendingAppointments = useMemo(() => 
-    filteredAppointments.filter(a => a.status === 'Pending'),
-    [filteredAppointments]
-  );
-
-  const handleUpdateStatus = async (id: string, status: string) => {
-    await updateAppointmentStatus(id, status);
-  };
-
-  if (loading) {
-     return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-muted/10">
-           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-           <p className="text-slate-400 font-bold uppercase tracking-widest text-xs animate-pulse">Syncing Clinic Data...</p>
-        </div>
-     );
-  }
-
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <NurseDesktopHeader />
-
-      <div className="flex-1 grid grid-cols-12 gap-8 p-8 min-h-0 overflow-hidden">
-        {/* Left/Main Column: Queue List */}
-        <div className="col-span-8 flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-6">
-            <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input 
-                   placeholder="Search patient name, token or phone..." 
-                   className="pl-11 h-12 bg-white/60 border-slate-200/60 rounded-xl focus:ring-primary/20 transition-all font-medium"
-                   value={searchTerm}
-                   onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-          </div>
-
-          <Card className="flex-1 flex flex-col min-h-0 rounded-[2.5rem] border-none shadow-premium bg-white/60 backdrop-blur-md overflow-hidden">
-             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-                <div className="px-8 pt-6">
-                   <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-14 w-full grid grid-cols-2">
-                      <TabsTrigger 
-                         value="arrived" 
-                         className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm font-bold flex items-center gap-2"
-                      >
-                         Arrived <Badge className="bg-emerald-500 text-white rounded-md">{arrivedAppointments.length}</Badge>
-                      </TabsTrigger>
-                      <TabsTrigger 
-                         value="pending"
-                         className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm font-bold flex items-center gap-2"
-                      >
-                         Pending <Badge className="bg-primary text-white rounded-md">{pendingAppointments.length}</Badge>
-                      </TabsTrigger>
-                   </TabsList>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-none">
-                   <TabsContent value="arrived" className="m-0 focus-visible:ring-0">
-                      <AppointmentList 
-                         appointments={arrivedAppointments}
-                         onUpdateStatus={handleUpdateStatus}
-                         onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
-                         showTopRightActions={false}
-                         clinicStatus={consultationStatus}
-                         currentTime={new Date()}
-                      />
-                   </TabsContent>
-                   <TabsContent value="pending" className="m-0 focus-visible:ring-0">
-                      <AppointmentList 
-                         appointments={pendingAppointments}
-                         onUpdateStatus={handleUpdateStatus}
-                         onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
-                         showTopRightActions={false}
-                         clinicStatus={consultationStatus}
-                         currentTime={new Date()}
-                      />
-                   </TabsContent>
-                </div>
-             </Tabs>
-          </Card>
-        </div>
-
-        {/* Right Column: Actions & Summary */}
-        <div className="col-span-4 flex flex-col gap-6 overflow-y-auto pr-2 scrollbar-none">
-          {/* Quick Action Buttons */}
-          <div className="space-y-4">
-             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Quick Actions</span>
-             
-             <Button 
-                onClick={handleWalkInOpen}
-                className="w-full h-20 bg-primary hover:bg-primary/90 text-white rounded-[2rem] shadow-xl shadow-primary/20 justify-start px-8 gap-4 group transition-all"
-             >
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                   <UserPlus className="h-6 w-6" />
-                </div>
-                <div className="text-left">
-                   <p className="font-bold text-lg">New Walk-in</p>
-                   <p className="text-white/60 text-xs font-medium uppercase tracking-wider">Arrive Now</p>
-                </div>
-                <ChevronRight className="ml-auto h-5 w-5 text-white/40 group-hover:translate-x-1 transition-transform" />
-             </Button>
-
-             <Button 
-                onClick={handleAdvancedOpen}
-                className="w-full h-20 bg-white hover:bg-slate-50 text-slate-900 border border-slate-200/60 rounded-[2rem] shadow-xl shadow-slate-200/20 justify-start px-8 gap-4 group transition-all"
-             >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                   <PhoneCall className="h-6 w-6 text-primary" />
-                </div>
-                <div className="text-left">
-                   <p className="font-bold text-lg">Book Advanced</p>
-                   <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Schedule Next</p>
-                </div>
-                <ChevronRight className="ml-auto h-5 w-5 text-slate-200 group-hover:translate-x-1 transition-transform" />
-             </Button>
-          </div>
-
-          {/* Activity Insights */}
-          <div className="mt-4 space-y-4">
-             <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Session Health</span>
-             <Card className="rounded-[2.5rem] border-none shadow-premium bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-white relative overflow-hidden">
-                <TrendingUp className="absolute top-[-10%] right-[-5%] w-32 h-32 opacity-10 rotate-12" />
-                <div className="relative z-10">
-                   <p className="text-white/70 text-xs font-black uppercase tracking-widest">Wait Time Trend</p>
-                   <h3 className="text-4xl font-black mt-2">~18m</h3>
-                   <div className="flex items-center gap-2 mt-4 bg-white/20 w-fit px-3 py-1 rounded-full text-[10px] font-bold">
-                      <Clock className="h-3 w-3" />
-                      STABLE CONTEXT
-                   </div>
-                </div>
-             </Card>
-
-             <Card className="rounded-[2.5rem] border-none shadow-premium bg-white/60 backdrop-blur-md p-6">
-                <div className="flex items-center justify-between mb-4">
-                   <p className="text-slate-900 font-black text-sm uppercase tracking-tight">Today's Goal</p>
-                   <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-black">72% DONE</span>
-                </div>
-                <div className="space-y-4">
-                   <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span className="text-xs text-slate-600 font-medium flex-1">Completed Appointments</span>
-                      <span className="text-xs font-black text-slate-900">42</span>
-                   </div>
-                   <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                      <span className="text-xs text-slate-600 font-medium flex-1">Upcoming Advanced</span>
-                      <span className="text-xs font-black text-slate-900">12</span>
-                   </div>
-                </div>
-             </Card>
-          </div>
-        </div>
-      </div>
-
-      {/* Booking Drawer Integration */}
+    <>
       <BookingDrawer
-         isOpen={isBookingDrawerOpen}
-         onClose={() => setIsBookingDrawerOpen(false)}
+         isOpen={isOpen}
+         onClose={onClose}
          title={bookingMode === 'walk-in' ? "Walk-in Registration" : "Advanced Booking"}
          subtitle={bookingMode === 'walk-in' ? "Register patient for immediate queue" : "Schedule patient for future slot"}
       >
          {bookingMode === 'walk-in' ? (
             <div className="space-y-6">
-               {/* Step Indicator */}
                {walkIn.currentStep !== 'confirm' && (
                   <div className="flex gap-2 mb-4">
                      <div className={cn("h-1.5 flex-1 rounded-full", walkIn.currentStep === 'identify' ? "bg-primary" : "bg-slate-200")} />
@@ -405,7 +155,7 @@ export function NurseDesktopDashboard() {
                               </Button>
                            </div>
 
-                           <Card className="border-none shadow-2xl shadow-primary/10 overflow-hidden rounded-[2.5rem] bg-white">
+                           <div className="border-none shadow-2xl shadow-primary/10 overflow-hidden rounded-[2.5rem] bg-white">
                               <div className="bg-primary p-8 text-white relative overflow-hidden">
                                  <Ticket className="absolute -bottom-6 -right-6 h-40 w-40 text-white/10 rotate-12" />
                                  <div className="relative z-10 space-y-6">
@@ -428,19 +178,19 @@ export function NurseDesktopDashboard() {
                                     </div>
                                  </div>
                               </div>
-                              <CardContent className="p-8 space-y-6">
+                              <div className="p-8 space-y-6">
                                  <Button 
                                     onClick={async () => {
                                        const apt = await walkIn.confirmBooking(true);
-                                       if (apt) setIsBookingDrawerOpen(false);
+                                       if (apt) onClose();
                                     }}
                                     disabled={walkIn.isSubmitting}
                                     className="w-full h-16 rounded-[2rem] bg-slate-900 hover:bg-black text-white font-black text-lg shadow-xl shadow-black/20 gap-3"
                                  >
                                     {walkIn.isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <><CheckCircle2 className="h-6 w-6" /> Confirm & Allot Token</>}
                                  </Button>
-                              </CardContent>
-                           </Card>
+                              </div>
+                           </div>
                         </>
                      )}
                   </div>
@@ -448,7 +198,6 @@ export function NurseDesktopDashboard() {
             </div>
          ) : (
             <div className="space-y-6">
-                {/* Advanced Step Indicator */}
                 {advancedStep !== 'success' && (
                   <div className="flex gap-2 mb-4">
                      <div className={cn("h-1.5 flex-1 rounded-full", advancedStep === 'identify' ? "bg-primary" : "bg-slate-200")} />
@@ -473,7 +222,6 @@ export function NurseDesktopDashboard() {
                         searchedPatients={walkIn.searchedPatients}
                         selectedPatient={walkIn.selectedPatient}
                         onSelectPatient={(p) => {
-                           // Select patient but SKIP the automatic walk-in preview transition
                            walkIn.selectPatient(p, true); 
                            if (p) {
                               setAdvancedStep('slots');
@@ -508,7 +256,6 @@ export function NurseDesktopDashboard() {
 
                 {advancedStep === 'slots' && (
                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
-                      {/* Integrated Horiz Date Picker extracted from book/page.tsx */}
                       <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 flex gap-2 overflow-x-auto scrollbar-none py-1">
                         {nextDates.map((date) => {
                            const isSelected = isSameDay(date, selectedDate);
@@ -609,7 +356,7 @@ export function NurseDesktopDashboard() {
                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Patient</p>
                                   <p className="text-sm font-bold text-slate-800">{walkIn.selectedPatient?.patientName || walkIn.selectedPatient?.name}</p>
                                   <p className="text-[9px] font-bold text-slate-400 uppercase">{walkIn.phoneNumber}</p>
-                               </div>
+                                </div>
                             </div>
                          </div>
 
@@ -659,7 +406,7 @@ export function NurseDesktopDashboard() {
                        </div>
 
                        <Button 
-                          onClick={() => setIsBookingDrawerOpen(false)}
+                          onClick={onClose}
                           className="w-full h-16 bg-slate-900 hover:bg-black text-white rounded-[2rem] font-black text-lg"
                        >
                           Done
@@ -674,13 +421,13 @@ export function NurseDesktopDashboard() {
         isOpen={walkIn.isAddRelativeDialogOpen}
         setIsOpen={walkIn.setIsAddRelativeDialogOpen}
         primaryPatientPhone={walkIn.phoneNumber}
-        clinicId={data?.clinic?.id || null}
-        onRelativeAdded={(newRelative) => {
-          walkIn.handlePatientSearch(walkIn.phoneNumber); // Refresh list
-          walkIn.selectPatient(newRelative); // Automatically select and proceed
+        clinicId={clinicId || null}
+        onRelativeAdded={(newRelative: any) => {
+          walkIn.handlePatientSearch(walkIn.phoneNumber); 
+          walkIn.selectPatient(newRelative); 
         }}
       />
-    </div>
+    </>
   );
 }
 

@@ -58,8 +58,8 @@ export class BookingSessionEngine {
   static getBookingBuffer(source: SlotSource): number {
     switch (source) {
       case 'patient':  return 45;
-      case 'staff':    return 0; // Reduced to 0 for instant nurse booking
-      case 'walkin':   return 0; // 0 buffer for nearby patients
+      case 'staff':    return 30; // 30-minute buffer for nurse / clinic admin bookings
+      case 'walkin':   return 0;  // 0 buffer for nearby patients
       case 'internal': return 0;
     }
   }
