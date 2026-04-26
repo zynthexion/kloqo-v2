@@ -93,7 +93,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [router]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      // 1. Tell backend to kill the HttpOnly cookie
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (err) {
+      console.warn('Backend logout failed, continuing with local cleanup', err);
+    }
+
     // 🧹 Comprehensive Session Cleanup
     const keysToRemove = [
       'kloqo_token', 

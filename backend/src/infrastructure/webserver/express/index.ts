@@ -16,6 +16,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
 
 // Use absolute path to ensure .env is found when running from monorepo root
@@ -62,8 +63,9 @@ app.use(cors({
       callback(null, false);
     }
   },
-  credentials: false // Using Bearer tokens, not cookies
+  credentials: true
 }));
+app.use(cookieParser());
 app.use(express.json());
 
 // ── Health Check ───────────────────────────────────────────────────────────

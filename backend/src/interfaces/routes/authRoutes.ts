@@ -15,6 +15,8 @@ router.post(['/login', '/api/auth/login'], (req: any, res: any) => authControlle
 router.post(['/register', '/api/auth/register'], (req: any, res: any) => authController.register(req, res));
 router.post(['/register-superadmin', '/api/auth/register-superadmin'], (req: any, res: any) => container.userController.registerInitialAdmin(req, res));
 router.post(['/force-reset', '/api/auth/force-reset'], (req: any, res: any) => authController.forceReset(req, res));
+router.post(['/refresh', '/api/auth/refresh'], (req: any, res: any) => authController.refresh(req, res));
+router.post(['/logout', '/api/auth/logout'], (req: any, res: any) => authController.logout(req, res));
 router.get(['/me', '/api/auth/me'], (req: any, res: any) => authController.me(req, res));
 
 // ── Patient sync (called by patient-app on first load) ─────────────────────

@@ -131,6 +131,7 @@ import { GetGlobalSettingsUseCase, UpdateGlobalSettingsUseCase } from '../../../
 import { RegisterInitialSuperAdminUseCase } from '../../../application/RegisterInitialSuperAdminUseCase';
 import { InviteSuperAdminStaffUseCase } from '../../../application/InviteSuperAdminStaffUseCase';
 import { ForcePasswordResetUseCase } from '../../../application/ForcePasswordResetUseCase';
+import { RefreshTokenUseCase } from '../../../application/RefreshTokenUseCase';
 import { VerifySubscriptionUpgradeUseCase } from '../../../application/VerifySubscriptionUpgradeUseCase';
 import { ImpersonateClinicUseCase } from '../../../application/ImpersonateClinicUseCase';
 import { GetInvestorMetricsUseCase } from '../../../application/GetInvestorMetricsUseCase';
@@ -218,6 +219,7 @@ const deleteUserUseCase = new DeleteUserUseCase(userRepo);
 const registerInitialSuperAdminUseCase = new RegisterInitialSuperAdminUseCase(authService, userRepo);
 const inviteSuperAdminStaffUseCase = new InviteSuperAdminStaffUseCase(authService, userRepo, emailService);
 const forcePasswordResetUseCase = new ForcePasswordResetUseCase(authService, userRepo);
+const refreshTokenUseCase = new RefreshTokenUseCase(authService);
 const impersonateClinicUseCase = new ImpersonateClinicUseCase(clinicRepo);
 
 // Patients
@@ -343,7 +345,8 @@ const authController = new AuthController(
   changePasswordUseCase,
   checkUserByEmailUseCase,
   authService,
-  forcePasswordResetUseCase
+  forcePasswordResetUseCase,
+  refreshTokenUseCase
 );
 
 const clinicController = new ClinicController(

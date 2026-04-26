@@ -7,6 +7,7 @@ import { ChangePasswordUseCase } from '../application/ChangePasswordUseCase';
 import { ForcePasswordResetUseCase } from '../application/ForcePasswordResetUseCase';
 
 import { CheckUserByEmailUseCase } from '../application/CheckUserByEmailUseCase';
+import { RefreshTokenUseCase } from '../application/RefreshTokenUseCase';
 
 import { IAuthService } from '../domain/repositories';
 import { RBACUtils } from '@kloqo/shared';
@@ -20,7 +21,8 @@ export class AuthController {
     private changePasswordUseCase: ChangePasswordUseCase,
     private checkUserByEmailUseCase: CheckUserByEmailUseCase,
     private authService: IAuthService,
-    private forcePasswordResetUseCase: ForcePasswordResetUseCase
+    private forcePasswordResetUseCase: ForcePasswordResetUseCase,
+    private refreshTokenUseCase: RefreshTokenUseCase
   ) {}
 
   async forceReset(req: Request, res: Response) {
@@ -74,6 +76,12 @@ export class AuthController {
       const cachedOtp = (global as any).otpCache?.[phone];
       if (otp === cachedOtp || otp === '123456') { // Allow 123456 for testing
         const result = await this.authService.loginWithPhone(phone);
+        
+        if (result.status === 'success' && result.refreshToken) {
+          this.setRefreshCookie(res, result.refreshToken);
+          delete result.refreshToken; // Hide from frontend body
+        }
+        
         res.json(result);
       } else {
         res.status(400).json({ error: 'Invalid OTP' });
@@ -115,6 +123,12 @@ export class AuthController {
     try {
       const { email, password, appSource } = req.body;
       const result = await this.loginUseCase.execute(email, password, appSource);
+      
+      if (result.status === 'success' && result.refreshToken) {
+        this.setRefreshCookie(res, result.refreshToken);
+        delete result.refreshToken; // Hide from frontend body
+      }
+      
       res.json(result);
     } catch (error: any) {
       console.error('[AUTH ERROR] Login failed:', error.message);
@@ -157,5 +171,43 @@ export class AuthController {
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
+  }
+
+  async refresh(req: Request, res: Response) {
+    try {
+      const refreshToken = req.cookies.kloqo_refresh;
+      if (!refreshToken) {
+        return res.status(401).json({ error: 'No refresh token provided' });
+      }
+
+      const result = await this.refreshTokenUseCase.execute(refreshToken);
+      
+      // Rotate refresh token: set new cookie
+      this.setRefreshCookie(res, result.refreshToken);
+      
+      // Return only the ID token in body
+      res.json({ token: result.token });
+    } catch (error: any) {
+      console.warn('[AUTH REFRESH] Failed:', error.message);
+      res.status(401).json({ error: 'Session expired. Please login again.' });
+    }
+  }
+
+  async logout(_req: Request, res: Response) {
+    res.clearCookie('kloqo_refresh', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+    res.json({ success: true, message: 'Logged out successfully' });
+  }
+
+  private setRefreshCookie(res: Response, token: string) {
+    res.cookie('kloqo_refresh', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
   }
 }

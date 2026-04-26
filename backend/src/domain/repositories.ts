@@ -132,7 +132,7 @@ export interface IErrorLogRepository {
 }
 
 export type AuthResponse = 
-  | { status: 'success'; user: User; token: string }
+  | { status: 'success'; user: User; token: string; refreshToken?: string }
   | { status: 'requires_reset'; email: string; resetToken: string };
 
 export interface IAuthService {
@@ -142,6 +142,7 @@ export interface IAuthService {
   updatePassword(uid: string, newPassword: string): Promise<void>;
   deleteUser(uid: string): Promise<void>;
   loginWithPhone(phone: string): Promise<AuthResponse>;
+  refreshToken(token: string): Promise<{ token: string; refreshToken: string }>;
 }
 
 export interface GlobalSettings {

@@ -113,6 +113,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      // 1. Tell backend to kill the HttpOnly cookie
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (err) {
+      console.warn('Backend logout failed, continuing with local cleanup', err);
+    }
+
     // 🧹 Comprehensive Session Cleanup
     const keysToRemove = [
       'token', 

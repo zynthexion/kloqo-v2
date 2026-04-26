@@ -69,7 +69,8 @@ export class FirebaseAuthService implements IAuthService {
     return {
       status: 'success',
       user,
-      token: data.idToken
+      token: data.idToken,
+      refreshToken: data.refreshToken
     };
   }
 
@@ -284,11 +285,40 @@ export class FirebaseAuthService implements IAuthService {
        return {
          status: 'success',
          user,
-         token: data.idToken
+         token: data.idToken,
+         refreshToken: data.refreshToken
        };
     } catch (error: any) {
       console.error('Login with phone failed:', error);
       throw new Error(`Auth failed: ${error.message}`);
     }
+  }
+
+  async refreshToken(token: string): Promise<{ token: string; refreshToken: string }> {
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+      throw new Error('FIREBASE_WEB_API_KEY not configured on backend.');
+    }
+
+    const url = `https://securetoken.googleapis.com/v1/token?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: token
+      }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    const data = await response.json() as any;
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || 'Token refresh failed');
+    }
+
+    return {
+      token: data.id_token,
+      refreshToken: data.refresh_token
+    };
   }
 }
