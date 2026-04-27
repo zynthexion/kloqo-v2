@@ -60,7 +60,8 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
   // Identity Gating
   const isSelf = user?.id === doctor.userId || user?.id === doctor.id;
   const isAdmin = user?.role === 'clinicAdmin' || user?.role === 'superAdmin';
-  const hasAutonomy = isSelf || isAdmin;
+  const isNurse = user?.role === 'nurse';
+  const hasAutonomy = isSelf || isAdmin || isNurse;
 
   const handleEdit = (dateKey: string, override: DoctorOverride) => {
     try {
@@ -163,10 +164,10 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
 
   return (
     <div className="space-y-10">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1 md:px-2">
         <div className="space-y-1">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Date Overrides</h2>
-          <p className="text-sm font-bold text-slate-400">Tactical schedule modifications for specific dates.</p>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight uppercase">Date Overrides</h2>
+          <p className="text-xs md:text-sm font-bold text-slate-400">Tactical schedule modifications for specific dates.</p>
         </div>
         {!hasAutonomy ? (
           <Button 
@@ -181,8 +182,8 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
             if (!open) setConflictError(null);
           }}>
             <DialogTrigger asChild>
-              <Button className="rounded-[2rem] bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest px-10 h-16 shadow-xl shadow-slate-900/20 hover:scale-[1.02] transition-transform">
-                <Plus className="w-4 h-4 mr-2" /> Apply New Override
+              <Button className="rounded-[1.5rem] md:rounded-[2rem] bg-slate-900 text-white font-black uppercase text-[9px] md:text-[10px] tracking-widest px-6 md:px-10 h-14 md:h-16 shadow-xl shadow-slate-900/20 hover:scale-[1.02] transition-transform">
+                <Plus className="w-4 h-4 mr-2" /> New Override
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
@@ -332,27 +333,27 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-8">
         {sortedDates.length > 0 ? (
           sortedDates.map((dateKey) => {
             const override = overrides[dateKey];
             const date = new Date(dateKey);
             
             return (
-              <Card key={dateKey} className="border-none shadow-2xl shadow-black/5 rounded-[3rem] bg-white overflow-hidden group hover:shadow-primary/10 transition-all duration-500 border-b-8 border-primary/5">
-                <CardHeader className="p-8 border-b border-slate-50 bg-slate-50/30 flex flex-row items-center justify-between space-y-0">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-primary border border-slate-100 italic font-black text-lg">
+              <Card key={dateKey} className="border-none shadow-2xl shadow-black/5 rounded-[2rem] md:rounded-[3rem] bg-white overflow-hidden group hover:shadow-primary/10 transition-all duration-500 border-b-8 border-primary/5">
+                <CardHeader className="p-6 md:p-8 border-b border-slate-50 bg-slate-50/30 flex flex-row items-center justify-between space-y-0">
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white shadow-sm flex items-center justify-center text-primary border border-slate-100 italic font-black text-base md:text-lg">
                       {format(date, 'd')}
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{format(date, 'MMMM yyyy')}</p>
-                      <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{format(date, 'EEEE')}</p>
+                      <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{format(date, 'MMM yyyy')}</p>
+                      <p className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-tight">{format(date, 'EEEE')}</p>
                     </div>
                   </div>
-                  <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold uppercase text-[9px] tracking-widest px-3 py-1 rounded-full">Active</Badge>
+                  <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold uppercase text-[8px] md:text-[9px] tracking-widest px-2 md:px-3 py-1 rounded-full">Active</Badge>
                 </CardHeader>
-                <CardContent className="p-8 space-y-6">
+                <CardContent className="p-6 md:p-8 space-y-4 md:space-y-6">
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
                       <Clock className="w-4 h-4 text-slate-300" />
@@ -410,14 +411,14 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
         )}
       </div>
 
-      <div className="p-10 rounded-[3rem] bg-indigo-50/50 border-2 border-indigo-100/50 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden group shadow-sm">
-        <div className="h-20 w-20 rounded-3xl bg-indigo-500/10 flex items-center justify-center border-2 border-indigo-500/20 shrink-0">
-          <CalendarIcon className="h-10 w-10 text-indigo-600" />
+      <div className="p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] bg-indigo-50/50 border-2 border-indigo-100/50 flex flex-col md:flex-row items-center gap-6 md:gap-8 relative overflow-hidden group shadow-sm">
+        <div className="h-16 w-16 md:h-20 md:w-20 rounded-2xl md:rounded-3xl bg-indigo-500/10 flex items-center justify-center border-2 border-indigo-500/20 shrink-0">
+          <CalendarIcon className="h-8 w-8 md:h-10 md:w-10 text-indigo-600" />
         </div>
-        <div className="space-y-2">
-          <h4 className="text-xl font-black text-indigo-900 uppercase tracking-tight leading-none">Override Lifecycle</h4>
-          <p className="text-sm font-bold text-indigo-700/70 leading-relaxed max-w-2xl">
-            Date overrides take precedence over weekly availability. Deleting an override will immediately restore the default schedule. Always verify booked appointments before restoring the weekly default.
+        <div className="space-y-1 md:space-y-2 text-center md:text-left">
+          <h4 className="text-lg md:text-xl font-black text-indigo-900 uppercase tracking-tight leading-none">Override Lifecycle</h4>
+          <p className="text-[11px] md:text-sm font-bold text-indigo-700/70 leading-relaxed max-w-2xl">
+            Date overrides take precedence over weekly availability. Deleting an override restores the default schedule.
           </p>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { Appointment } from '@kloqo/shared';
 import AppointmentList from '@/components/clinic/AppointmentList';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface AppointmentSearchAndListProps {
   searchTerm: string;
@@ -39,6 +40,11 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
   hasMore = false,
   limit = 10
 }) => {
+  console.log('[AppointmentSearchAndList] Rendering with:', { 
+    searchTerm, 
+    appointmentsCount: appointments.length,
+    isLoading 
+  });
   const content = (
     <div className={cn("flex flex-col h-full", isTablet && "bg-white shadow-premium rounded-[2.5rem] border border-slate-50 overflow-hidden min-h-[600px]")}>
       {isTablet && (
@@ -86,7 +92,7 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
             <CalendarDays className="h-16 w-16 mb-4 opacity-10" />
             <p className={cn("text-lg font-black uppercase tracking-widest", !isTablet && "text-sm")}>No appointments found</p>
             <p className="text-xs font-bold mt-1 opacity-50 uppercase tracking-tighter">
-              {format(selectedDate, 'MMMM d, yyyy')}
+              {searchTerm ? `Search: "${searchTerm}" across all dates` : format(selectedDate, 'MMMM d, yyyy')}
             </p>
           </div>
         ) : (

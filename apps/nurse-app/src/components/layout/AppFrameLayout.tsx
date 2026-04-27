@@ -37,20 +37,17 @@ export default function AppFrameLayout({ children, className, showBottomNav = fa
              isModern && "bg-white/70 backdrop-blur-xl rounded-[2.5rem] border border-white/40 shadow-premium overflow-hidden",
              isFullScreen && "bg-transparent border-0 rounded-0"
            )}>
-             {children}
+              <div className={cn("flex-1 overflow-auto", showBottomNav && "pb-20")}>
+                {children}
+              </div>
            </div>
         </div>
         {showBottomNav && (
             <div className={cn(
-              "mt-auto",
-              isModern ? "px-4" : ""
+              "fixed bottom-0 left-0 right-0 z-50 transition-all duration-500",
+              isModern ? "pb-8 px-4" : "bg-white border-t border-slate-100"
             )}>
                 <div className="max-w-md mx-auto">
-                    <RoleSwitcher />
-                </div>
-                <div className={cn(
-                   isModern ? "pb-8" : ""
-                )}>
                    <BottomNav />
                 </div>
             </div>

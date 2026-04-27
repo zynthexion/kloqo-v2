@@ -12,14 +12,17 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 type LiveDashboardProps = {
   clinicId: string;
 };
 
 export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { data, loading, error, updateDoctorStatus, updateAppointmentStatus } = useNurseDashboard(clinicId);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(searchParams.get('doctor') || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('arrived');
   const { toast } = useToast();
@@ -32,9 +35,23 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
 
   useEffect(() => {
     if (data?.doctors.length && !selectedDoctorId) {
-      setSelectedDoctorId(data.doctors[0].id);
+      const initialId = searchParams.get('doctor') || data.doctors[0].id;
+      setSelectedDoctorId(initialId);
+      if (!searchParams.get('doctor')) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('doctor', initialId);
+        router.replace(`?${params.toString()}`);
+      }
     }
-  }, [data, selectedDoctorId]);
+  }, [data, selectedDoctorId, searchParams, router]);
+
+  const handleDoctorChange = (id: string) => {
+    setSelectedDoctorId(id);
+    localStorage.setItem('selectedDoctorId', id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('doctor', id);
+    router.replace(`?${params.toString()}`);
+  };
 
   const currentDoctor = useMemo(() => 
     data?.doctors.find(d => d.id === selectedDoctorId), 
@@ -126,7 +143,7 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
       <ClinicHeader
         doctors={data?.doctors || []}
         selectedDoctor={selectedDoctorId}
-        onDoctorChange={setSelectedDoctorId}
+        onDoctorChange={handleDoctorChange}
         consultationStatus={currentDoctor?.consultationStatus as 'In' | 'Out'}
         onStatusChange={handleStatusChange}
         currentTime={currentTime}

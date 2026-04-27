@@ -12,6 +12,14 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { User, ChevronDown } from 'lucide-react';
 import { apiRequest } from '@/lib/api-client';
 import { Appointment, Doctor } from '@kloqo/shared';
 import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
@@ -37,6 +45,7 @@ function MarkLeaveContent() {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [clinicId, setClinicId] = useState<string | null>(null);
+    const [availableDoctors, setAvailableDoctors] = useState<Doctor[]>([]);
 
     useEffect(() => {
         const id = localStorage.getItem('clinicId');
@@ -67,10 +76,12 @@ function MarkLeaveContent() {
             const currentDoctor = dashData.doctors.find((d: any) => d.id === doctorId);
             if (currentDoctor) {
                 setDoctor(currentDoctor);
+                setAvailableDoctors(dashData.doctors || []);
                 const doctorAppointments = dashData.appointments.filter((a: any) => a.doctorId === doctorId);
                 setAppointments(doctorAppointments);
             } else {
                 setDoctor(null);
+                setAvailableDoctors(dashData.doctors || []);
                 toast({ variant: 'destructive', title: 'Error', description: 'Doctor not found.' });
             }
         } catch (error) {
@@ -167,6 +178,12 @@ function MarkLeaveContent() {
         }
     };
 
+    const handleDoctorChange = (id: string) => {
+        localStorage.setItem('selectedDoctorId', id);
+        fetchData();
+        setSelectedSessions([]);
+    };
+
     const handleDateSelect = (date: Date | undefined) => {
         if (date) {
             setSelectedDate(date);
@@ -201,9 +218,45 @@ function MarkLeaveContent() {
                     </Button>
                     <div className="flex-1">
                         <h1 className="text-lg font-black text-slate-900 leading-tight">Mark Doctor Leave</h1>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {doctor ? `Dr. ${doctor.name}` : 'Select Doctor'}
-                        </p>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild disabled={availableDoctors.length <= 1}>
+                                <div className={cn(
+                                    "flex items-center gap-1 mt-0.5 transition-all",
+                                    availableDoctors.length > 1 && "cursor-pointer hover:opacity-70 active:scale-95 group"
+                                )}>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        {doctor ? `Dr. ${doctor.name}` : 'Select Doctor'}
+                                    </p>
+                                    {availableDoctors.length > 1 && <ChevronDown className="h-2 w-2 text-slate-400" />}
+                                </div>
+                            </DropdownMenuTrigger>
+                            {availableDoctors.length > 1 && (
+                                <DropdownMenuContent align="start" className="rounded-2xl border-none shadow-2xl p-2 min-w-[200px] bg-white/95 backdrop-blur-xl">
+                                    <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Switch Doctor Context</p>
+                                    </div>
+                                    {availableDoctors.map(doc => (
+                                        <DropdownMenuItem 
+                                            key={doc.id} 
+                                            onSelect={() => handleDoctorChange(doc.id)}
+                                            className={cn(
+                                                "rounded-xl py-2 px-3 mb-1 flex items-center gap-3 transition-colors",
+                                                doctor?.id === doc.id ? "bg-slate-100" : "hover:bg-slate-50 cursor-pointer"
+                                            )}
+                                        >
+                                            <Avatar className="h-8 w-8 border border-slate-100">
+                                                <AvatarImage src={doc.avatar} />
+                                                <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-xs text-slate-700">Dr. {doc.name}</span>
+                                                <span className="text-[8px] font-black uppercase tracking-widest opacity-40">{doc.department}</span>
+                                            </div>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            )}
+                        </DropdownMenu>
                     </div>
                 </header>
 

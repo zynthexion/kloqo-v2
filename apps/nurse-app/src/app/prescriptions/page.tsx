@@ -12,15 +12,22 @@ import { PrescriptionHeader } from '@/components/prescriptions/PrescriptionHeade
 import { PrescriptionCard } from '@/components/prescriptions/PrescriptionCard';
 import { DispenseModal, AbandonModal } from '@/components/prescriptions/FulfillmentModals';
 import { LogOutDialog } from '@/components/layout/LogOutDialog';
+import { useNurseDashboard } from '@/hooks/useNurseDashboard';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Doctor } from '@kloqo/shared';
 
 export default function PharmacistPrescriptionsPage() {
   const { theme } = useTheme();
   const isModern = theme === 'modern';
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedDoctorId = searchParams.get('doctor') || '';
+
   const {
-    user, logout, activeTab, setActiveTab, queue, 
-    searchQuery, setSearchQuery, searchResults,
+    user, logout, activeTab, setActiveTab, queue: rawQueue, 
+    searchQuery, setSearchQuery, searchResults: rawSearchResults,
     loadingQueue, loadingSearch, viewerUrl, setViewerUrl,
     dispenseTarget, setDispenseTarget, billValue, setBillValue,
     dispenseNotes, setDispenseNotes, dispensing,
@@ -29,13 +36,34 @@ export default function PharmacistPrescriptionsPage() {
     confirmAbandon, handleBrandedPrint
   } = usePrescriptionFulfillment();
 
+  const { data: nurseDashData } = useNurseDashboard(user?.clinicId || '');
+
+  const handleDoctorChange = (id: string) => {
+    localStorage.setItem('selectedDoctorId', id);
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set('doctor', id);
+    else params.delete('doctor');
+    router.replace(`?${params.toString()}`);
+  };
+
+  const queue = selectedDoctorId 
+    ? rawQueue.filter(a => a.doctorId === selectedDoctorId) 
+    : rawQueue;
+
+  const searchResults = selectedDoctorId 
+    ? rawSearchResults.filter(a => a.doctorId === selectedDoctorId) 
+    : rawSearchResults;
+
   return (
-    <AppFrameLayout showBottomNav={false}>
+    <AppFrameLayout showBottomNav={true}>
       <div className="flex flex-col h-full bg-slate-50/20 font-pt-sans">
         <PrescriptionHeader 
           clinicName={(user as any)?.clinicName} 
           userName={user?.name || ''} 
           onLogout={() => setShowLogoutConfirm(true)} 
+          doctors={(nurseDashData?.doctors ?? []) as Doctor[]}
+          selectedDoctorId={selectedDoctorId}
+          onDoctorChange={handleDoctorChange}
         />
 
         <div className="max-w-[1600px] w-full mx-auto p-4 md:p-8 space-y-6">
@@ -50,7 +78,7 @@ export default function PharmacistPrescriptionsPage() {
                     activeTab === tab ? "bg-theme-blue text-white shadow-xl shadow-theme-blue/20" : "bg-slate-50 text-slate-400"
                   )}
                 >
-                  {tab === 'queue' ? '⚡ Active Fulfillment' : '🔍 Secure Search'}
+                  {tab === 'queue' ? '⚡ Active Queue' : '🔒 Phone Search'}
                 </button>
               ))}
             </div>
@@ -60,16 +88,17 @@ export default function PharmacistPrescriptionsPage() {
                 <div className="flex-1 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input
-                    type="text"
+                    type="tel"
+                    maxLength={10}
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value.replace(/\D/g, ''))}
                     onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                    placeholder="Search Patient Record..."
+                    placeholder="Enter 10-digit Phone..."
                     className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-4 focus:ring-theme-blue/10"
                   />
                 </div>
                 <button onClick={handleSearch} disabled={loadingSearch} className="px-6 bg-theme-blue text-white rounded-2xl font-black text-xs uppercase shadow-lg shadow-theme-blue/30">
-                  {loadingSearch ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+                  {loadingSearch ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Get History'}
                 </button>
               </div>
             )}

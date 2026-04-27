@@ -59,12 +59,17 @@ export function usePrescriptionFulfillment() {
   }, [fetchQueue]);
 
   const handleSearch = useCallback(async () => {
-    if (!searchQuery.trim() || !clinicId) return;
+    const cleanPhone = searchQuery.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      alert('🔒 Privacy Check: Please enter a full 10-digit phone number to retrieve history.');
+      return;
+    }
+    if (!clinicId) return;
+    
     setLoadingSearch(true);
     try {
-      const data = await apiRequest<Appointment[]>(`/clinic/prescriptions?clinicId=${clinicId}`);
-      const q = searchQuery.toLowerCase();
-      setSearchResults((data || []).filter(a => a.patientName?.toLowerCase().includes(q)));
+      const data = await apiRequest<Appointment[]>(`/clinic/prescriptions?clinicId=${clinicId}&patientPhone=${cleanPhone}`);
+      setSearchResults(data || []);
     } catch (e) {
       console.error('[Fulfillment] Search Error:', e);
     } finally {

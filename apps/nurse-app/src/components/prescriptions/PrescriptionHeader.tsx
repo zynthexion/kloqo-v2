@@ -6,13 +6,30 @@ interface PrescriptionHeaderProps {
   clinicName: string;
   userName: string;
   onLogout: () => void;
+  doctors?: any[];
+  selectedDoctorId?: string;
+  onDoctorChange?: (id: string) => void;
 }
+
+import { ChevronDown } from 'lucide-react';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 export const PrescriptionHeader: React.FC<PrescriptionHeaderProps> = ({
   clinicName,
   userName,
-  onLogout
+  onLogout,
+  doctors = [],
+  selectedDoctorId,
+  onDoctorChange
 }) => {
+  const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+
   return (
     <header className="sticky top-0 z-40 bg-theme-blue text-white px-6 py-4 md:py-6 shadow-2xl transition-all duration-300">
       <div className="absolute inset-0 overflow-hidden opacity-10">
@@ -29,11 +46,59 @@ export const PrescriptionHeader: React.FC<PrescriptionHeaderProps> = ({
             <h1 className="text-xl md:text-2xl font-black tracking-tight leading-none">
                FULFILLMENT CENTER
             </h1>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-3 mt-2">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">
-                Live Dashboard &bull; {clinicName || 'Operational Mode'}
+                {clinicName || 'Operational Mode'}
               </span>
+              {doctors.length > 0 && (
+                <>
+                  <span className="text-white/20">|</span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 group outline-none">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300 group-hover:text-white transition-colors">
+                          {selectedDoctor ? `Dr. ${selectedDoctor.name}` : 'All Practitioners'}
+                        </span>
+                        <ChevronDown className="w-3 h-3 text-emerald-400 group-hover:text-white transition-all group-data-[state=open]:rotate-180" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[240px] rounded-[1.5rem] p-2 bg-white/95 backdrop-blur-md border-slate-100 shadow-2xl">
+                      <DropdownMenuItem 
+                        onClick={() => onDoctorChange?.('')}
+                        className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-50 focus:bg-slate-50 group"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-black text-[10px]">
+                          ALL
+                        </div>
+                        <span className="text-xs font-black text-slate-800 uppercase tracking-tight">Show All Records</span>
+                      </DropdownMenuItem>
+                      {doctors.map((doc) => (
+                        <DropdownMenuItem 
+                          key={doc.id}
+                          onClick={() => onDoctorChange?.(doc.id)}
+                          className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-50 focus:bg-slate-50 group"
+                        >
+                          <Avatar className="w-8 h-8 border-2 border-slate-100">
+                            <AvatarImage src={doc.image} />
+                            <AvatarFallback className="bg-slate-100 text-slate-600 text-[10px] font-black">
+                              {doc.name.substring(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="text-xs font-black text-slate-800 uppercase tracking-tight group-hover:text-theme-blue transition-colors">
+                              {doc.name}
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                              {doc.specialty || 'Practitioner'}
+                            </p>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
             </div>
           </div>
         </div>

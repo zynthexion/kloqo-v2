@@ -13,6 +13,9 @@ import { usePhoneBookingDetails } from '@/hooks/use-phone-booking-details';
 import { PatientSearchBanner } from '@/components/phone-booking/PatientSearchBanner';
 import { PatientMatchList } from '@/components/phone-booking/PatientMatchList';
 import { PatientRegistrationForm } from '@/components/phone-booking/PatientRegistrationForm';
+import ClinicHeader from '@/components/clinic/ClinicHeader';
+import { useNurseDashboard } from '@/hooks/useNurseDashboard';
+import { Doctor } from '@kloqo/shared';
 
 function Content() {
   const { toast } = useToast();
@@ -40,6 +43,12 @@ function Content() {
     handleSendLink,
     router
   } = usePhoneBookingDetails();
+  const { data: nurseDashData } = useNurseDashboard(clinicId || '');
+
+  const handleDoctorChange = (id: string) => {
+    localStorage.setItem('selectedDoctorId', id);
+    router.replace(`/phone-booking/details?doctor=${id}`);
+  };
 
   if (!doctorId) {
     return (
@@ -55,21 +64,16 @@ function Content() {
   }
 
   return (
-    <AppFrameLayout>
+    <AppFrameLayout showBottomNav>
       <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
-        <header className="flex items-center gap-4 p-4 bg-white border-b sticky top-0 z-10">
-          <Link href="/">
-            <Button variant="ghost" size="icon" className="rounded-xl">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-lg font-black text-slate-900 leading-tight">Phone Booking</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Queue Orchestrator
-            </p>
-          </div>
-        </header>
+        <ClinicHeader 
+          doctors={(nurseDashData?.doctors ?? []) as Doctor[]}
+          selectedDoctor={doctorId}
+          onDoctorChange={handleDoctorChange}
+          showLogo={false}
+          pageTitle="Phone Booking"
+          showSettings={false}
+        />
 
         <main className="flex-1 p-4 space-y-6 overflow-y-auto">
           <PatientSearchBanner 

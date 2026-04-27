@@ -29,13 +29,8 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
   const availableRoles = useMemo((): Role[] => {
     if (!user) return [];
     
-    // All-or-nothing check for Doctors
-    if (RBACUtils.hasRole(user, 'doctor')) {
-      return ['doctor'];
-    }
-
     const rawRoles = user.roles && user.roles.length > 0 ? user.roles : (user.role ? [user.role] : []);
-    const operationalRoles: Role[] = ['nurse', 'pharmacist', 'receptionist'];
+    const operationalRoles: Role[] = ['doctor', 'nurse', 'pharmacist', 'receptionist', 'clinicAdmin'];
     return rawRoles.filter(r => operationalRoles.includes(r as Role)) as Role[];
   }, [user]);
 
@@ -77,16 +72,21 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
     
     // Default Fallback Logic
     let defaultRole: Role | null = null;
-    if (RBACUtils.hasRole(user, 'doctor')) {
-      defaultRole = 'doctor';
-    } else if (RBACUtils.hasRole(user, 'nurse')) {
+    
+    // Priority: Saved Role > Nurse > Doctor > First Available
+    if (savedRole && availableRoles.includes(savedRole)) {
+      defaultRole = savedRole;
+    } else if (availableRoles.includes('nurse')) {
       defaultRole = 'nurse';
+    } else if (availableRoles.includes('doctor')) {
+      defaultRole = 'doctor';
     } else if (availableRoles.length > 0) {
       defaultRole = availableRoles[0];
     }
 
     if (defaultRole) {
       setActiveRole(defaultRole);
+      localStorage.setItem('activeRole', defaultRole);
       
       // 🚀 Auto-Correction on first mount if current path is restricted
       // If we land on /dashboard as a receptionist, move home instantly
@@ -108,12 +108,15 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
       localStorage.setItem('activeRole', newRole);
       
       // Instant Teleportation Phase
+      const storedDoctorId = localStorage.getItem('selectedDoctorId');
+      const doctorParam = storedDoctorId ? `?doctor=${storedDoctorId}` : '';
+
       if (newRole === 'pharmacist') {
-        router.push('/prescriptions');
+        router.push(`/prescriptions${doctorParam}`);
       } else if (newRole === 'receptionist') {
-        router.push('/');
+        router.push(`/${doctorParam}`);
       } else {
-        router.push('/dashboard');
+        router.push(`/dashboard${doctorParam}`);
       }
     } else {
       console.warn(`[ActiveIdentity] Switch refused: User does not possess role ${newRole}`);

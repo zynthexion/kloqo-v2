@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { isSameDay, addDays, subDays } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
@@ -10,18 +10,20 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export function useAppointmentManagement() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const clinicId = user?.clinicId;
 
-  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<string>(searchParams.get('doctor') || '');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [dateAppointments, setDateAppointments] = useState<Appointment[]>([]);
   const [dateLoading, setDateLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const limit = 10;
+  const limit = 20;
 
   const { data, loading: dashLoading, updateAppointmentStatus } = useNurseDashboard(clinicId);
 
@@ -30,14 +32,32 @@ export function useAppointmentManagement() {
     if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading, router]);
 
-  // Auto-select first doctor
+  // Auto-select first doctor and sync with URL
   useEffect(() => {
     if (data?.doctors?.length && !selectedDoctor) {
       const stored = localStorage.getItem('selectedDoctorId');
-      const found = data.doctors.find(d => d.id === stored);
-      setSelectedDoctor(found ? found.id : data.doctors[0].id);
+      const urlDocId = searchParams.get('doctor');
+      const found = data.doctors.find(d => d.id === (urlDocId || stored));
+      const initialId = found ? found.id : data.doctors[0].id;
+      
+      setSelectedDoctor(initialId);
+      
+      if (urlDocId !== initialId) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('doctor', initialId);
+        router.replace(`?${params.toString()}`);
+      }
     }
-  }, [data?.doctors, selectedDoctor]);
+  }, [data?.doctors, selectedDoctor, searchParams, router]);
+  
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1); // Reset to first page on search
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Fetch appointments for selected date
   useEffect(() => {
@@ -49,25 +69,37 @@ export function useAppointmentManagement() {
     // So we apply it here.
     
 
-    if (isToday && data?.appointments) {
+    if (isToday && data?.appointments && !debouncedSearch) {
       setDateAppointments(data.appointments);
+      setTotalCount(data.appointments.length);
+      setHasMore(false);
       return;
     }
 
-    const fetchForDate = async () => {
+    const fetchData = async () => {
       setDateLoading(true);
       try {
         const dateStr = getClinicISODateString(selectedDate);
         const token = localStorage.getItem('token');
+        const searchPart = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
 
-        const res = await fetch(`${API_URL}/appointments/dashboard?clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}&page=${page}&limit=${limit}`, {
+        const res = await fetch(`${API_URL}/appointments/dashboard?clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}&page=${page}&limit=${limit}${searchPart}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log('[Appointments] Fetch Response:', res.status, res.statusText);
         if (res.ok) {
           const json = await res.json();
+          console.log('[Appointments] Data Received:', {
+            count: json.appointments?.length,
+            total: json.totalCount,
+            hasMore: json.hasMore
+          });
           setDateAppointments(json.appointments ?? []);
           setTotalCount(json.totalCount ?? 0);
           setHasMore(json.hasMore ?? false);
+        } else {
+          const err = await res.text();
+          console.error('[Appointments] Fetch Error Payload:', err);
         }
       } catch (e) {
         console.error('[Appointments] Fetch Error:', e);
@@ -75,8 +107,8 @@ export function useAppointmentManagement() {
         setDateLoading(false);
       }
     };
-    fetchForDate();
-  }, [clinicId, selectedDate, selectedDoctor, data?.appointments, page]);
+    fetchData();
+  }, [clinicId, selectedDate, selectedDoctor, data?.appointments, page, debouncedSearch]);
 
   // Reset page when date or doctor changes
   useEffect(() => {
@@ -86,7 +118,10 @@ export function useAppointmentManagement() {
   const handleDoctorChange = useCallback((id: string) => {
     setSelectedDoctor(id);
     localStorage.setItem('selectedDoctorId', id);
-  }, []);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('doctor', id);
+    router.replace(`?${params.toString()}`);
+  }, [searchParams, router]);
 
   const currentDoctor = useMemo(() => 
     data?.doctors.find(d => d.id === selectedDoctor),

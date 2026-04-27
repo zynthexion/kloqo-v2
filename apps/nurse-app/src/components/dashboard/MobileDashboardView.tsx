@@ -17,6 +17,7 @@ interface MobileDashboardViewProps {
   consultationStatus: 'In' | 'Out';
   handleStatusChange: (status: 'In' | 'Out', sessionIndex?: number) => Promise<void>;
   mainMenuItems: any[];
+  activeRole?: any;
 }
 
 export function MobileDashboardView({
@@ -26,7 +27,8 @@ export function MobileDashboardView({
   handleDoctorChange,
   consultationStatus,
   handleStatusChange,
-  mainMenuItems
+  mainMenuItems,
+  activeRole
 }: MobileDashboardViewProps) {
   const router = useRouter();
 
@@ -98,21 +100,49 @@ export function MobileDashboardView({
                 </div>
               ))}
 
-              {isModern && selectedDoctor && (
-                <div className="w-full flex justify-between gap-4 mt-4 px-2">
-                  <button onClick={() => router.push('/day-snapshot')} className="flex-1 group">
-                    <div className="relative w-full aspect-square flex flex-col items-center justify-center transition-all duration-500 bg-slate-50/50 backdrop-blur-md rounded-[2.5rem] border border-white hover:bg-white hover:shadow-premium">
-                      <BarChart3 className="h-8 w-8 text-primary transition-all duration-300 group-hover:scale-110" strokeWidth={2.5} />
-                      <span className="text-[10px] font-black uppercase tracking-widest mt-2 text-muted-foreground">Stats</span>
+              {activeRole === 'nurse' && (
+                <>
+                  {/* Left Side: Snapshot Icon */}
+                  <button
+                    onClick={() => router.push('/day-snapshot')}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-8 z-50 group"
+                    aria-label="Snapshot"
+                  >
+                    <div className={cn(
+                      "relative w-20 h-20 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center",
+                      isModern 
+                        ? "bg-gradient-to-br from-blue-400 to-blue-600 shadow-blue-500/30" 
+                        : "bg-gradient-to-br from-slate-700 to-slate-900 border-2 border-white/20"
+                    )}>
+                      <BarChart3 className="h-8 w-8 text-white drop-shadow-lg" strokeWidth={2.5} />
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                         <span className={cn("text-[10px] font-black uppercase tracking-widest", isModern ? "text-slate-400" : "text-white/60")}>Snapshot</span>
+                      </div>
                     </div>
                   </button>
-                  <button onClick={() => selectedDoctor && router.push(`/schedule-break?doctor=${selectedDoctor}`)} className="flex-1 group">
-                    <div className="relative w-full aspect-square flex flex-col items-center justify-center transition-all duration-500 bg-amber-50/50 backdrop-blur-md rounded-[2.5rem] border border-white hover:bg-white hover:shadow-premium">
-                      <Coffee className="h-8 w-8 text-amber-500 transition-all duration-300 group-hover:scale-110" strokeWidth={2.5} />
-                      <span className="text-[10px] font-black uppercase tracking-widest mt-2 text-muted-foreground">Break</span>
+
+                  {/* Right Side: Break Icon */}
+                  <button
+                    onClick={() => selectedDoctor && router.push(`/schedule-break?doctor=${selectedDoctor}`)}
+                    className={cn(
+                       "absolute right-0 top-1/2 -translate-y-1/2 translate-x-8 z-50 group",
+                       !selectedDoctor && "opacity-50 pointer-events-none"
+                    )}
+                    aria-label="Break"
+                  >
+                    <div className={cn(
+                      "relative w-20 h-20 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 flex items-center justify-center",
+                      isModern 
+                        ? "bg-gradient-to-br from-amber-400 to-amber-600 shadow-amber-500/30" 
+                        : "bg-gradient-to-br from-amber-600 to-amber-800 border-2 border-white/20"
+                    )}>
+                      <Coffee className="h-8 w-8 text-white drop-shadow-lg scale-x-[-1]" strokeWidth={2.5} />
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                         <span className={cn("text-[10px] font-black uppercase tracking-widest", isModern ? "text-slate-400" : "text-white/60")}>Break</span>
+                      </div>
                     </div>
                   </button>
-                </div>
+                </>
               )}
             </div>
           </div>

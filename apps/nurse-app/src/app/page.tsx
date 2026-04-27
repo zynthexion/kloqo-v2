@@ -107,7 +107,7 @@ export default function HomePage() {
     },
   ];
 
-  const { displayName } = useActiveIdentity();
+  const { displayName, activeRole } = useActiveIdentity();
 
   return (
     <>
@@ -121,6 +121,7 @@ export default function HomePage() {
             consultationStatus={consultationStatus}
             handleStatusChange={handleStatusChange}
             mainMenuItems={mainMenuItems}
+            activeRole={activeRole}
           />
         } 
         tablet={

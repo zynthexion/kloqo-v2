@@ -10,6 +10,9 @@ import { DateSelection } from '@/components/booking/DateSelection';
 import { SlotGrid } from '@/components/booking/SlotGrid';
 import { BookingSummaryView } from '@/components/booking/BookingSummaryView';
 import { FullScreenLoader } from '../../../components/full-screen-loader';
+import ClinicHeader from '@/components/clinic/ClinicHeader';
+import { useNurseDashboard } from '@/hooks/useNurseDashboard';
+import { Doctor } from '@kloqo/shared';
 
 function BookAppointmentPageContent() {
   const router = useRouter();
@@ -17,6 +20,8 @@ function BookAppointmentPageContent() {
   
   const doctorId = searchParams.get('doctor');
   const patientId = searchParams.get('patientId');
+  const { user } = useNurseBooking(doctorId, patientId); // Just to get user/clinicId
+  const { data: nurseDashData } = useNurseDashboard(user?.clinicId || '');
 
   const {
     selectedDate, setSelectedDate,
@@ -26,8 +31,15 @@ function BookAppointmentPageContent() {
     step, setStep,
     patient, doctor,
     fetchingDoctor, dates,
-    handleBook
+    handleBook, user
   } = useNurseBooking(doctorId, patientId);
+
+  const handleDoctorChange = (id: string) => {
+    localStorage.setItem('selectedDoctorId', id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('doctor', id);
+    router.replace(`?${params.toString()}`);
+  };
 
   if (!doctorId || !patientId) {
     return (
@@ -49,19 +61,15 @@ function BookAppointmentPageContent() {
       <div className="flex flex-col h-full bg-slate-50">
         <FullScreenLoader isOpen={booking} />
         
-        <header className="flex items-center gap-4 p-4 bg-white border-b sticky top-0 z-50">
-          <Button onClick={() => step === 'summary' ? setStep('selection') : router.back()} variant="ghost" size="icon" className="rounded-xl">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-lg font-black text-slate-900 leading-tight">
-              {step === 'selection' ? 'Select Slot' : 'Confirm Booking'}
-            </h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              {step === 'selection' ? 'Step 2: Choose Date & Time' : 'Step 3: Final Review'}
-            </p>
-          </div>
-        </header>
+        <ClinicHeader 
+          doctors={(nurseDashData?.doctors ?? []) as Doctor[]}
+          selectedDoctor={doctorId || ''}
+          onDoctorChange={handleDoctorChange}
+          showLogo={false}
+          pageTitle={step === 'selection' ? 'Select Slot' : 'Confirm Booking'}
+          showSettings={false}
+          onBack={step === 'summary' ? () => setStep('selection') : undefined}
+        />
 
         {step === 'selection' ? (
           <>

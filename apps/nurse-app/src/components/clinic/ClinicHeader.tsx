@@ -10,13 +10,14 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { User, Settings, Coffee, CalendarX, Phone } from 'lucide-react';
+import { User, Settings, Coffee, CalendarX, Phone, ChevronDown } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
+import { RoleSwitcher } from '../layout/RoleSwitcher';
 
 type ClinicHeaderProps = {
     doctors: Doctor[];
@@ -140,25 +141,68 @@ export default function ClinicHeader({
                 </div>
             )}
             <div className="relative z-10 w-full flex flex-col gap-3">
-                <div className="w-full flex justify-between items-start">
-                    {showLogo ? (
-                        <h1 className={cn(
-                            theme === 'modern' ? "text-2xl font-black tracking-tighter modern-gradient-text" : "text-2xl font-bold tracking-tight"
-                        )}>kloqo</h1>
-                    ) : (
-                        <div className="flex items-center gap-3">
-                            <Avatar className={cn("h-10 w-10 border-2", theme === 'modern' ? "border-primary/20" : "border-white/50")}>
-                                <AvatarImage src={currentDoctor?.avatar} alt={`Dr. ${currentDoctor?.name}`} />
-                                <AvatarFallback><User /></AvatarFallback>
-                            </Avatar>
-                            {currentDoctor && (
-                                <div>
-                                    <p className="font-bold">Dr. {currentDoctor.name}</p>
-                                    <p className="text-xs opacity-70">{currentDoctor.department}</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                <div className="w-full flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <RoleSwitcher />
+                        {showLogo ? (
+                            <h1 className={cn(
+                                theme === 'modern' ? "text-2xl font-black tracking-tighter modern-gradient-text" : "text-2xl font-bold tracking-tight"
+                            )}>kloqo</h1>
+                        ) : (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild disabled={doctors.length <= 1}>
+                                    <div className={cn(
+                                        "flex items-center gap-3 transition-all duration-300",
+                                        doctors.length > 1 && "cursor-pointer hover:opacity-80 active:scale-95 group"
+                                    )}>
+                                        <Avatar className={cn(
+                                            "h-10 w-10 border-2 transition-transform",
+                                            doctors.length > 1 && "group-hover:scale-110",
+                                            theme === 'modern' ? "border-primary/20" : "border-white/50"
+                                        )}>
+                                            <AvatarImage src={currentDoctor?.avatar} alt={`Dr. ${currentDoctor?.name}`} />
+                                            <AvatarFallback><User /></AvatarFallback>
+                                        </Avatar>
+                                        {currentDoctor && (
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1">
+                                                    <p className="font-bold text-sm">Dr. {currentDoctor.name}</p>
+                                                    {doctors.length > 1 && <ChevronDown className="h-3 w-3 opacity-50" />}
+                                                </div>
+                                                <p className="text-[10px] opacity-70 uppercase font-bold tracking-widest">{currentDoctor.department}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </DropdownMenuTrigger>
+                                {doctors.length > 1 && (
+                                    <DropdownMenuContent align="start" className="rounded-2xl border-none shadow-2xl p-2 min-w-[200px] bg-white/95 backdrop-blur-xl">
+                                        <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Switch Doctor Context</p>
+                                        </div>
+                                        {doctors.map(doctor => (
+                                            <DropdownMenuItem 
+                                                key={doctor.id} 
+                                                onSelect={() => onDoctorChange(doctor.id)}
+                                                className={cn(
+                                                    "rounded-xl py-2 px-3 mb-1 flex items-center gap-3 transition-colors",
+                                                    selectedDoctor === doctor.id ? "bg-slate-100" : "hover:bg-slate-50 cursor-pointer"
+                                                )}
+                                            >
+                                                <Avatar className="h-8 w-8 border border-slate-100">
+                                                    <AvatarImage src={doctor.avatar} />
+                                                    <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-xs text-slate-700">Dr. {doctor.name}</span>
+                                                    <span className="text-[8px] font-black uppercase tracking-widest opacity-40">{doctor.department}</span>
+                                                </div>
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                )}
+                            </DropdownMenu>
+                        )}
+                    </div>
                     <div className="flex items-center gap-2">
                         {showPhoneModeToggle && (
                             <Button

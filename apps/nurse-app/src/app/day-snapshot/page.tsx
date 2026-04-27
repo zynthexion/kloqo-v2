@@ -6,15 +6,18 @@ import {
   format, addDays, subDays, isSameDay, isPast, endOfDay, addMinutes
 } from 'date-fns';
 import {
-  BarChart3, Users, CheckCircle2, XCircle, UserMinus, Clock, Coffee, Plus, Loader2
+  BarChart3, Users, CheckCircle2, XCircle, UserMinus, Clock, Coffee, Plus, Loader2, Calendar as CalendarIcon, TrendingUp, ArrowRight
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
+import { Button } from '@/components/ui/button';
 import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import ClinicHeader from '@/components/clinic/ClinicHeader';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { AppointmentDatePicker } from '@/components/appointments/AppointmentDatePicker';
 import { cn } from '@/lib/utils';
 import { ResponsiveAppLayout } from '@/components/layout/ResponsiveAppLayout';
 import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
@@ -26,9 +29,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function DaySnapshotPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [selectedDoctor, setSelectedDoctor] = useState<string>(searchParams.get('doctor') || '');
   const [activeSession, setActiveSession] = useState<string>('all');
   const [dateAppointments, setDateAppointments] = useState<Appointment[]>([]);
   const [dateLoading, setDateLoading] = useState(false);
@@ -42,14 +46,31 @@ export default function DaySnapshotPage() {
     if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading, router]);
 
-  // Auto-select first doctor
+  // Auto-select first doctor and sync with URL
   useEffect(() => {
     if (data?.doctors?.length && !selectedDoctor) {
       const stored = localStorage.getItem('selectedDoctorId');
-      const found = data.doctors.find(d => d.id === stored);
-      setSelectedDoctor(found ? found.id : data.doctors[0].id);
+      const urlDocId = searchParams.get('doctor');
+      const found = data.doctors.find(d => d.id === (urlDocId || stored));
+      const initialId = found ? found.id : data.doctors[0].id;
+      
+      setSelectedDoctor(initialId);
+      
+      if (urlDocId !== initialId) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('doctor', initialId);
+        router.replace(`?${params.toString()}`);
+      }
     }
-  }, [data?.doctors, selectedDoctor]);
+  }, [data?.doctors, selectedDoctor, searchParams, router]);
+
+  const handleDoctorChange = (id: string) => {
+    setSelectedDoctor(id);
+    localStorage.setItem('selectedDoctorId', id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('doctor', id);
+    router.replace(`?${params.toString()}`);
+  };
 
   // Fetch appointments for selected date
   useEffect(() => {
@@ -124,8 +145,21 @@ export default function DaySnapshotPage() {
   // Generate 7 before + 14 after today
   const dates = useMemo(() => {
     const today = new Date();
-    return Array.from({ length: 22 }, (_, i) => addDays(subDays(today, 7), i));
-  }, []);
+    // Default to 7 days if not set, or use the doctor's specific setting
+    const range = (currentDoctor as any)?.advanceBookingDays ?? 7;
+    
+    // Always include Today + Next N Days
+    const standardDates = Array.from({ length: range + 1 }, (_, i) => addDays(today, i));
+    
+    // If the selected date is already in our standard range, just return it
+    const isSelectedInStandard = standardDates.some(d => isSameDay(d, selectedDate));
+    if (isSelectedInStandard) return standardDates;
+    
+    // If selected date is NOT in standard range (e.g. past or far future via calendar),
+    // we show a 7-day window around it.
+    const customWindow = Array.from({ length: 7 }, (_, i) => addDays(subDays(selectedDate, 3), i));
+    return customWindow;
+  }, [selectedDate, currentDoctor?.advanceBookingDays]);
 
   const mobileView = (
     <AppFrameLayout showBottomNav>
@@ -133,49 +167,19 @@ export default function DaySnapshotPage() {
         <ClinicHeader
           doctors={(data?.doctors ?? []) as Doctor[]}
           selectedDoctor={selectedDoctor}
-          onDoctorChange={setSelectedDoctor}
+          onDoctorChange={handleDoctorChange}
           showLogo={false}
           pageTitle="Day Snapshot"
           showSettings={false}
         />
 
         <main className="flex-1 p-4 -mt-6 z-10 bg-white rounded-t-3xl shadow-xl flex flex-col gap-6 overflow-hidden">
-          {/* Date Carousel */}
-          <div>
-            <div className="flex justify-between items-center mb-3 px-2">
-              <h2 className="font-black text-base text-slate-800 uppercase tracking-tight">Select Date</h2>
-              <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                {format(selectedDate, 'MMMM yyyy')}
-              </span>
-            </div>
-            <div className="-mx-1">
-              <div className="flex gap-1.5 px-1 w-max">
-                {dates.map((d, index) => {
-                  const isSelected = isSameDay(d, selectedDate);
-                  const isToday = isSameDay(d, new Date());
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => { setSelectedDate(d); setActiveSession('all'); }}
-                      className={cn(
-                        'flex flex-col items-center justify-center p-2.5 rounded-2xl gap-0.5 transition-all duration-200 border-2 min-w-[52px]',
-                        isSelected
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-lg scale-105'
-                          : 'bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100',
-                        isToday && !isSelected && 'border-blue-200'
-                      )}
-                    >
-                      <span className={cn('text-[9px] font-bold uppercase', isSelected ? 'text-blue-100' : 'text-slate-400')}>
-                        {format(d, 'EEE')}
-                      </span>
-                      <span className="text-base font-black leading-none">{format(d, 'dd')}</span>
-                      {isToday && <div className={cn('w-1 h-1 rounded-full', isSelected ? 'bg-white' : 'bg-blue-600')} />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          {/* Date Selector */}
+          <AppointmentDatePicker 
+            dates={dates} 
+            selectedDate={selectedDate} 
+            onSelectDate={(d) => { setSelectedDate(d); setActiveSession('all'); }} 
+          />
 
           <div className="flex-1 overflow-y-auto pr-1 space-y-6 scrollbar-hide">
             {/* Session Tabs */}
@@ -331,13 +335,222 @@ export default function DaySnapshotPage() {
       hideSidebar={activeRole === 'nurse'}
       hideRightPanel={activeRole === 'nurse'}
     >
-       <div className="flex flex-col h-full bg-slate-50 overflow-hidden py-8">
-          <header className="mb-8">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Day Snapshot</h1>
-              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-2 px-1">Clinic performance and break schedule</p>
+       <div className="max-w-7xl mx-auto space-y-10 py-10 px-6 font-pt-sans animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                   <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <BarChart3 className="h-4 w-4 text-white" />
+                   </div>
+                   <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 font-black uppercase tracking-widest text-[10px] px-3 py-1">
+                     Clinical Metrics Hub
+                   </Badge>
+                </div>
+                <h1 className="text-5xl font-black text-slate-900 tracking-tight leading-none">Day Snapshot<span className="text-blue-600">.</span></h1>
+                <p className="text-slate-500 font-bold max-w-md leading-relaxed">
+                  Real-time clinical throughput analytics and session-specific break management.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-premium border border-slate-100">
+                <div className="px-6 py-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Focus Date</p>
+                  <p className="text-sm font-black text-slate-900">{format(selectedDate, 'MMMM d, yyyy')}</p>
+                </div>
+              </div>
           </header>
-          <div className="flex-1 overflow-y-auto">
-             {mobileView}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            {/* Left Column: Stats & Calendar */}
+            <div className="lg:col-span-4 space-y-10">
+              {/* Date Selection Card */}
+              <AppointmentDatePicker 
+                dates={dates} 
+                selectedDate={selectedDate} 
+                onSelectDate={(d) => { setSelectedDate(d); setActiveSession('all'); }} 
+                isTablet 
+              />
+
+              {/* Session Filter */}
+              {sessions.length > 0 && (
+                <Card className="rounded-[3rem] border-none shadow-premium bg-slate-900 p-8 text-white">
+                   <div className="flex items-center gap-3 mb-8">
+                      <Clock className="h-5 w-5 text-blue-400" />
+                      <h3 className="font-black text-white uppercase tracking-tight text-sm">Session Focus</h3>
+                   </div>
+                   <div className="space-y-3">
+                      <button 
+                        onClick={() => setActiveSession('all')}
+                        className={cn(
+                          "w-full p-5 rounded-2xl flex items-center justify-between transition-all font-bold",
+                          activeSession === 'all' ? "bg-white text-slate-900 shadow-lg" : "bg-white/5 text-white/60 hover:bg-white/10"
+                        )}
+                      >
+                        <span className="text-sm">Comprehensive View</span>
+                        {activeSession === 'all' && <CheckCircle2 className="h-4 w-4" />}
+                      </button>
+                      {sessions.map((session: any, index: number) => (
+                        <button 
+                          key={index}
+                          onClick={() => setActiveSession(index.toString())}
+                          className={cn(
+                            "w-full p-5 rounded-2xl flex items-center justify-between transition-all font-bold",
+                            activeSession === index.toString() ? "bg-white text-slate-900 shadow-lg" : "bg-white/5 text-white/60 hover:bg-white/10"
+                          )}
+                        >
+                          <span className="text-sm">{session.from} - {session.to}</span>
+                          {activeSession === index.toString() && <CheckCircle2 className="h-4 w-4" />}
+                        </button>
+                      ))}
+                   </div>
+                </Card>
+              )}
+            </div>
+
+            {/* Right/Main Column: Analytics Grid & Breaks */}
+            <div className="lg:col-span-8 space-y-10">
+               {/* Premium Stats Grid */}
+               <div className="grid grid-cols-2 lg:grid-cols-3 gap-8">
+                  {/* Total Bookings - Featured */}
+                  <Card className="col-span-2 lg:col-span-1 rounded-[3rem] border-none shadow-premium bg-gradient-to-br from-blue-600 to-blue-800 p-8 text-white relative overflow-hidden group">
+                     <Users className="absolute top-[-20%] right-[-10%] w-40 h-40 opacity-10 rotate-12 transition-transform group-hover:scale-110" />
+                     <div className="relative z-10">
+                        <p className="text-blue-100/60 text-[10px] font-black uppercase tracking-[0.2em]">Total Appointments</p>
+                        <h3 className="text-7xl font-black mt-4 tracking-tighter leading-none">{stats.total}</h3>
+                        <div className="mt-6 flex items-center gap-2 bg-white/10 w-fit px-3 py-1 rounded-full text-[10px] font-black">
+                           <TrendingUp className="h-3 w-3" /> REGISTERED
+                        </div>
+                     </div>
+                  </Card>
+
+                  {/* Arrived/Waiting */}
+                  <Card className="rounded-[3rem] border-none shadow-premium bg-white p-8 border border-slate-100 group hover:border-amber-200 transition-all">
+                     <div className="flex items-center gap-4 mb-8">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 shadow-sm group-hover:scale-110 transition-transform">
+                           <Clock className="h-6 w-6" />
+                        </div>
+                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Active Queue</span>
+                     </div>
+                     <h3 className="text-5xl font-black text-slate-900">{stats.confirmed}</h3>
+                     <p className="text-slate-400 font-bold text-xs mt-3 uppercase tracking-widest leading-none">Arrived at Clinic</p>
+                  </Card>
+
+                  {/* Completed */}
+                  <Card className="rounded-[3rem] border-none shadow-premium bg-white p-8 border border-slate-100 group hover:border-emerald-200 transition-all">
+                     <div className="flex items-center gap-4 mb-8">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shadow-sm group-hover:scale-110 transition-transform">
+                           <CheckCircle2 className="h-6 w-6" />
+                        </div>
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Fulfillment</span>
+                     </div>
+                     <h3 className="text-5xl font-black text-slate-900">{stats.completed}</h3>
+                     <p className="text-slate-400 font-bold text-xs mt-3 uppercase tracking-widest leading-none">Consultations Done</p>
+                  </Card>
+               </div>
+
+               {/* Breaks & Attrition Grid */}
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                  {/* Break Schedule */}
+                  <Card className="rounded-[3.5rem] border-none shadow-premium bg-white p-10 border border-slate-100">
+                     <div className="flex items-center justify-between mb-10">
+                        <div className="flex items-center gap-4">
+                           <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
+                              <Coffee className="h-6 w-6" />
+                           </div>
+                           <h3 className="text-xl font-black text-slate-900 tracking-tight">Break Schedule</h3>
+                        </div>
+                        {selectedDoctor && (
+                           <Button 
+                             onClick={() => router.push(`/schedule-break?doctor=${selectedDoctor}`)}
+                             variant="outline" 
+                             className="rounded-2xl border-slate-200 font-black text-[10px] uppercase tracking-widest h-12 px-6 hover:bg-slate-50 transition-all"
+                           >
+                             <Plus className="h-4 w-4 mr-2" /> Add Period
+                           </Button>
+                        )}
+                     </div>
+
+                     <div className="space-y-5">
+                        {breaks.length > 0 ? (
+                           breaks.map((brk: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 group hover:bg-amber-50/50 hover:border-amber-200 transition-all">
+                                 <div className="flex items-center gap-5">
+                                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
+                                       <Clock className="h-5 w-5 text-amber-500" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                       <span className="font-black text-slate-900 text-xl tracking-tight leading-none">
+                                          {format(new Date(brk.startTime), 'hh:mm a')}
+                                       </span>
+                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Start Time</span>
+                                    </div>
+                                 </div>
+                                 <div className="flex items-center gap-4">
+                                    <ArrowRight className="h-4 w-4 text-slate-300" />
+                                    <div className="flex flex-col items-end">
+                                       <span className="font-black text-slate-900 text-xl tracking-tight leading-none">
+                                          {format(new Date(brk.endTime), 'hh:mm a')}
+                                       </span>
+                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">End Time</span>
+                                    </div>
+                                 </div>
+                              </div>
+                           ))
+                        ) : (
+                           <div className="py-24 text-center border-2 border-dashed border-slate-100 rounded-[3rem] bg-slate-50/30">
+                              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                                 <Coffee className="h-8 w-8 text-slate-200" />
+                              </div>
+                              <p className="text-slate-400 font-bold text-sm tracking-tight">No clinical pauses scheduled today</p>
+                           </div>
+                        )}
+                     </div>
+                  </Card>
+
+                  {/* Attrition/Missed Stats */}
+                  <Card className="rounded-[3.5rem] border-none shadow-premium bg-slate-50 p-10 border border-slate-100">
+                     <div className="flex items-center gap-4 mb-10">
+                        <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-600">
+                           <XCircle className="h-6 w-6" />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Clinical Attrition</h3>
+                     </div>
+
+                     <div className="space-y-6">
+                        {[
+                           { label: 'Cancelled', value: stats.cancelled, color: 'bg-red-500', bg: 'bg-red-50/30' },
+                           { label: 'No-show', value: stats.noshow, color: 'bg-amber-500', bg: 'bg-amber-50/30' },
+                           { label: 'Skipped', value: stats.skipped, color: 'bg-orange-500', bg: 'bg-orange-50/30' },
+                        ].map(item => (
+                           <div key={item.label} className={cn("p-6 rounded-3xl flex items-center justify-between border border-white shadow-sm", item.bg)}>
+                              <div className="flex items-center gap-4">
+                                 <div className={cn("w-3 h-3 rounded-full shadow-sm", item.color)} />
+                                 <span className="font-black text-slate-600 uppercase tracking-widest text-[11px]">{item.label}</span>
+                              </div>
+                              <span className="text-3xl font-black text-slate-900 tabular-nums">{item.value}</span>
+                           </div>
+                        ))}
+                        
+                        <div className="pt-10 mt-6 border-t border-slate-200/60">
+                           <div className="flex justify-between items-end">
+                              <div className="space-y-1">
+                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Leakage</p>
+                                 <p className="text-4xl font-black text-red-600 tabular-nums leading-none">
+                                    {stats.cancelled + stats.noshow + stats.skipped}
+                                 </p>
+                              </div>
+                              <div className="text-right">
+                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] leading-tight mb-2">
+                                    IMPACT<br />ANALYSIS
+                                 </p>
+                                 <TrendingUp className="h-6 w-6 text-red-100 ml-auto" />
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  </Card>
+               </div>
+            </div>
           </div>
        </div>
     </TabletDashboardLayout>

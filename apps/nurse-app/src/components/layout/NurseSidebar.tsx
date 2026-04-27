@@ -7,9 +7,6 @@ import {
   LayoutDashboard, 
   CalendarDays, 
   Settings, 
-  Activity,
-  LogOut,
-  User,
   Map
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -50,11 +47,24 @@ export function NurseSidebar() {
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-24 bg-white/40 backdrop-blur-xl border-r border-slate-200/50 flex flex-col items-center py-6 z-50 transition-all duration-500 hover:w-28 group/sidebar">
       {/* Clinic Brand */}
-      <div className="mb-10 relative">
-        <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-xl shadow-primary/20 rotate-3 group-hover/sidebar:rotate-0 transition-transform">
-          <span className="text-white font-black text-xl">K</span>
-        </div>
-        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white" />
+      <div className="mb-10 relative px-4 w-full">
+        <Link href="/" className="flex items-center justify-center group/logo">
+          <div className="w-10 h-10 shrink-0 group-hover/sidebar:hidden transition-all duration-300">
+            <img 
+              alt="Kloqo Icon" 
+              src="/kloqo_Logo_twest.png" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <div className="hidden group-hover/sidebar:flex w-full items-center justify-center transition-all duration-500 animate-in fade-in zoom-in-95">
+            <img 
+              alt="Kloqo Logo" 
+              src="/kloqo_Logo_twest.png" 
+              className="h-8 w-auto object-contain"
+            />
+          </div>
+        </Link>
+        <div className="absolute top-0 right-4 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white shadow-sm" />
       </div>
 
       {/* Main Nav */}
@@ -76,9 +86,6 @@ export function NurseSidebar() {
            <RoleSwitcher />
         </div>
 
-        <div className="p-3 rounded-2xl bg-slate-100/50 hover:bg-slate-200/50 transition-colors cursor-pointer group">
-          <Activity className="h-6 w-6 text-slate-400 group-hover:text-primary transition-colors" />
-        </div>
         
         <Link href="/settings">
           <Avatar className="h-12 w-12 border-2 border-white shadow-md hover:scale-110 transition-transform cursor-pointer">

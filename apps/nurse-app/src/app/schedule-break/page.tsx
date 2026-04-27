@@ -17,6 +17,8 @@ import { BreakDatePicker } from '@/components/schedule-break/BreakDatePicker';
 import { BreakSlotGrid } from '@/components/schedule-break/BreakSlotGrid';
 import { BreakImpactPreview } from '@/components/schedule-break/BreakImpactPreview';
 import { BreakCompensationToggle } from '@/components/schedule-break/BreakCompensationToggle';
+import { useNurseDashboard } from '@/hooks/useNurseDashboard';
+import { Doctor } from '@kloqo/shared';
 
 const formatTimeStr = (t: string | null) => {
   if (!t) return '';
@@ -26,16 +28,21 @@ const formatTimeStr = (t: string | null) => {
 };
 
 function BreakLayoutContent({
-  stage, setStage, selectedDate, setSelectedDate,
-  doctor, availableSessions, timeIntervals, endIntervals,
-  sessionIndex, setSessionIndex, startTime, setStartTime, endTime, setEndTime,
-  isFullCompensation, setIsFullCompensation,
+  stage, setStage, selectedDate, setSelectedDate, doctor, availableSessions,
+  timeIntervals, endIntervals, sessionIndex, setSessionIndex, startTime,
+  setStartTime, endTime, setEndTime, isFullCompensation, setIsFullCompensation,
   previewResult, isLoadingPreview, isConfirming, dates, handlePreview, handleConfirm,
-  onBack
+  onBack, doctors, selectedDoctorId, onDoctorChange
 }: any) {
   return (
     <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
-      <BreakHeader stage={stage} onBack={onBack} />
+      <BreakHeader 
+        stage={stage} 
+        onBack={onBack} 
+        doctors={doctors}
+        selectedDoctorId={selectedDoctorId}
+        onDoctorChange={onDoctorChange}
+      />
 
       {stage === 'SELECT' && (
         <>
@@ -112,8 +119,14 @@ function BreakLayoutContent({
 
 function Content() {
   const scheduleProps = useScheduleBreak();
-  const { doctorId, router, stage, setStage } = scheduleProps;
+  const { doctorId, router, stage, setStage, clinicId } = scheduleProps;
   const { activeRole } = useActiveIdentity();
+  const { data: nurseDashData } = useNurseDashboard(clinicId);
+
+  const handleDoctorChange = (id: string) => {
+    localStorage.setItem('selectedDoctorId', id);
+    router.replace(`/schedule-break?doctor=${id}`);
+  };
 
   if (!doctorId) {
     return (
@@ -136,6 +149,9 @@ function Content() {
       <BreakLayoutContent 
         {...scheduleProps} 
         onBack={() => stage === 'PREVIEW' ? setStage('SELECT') : router.back()} 
+        doctors={(nurseDashData?.doctors ?? []) as Doctor[]}
+        selectedDoctorId={doctorId}
+        onDoctorChange={handleDoctorChange}
       />
     </AppFrameLayout>
   );
@@ -146,6 +162,9 @@ function Content() {
           <BreakLayoutContent 
             {...scheduleProps} 
             onBack={() => stage === 'PREVIEW' ? setStage('SELECT') : router.back()} 
+            doctors={(nurseDashData?.doctors ?? []) as Doctor[]}
+            selectedDoctorId={doctorId}
+            onDoctorChange={handleDoctorChange}
           />
        </div>
     </TabletDashboardLayout>
