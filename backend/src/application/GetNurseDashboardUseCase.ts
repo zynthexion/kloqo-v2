@@ -23,7 +23,7 @@ export class GetNurseDashboardUseCase {
     private patientRepo?: IPatientRepository
   ) {}
 
-  async execute(clinicId: string, date: string, assignedDoctorIds?: string[], pagination?: { page: number; limit: number }): Promise<NurseDashboardData> {
+  async execute(clinicId: string, date: string, assignedDoctorIds?: string[], pagination?: { page: number; limit: number }, search?: string): Promise<NurseDashboardData> {
     // Sync statuses first to ensure fresh data
     await this.syncStatusUseCase.execute(clinicId).catch(e => {});
 
@@ -31,7 +31,25 @@ export class GetNurseDashboardUseCase {
     let totalCount = 0;
     let hasMore = false;
 
-    if (pagination) {
+    if (search) {
+      // If searching, we ignore the date and look across all appointments in this clinic
+      const res = await this.appointmentRepo.findAll({ 
+        clinicId, 
+        search, 
+        page: pagination?.page || 1, 
+        limit: pagination?.limit || 20,
+        doctorId: assignedDoctorIds && assignedDoctorIds.length > 0 ? assignedDoctorIds[0] : undefined // For now, handle single doctor context if repository supports it
+      });
+      if (Array.isArray(res)) {
+        appointments = res;
+        totalCount = res.length;
+        hasMore = false;
+      } else {
+        appointments = res.data;
+        totalCount = res.total;
+        hasMore = !!res.hasMore;
+      }
+    } else if (pagination) {
       const paginatedRes = await this.appointmentRepo.findPaginatedByClinicAndDate(clinicId, date, pagination as any);
       appointments = paginatedRes.data;
       totalCount = paginatedRes.total;

@@ -46,17 +46,29 @@ export class PrescriptionController {
     }
   }
 
-  /** GET /clinic/prescriptions?clinicId=&doctorId=&pharmacyStatus=&startDate=&endDate= */
+  /** GET /clinic/prescriptions?clinicId=&doctorId=&pharmacyStatus=&startDate=&endDate=&patientPhone= */
   async getByClinicFiltered(req: Request, res: Response) {
     try {
-      const { clinicId, doctorId, pharmacyStatus, startDate, endDate } = req.query;
+      const { clinicId, doctorId, pharmacyStatus, startDate, endDate, patientPhone } = req.query;
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+
+      // 🔒 SECURITY: Critical Privacy Boundary (Rule: Exact Phone Search)
+      // Pharmacists searching for history (not pending queue) MUST provide a full 10-digit phone.
+      const isSearch = pharmacyStatus !== 'pending';
+      if (isSearch && !patientPhone) {
+        return res.status(400).json({ error: 'PRIVACY_PROTECTION: Historical search requires a 10-digit Patient Phone Number.' });
+      }
+
+      if (patientPhone && (patientPhone as string).length !== 10) {
+        return res.status(400).json({ error: 'INVALID_SEARCH: Please enter exactly 10 digits.' });
+      }
 
       const filters: any = {};
       if (doctorId) filters.doctorId = doctorId as string;
       if (pharmacyStatus) filters.pharmacyStatus = pharmacyStatus as string;
       if (startDate) filters.startDate = new Date(startDate as string);
       if (endDate) filters.endDate = new Date(endDate as string);
+      if (patientPhone) filters.patientPhone = patientPhone as string;
 
       const appointments = await this.appointmentRepo.findCompletedByClinic(clinicId as string, filters);
 

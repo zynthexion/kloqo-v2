@@ -7,7 +7,7 @@ import { getClinicDateString, getClinicISODateString, parseClinicDate } from '..
 export class FirebaseAppointmentRepository implements IAppointmentRepository {
   private collection = db.collection('appointments');
 
-  async findAll(params?: PaginationParams & { clinicId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]> {
+  async findAll(params?: PaginationParams & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]> {
     // ─── SECURITY: Multi-tenancy enforcement ─────────────────────────────────
     // An un-scoped findAll would return EVERY appointment across ALL clinics.
     // This is a catastrophic data-leak for a multi-tenant SaaS. Callers MUST
@@ -21,18 +21,39 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
       );
     }
 
-    let query: admin.firestore.Query = this.collection.where('clinicId', '==', params.clinicId);
+    try {
+      let query: admin.firestore.Query = this.collection.where('clinicId', '==', params.clinicId);
 
-    if (params) {
-      // Strip out clinicId before forwarding to the paginator so the paginator
-      // doesn't try to use it as a Firestore ordering / limit field.
-      const { clinicId: _stripped, ...paginationParams } = params;
-      return paginate<Appointment>(query, paginationParams as PaginationParams);
+      if (params) {
+        if (params.doctorId) {
+          console.log('[REPOSITORY_DEBUG] findAll filtering by doctorId:', params.doctorId);
+          query = query.where('doctorId', '==', params.doctorId);
+        }
+        
+        if (params.search) {
+          const isPhone = /^\d+$/.test(params.search);
+          const searchField = isPhone ? 'patientPhone' : 'patientName';
+          
+          console.log('[REPOSITORY_DEBUG] findAll search:', { field: searchField, term: params.search });
+          
+          query = query.where(searchField, '>=', params.search)
+            .where(searchField, '<=', params.search + '\uf8ff')
+            .orderBy(searchField); 
+        }
+        // Strip out clinicId before forwarding to the paginator
+        const { clinicId: _stripped, ...paginationParams } = params;
+        const result = await paginate<Appointment>(query, paginationParams as PaginationParams);
+        console.log('[REPOSITORY_DEBUG] findAll result count:', Array.isArray(result) ? result.length : result.data.length);
+        return result;
+      }
+
+      const snapshot = await query.get();
+      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
+      return docs.filter(doc => !doc.isDeleted);
+    } catch (error) {
+      console.error('[REPOSITORY_ERROR] findAll failed:', error);
+      throw error;
     }
-
-    const snapshot = await query.get();
-    const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
-    return docs.filter(doc => !doc.isDeleted);
   }
 
   async findById(id: string): Promise<Appointment | null> {
@@ -155,7 +176,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return snapshot.data().count;
   }
 
-  async findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Appointment[]> {
+  async findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number; patientPhone?: string }): Promise<Appointment[]> {
     let query: admin.firestore.Query = this.collection.where('status', '==', 'Completed');
     
     // Scoped search only if clinicId is provided
@@ -165,6 +186,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
 
     if (filters.doctorId) query = query.where('doctorId', '==', filters.doctorId);
     if (filters.pharmacyStatus) query = query.where('pharmacyStatus', '==', filters.pharmacyStatus);
+    if (filters.patientPhone) query = query.where('patientPhone', '==', filters.patientPhone);
     if (filters.startDate && filters.endDate) {
       query = query.where('completedAt', '>=', filters.startDate).where('completedAt', '<=', filters.endDate);
     }

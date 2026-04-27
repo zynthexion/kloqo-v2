@@ -20,7 +20,7 @@ export interface IDepartmentRepository {
 }
 
 export interface IAppointmentRepository {
-  findAll(params?: PaginationParams): Promise<PaginatedResponse<Appointment> | Appointment[]>;
+  findAll(params?: PaginationParams & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]>;
   findById(id: string): Promise<Appointment | null>;
   findByDoctorAndDate(doctorId: string, date: string): Promise<Appointment[]>;
   findByClinicAndDate(clinicId: string, date: string): Promise<Appointment[]>;
@@ -36,7 +36,7 @@ export interface IAppointmentRepository {
   incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number>;
   countByStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
   countByPharmacyStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
-  findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number }): Promise<Appointment[]>;
+  findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number; patientPhone?: string }): Promise<Appointment[]>;
   findCompletedByPatientInClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
   delete(id: string): Promise<void>;
 

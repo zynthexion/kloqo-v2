@@ -109,7 +109,7 @@ export class AppointmentController {
 
   async getNurseDashboard(req: any, res: Response) {
     try {
-      const { clinicId, date, page, limit } = req.query;
+      const { clinicId, date, page, limit, search } = req.query;
       if (!clinicId || !date) {
         console.log('[DASHBOARD_DEBUG] Missing params:', { clinicId, date });
         return res.status(400).json({ message: 'clinicId and date are required' });
@@ -118,8 +118,8 @@ export class AppointmentController {
       const assignedDoctorIds = (req as any).user?.assignedDoctorIds;
       const pagination = page && limit ? { page: parseInt(page as string), limit: parseInt(limit as string) } : undefined;
       
-      console.log('[DASHBOARD_DEBUG] Executing for:', { clinicId, date, assignedDoctorIds, pagination });
-      const data = await this.getNurseDashboardUseCase.execute(clinicId as string, date as string, assignedDoctorIds, pagination);
+      console.log('[DASHBOARD_DEBUG] Executing for:', { clinicId, date, assignedDoctorIds, pagination, search });
+      const data = await this.getNurseDashboardUseCase.execute(clinicId as string, date as string, assignedDoctorIds, pagination, search as string);
 
       res.json(data);
     } catch (error: any) {
