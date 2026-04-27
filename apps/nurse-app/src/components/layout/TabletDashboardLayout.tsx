@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Switch } from '@/components/ui/switch';
 import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
+import AppFrameLayout from '@/components/layout/AppFrameLayout';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,36 +53,7 @@ export function TabletDashboardLayout({
   const [showConfirmIn, setShowConfirmIn] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   
-  // Custom interactive collapse state
   const isDashboard = pathname.startsWith('/dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(!isDashboard);
-
-  // Sync state if pathname changes to/from dashboard
-  useEffect(() => {
-    if (isDashboard) {
-      setIsSidebarOpen(false);
-    } else {
-      setIsSidebarOpen(true);
-    }
-  }, [isDashboard]);
-  
-  const ALL_NAV_ITEMS = [
-    { href: '/', icon: Home, label: 'Overview', menuKey: '/' },
-    { href: '/dashboard', icon: Radio, label: 'Live', menuKey: '/dashboard' },
-    { href: '/appointments', icon: List, label: 'Bookings', menuKey: '/appointments' },
-    { href: '/appointments/schedule', icon: Calendar, label: 'Schedule', menuKey: '/appointments/schedule' },
-    { href: '/prescriptions', icon: FileText, label: 'Rx Queue', menuKey: '/prescriptions' },
-    { href: '/settings', icon: User, label: 'Profile', menuKey: '/settings' },
-  ];
-
-  const hardcodedRoles: Role[] = ['nurse', 'doctor', 'clinicAdmin', 'superAdmin'];
-  
-  const navItems = hardcodedRoles.includes(activeRole as Role)
-    ? ALL_NAV_ITEMS.filter(item => {
-        const isClinical = activeRole === 'nurse' || activeRole === 'doctor';
-        return isClinical ? item.menuKey !== '/prescriptions' : true;
-      })
-    : ALL_NAV_ITEMS;
 
   const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
   const consultationStatus = selectedDoctor?.consultationStatus || 'Out';
@@ -109,127 +81,51 @@ export function TabletDashboardLayout({
   };
 
   return (
-    <div className="flex h-screen w-full bg-[#F8FAFC] overflow-hidden font-sans text-lg">
-      {/* 1. Left Sidebar (Navigation) */}
-      {!hideSidebar && (
-        <aside className={cn(
-          "bg-white border-r border-slate-200 flex flex-col items-center py-8 z-40 transition-all duration-500 relative",
-          !isSidebarOpen ? "w-0 opacity-0 -translate-x-full overflow-hidden border-0" : (collapsed ? "w-24" : "w-32 lg:w-40")
-        )}>
-          {/* Collapse Toggle inside Sidebar */}
-          {isSidebarOpen && isDashboard && (
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="absolute -right-3 top-24 w-6 h-12 bg-white border border-slate-200 border-l-0 shadow-sm rounded-r-xl flex items-center justify-center text-slate-400 hover:text-primary transition-colors z-50"
-            >
-              <ChevronRight className="h-4 w-4 rotate-180" />
-            </button>
-          )}
-          <div className="flex items-center justify-center p-4 shrink-0 mb-8 w-full">
-            <Link className="flex items-center gap-3 group" href="/">
-              <div className="w-10 h-10 shrink-0 lg:group-hover:hidden transition-opacity duration-200">
-                <img alt="Kloqo Icon" loading="lazy" width="40" height="40" decoding="async" src="/kloqo_Logo_twest.png" style={{ color: 'transparent' }} />
-              </div>
-              {!collapsed && (
-                <div className="w-28 h-auto shrink-0 hidden lg:group-hover:flex transition-opacity duration-200 delay-100 items-center justify-center">
-                  <img alt="Kloqo Logo" loading="lazy" width="128" height="35" decoding="async" src="/kloqo_Logo_twest.png" style={{ color: 'transparent' }} />
+    <AppFrameLayout className="bg-[#F8FAFC]">
+      <div className="flex h-full w-full overflow-hidden font-sans text-lg">
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col min-w-0 bg-transparent overflow-y-auto custom-scrollbar relative">
+          <header className="h-24 px-10 flex items-center justify-between sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-md z-30 border-b border-slate-100 gap-8">
+              <div className="flex-1">
+                {/* Status Toggle in Header since we removed it from sidebar */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-white/50 py-1.5 px-4 rounded-full border border-slate-200">
+                    <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'Out' ? "text-slate-900" : "text-slate-400")}>Dr. {selectedDoctor?.name || 'Doctor'} is Out</span>
+                    <Switch 
+                      className="scale-75 data-[state=checked]:bg-emerald-500" 
+                      checked={consultationStatus === 'In'}
+                      onCheckedChange={handleStatusChange}
+                      disabled={isToggling}
+                    />
+                    <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'In' ? "text-emerald-600" : "text-slate-400")}>In</span>
+                  </div>
                 </div>
-              )}
-            </Link>
-          </div>
-          
-          <nav className="flex-1 flex flex-col gap-6">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href || (item.href === '/dashboard' && pathname.startsWith('/dashboard'));
-              return (
-                <Link href={item.href} key={item.label} title={item.label}>
-                  <div className={cn(
-                    "flex items-center justify-center min-h-[56px] w-[56px] rounded-2xl transition-all duration-300 group relative",
-                    isActive 
-                      ? "bg-primary/10 text-primary shadow-sm" 
-                      : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
-                  )}>
-                    <item.icon className={cn("h-7 w-7 transition-transform", isActive ? "scale-110 stroke-[2.5px]" : "group-hover:scale-110")} />
-                    {isActive && (
-                      <div className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1.5 h-8 bg-primary rounded-r-full" />
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="mt-auto flex flex-col gap-8 items-center w-full">
-              <RoleSwitcher />
-              
-              <div className="w-full px-4 pb-8 flex flex-col items-center gap-4 group">
-                  <Avatar className="h-16 w-16 rounded-2xl shadow-sm border-2 border-white group-hover:scale-105 transition-transform duration-500">
-                      <AvatarImage src={displayAvatar} />
-                      <AvatarFallback className="bg-primary/5 p-0 overflow-hidden">
-                        <User className="w-8 h-8 text-slate-300" />
-                      </AvatarFallback>
-                  </Avatar>
-                  <div className="text-center overflow-hidden w-full">
-                      <p className="text-sm font-black text-slate-900 leading-tight truncate px-1">
-                        {displayName}
-                      </p>
-                      <div className="flex items-center justify-center gap-2 mt-2 bg-slate-50 py-1.5 px-3 rounded-full border border-slate-100">
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'Out' ? "text-slate-900" : "text-slate-400")}>Out</span>
-                        <Switch 
-                          className="scale-75 data-[state=checked]:bg-emerald-500" 
-                          checked={consultationStatus === 'In'}
-                          onCheckedChange={handleStatusChange}
-                          disabled={isToggling}
-                        />
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'In' ? "text-emerald-600" : "text-slate-400")}>In</span>
-                      </div>
-                  </div>
               </div>
+              {headerActions}
+          </header>
+
+          <div className={cn("flex-1 flex flex-col w-full h-full relative", !noPadding && "px-10 py-10 pb-24")}>
+              {children}
           </div>
-        </aside>
-      )}
+        </main>
 
-      {/* Floating Restore Button (Visible when sidebar is collapsed) */}
-      {!isSidebarOpen && !hideSidebar && (
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed left-6 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center justify-center w-12 h-24 bg-slate-900 border border-slate-700 shadow-2xl rounded-full hover:bg-black transition-all duration-300 group hover:-translate-x-1 animate-in slide-in-from-left duration-500"
-        >
-          <div className="flex flex-col items-center gap-1">
-            <ChevronRight className="h-5 w-5 text-white group-hover:translate-x-0.5 transition-transform" />
-            <span className="text-[8px] font-black text-white/40 uppercase [writing-mode:vertical-lr] tracking-widest mt-1">Menu</span>
-          </div>
-        </button>
-      )}
-
-      {/* 2. Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-transparent overflow-y-auto custom-scrollbar relative">
-        <header className="h-24 px-10 flex items-center justify-between sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-md z-30 border-b border-slate-100 gap-8">
-            <div className="flex-1"></div>
-            {headerActions}
-        </header>
-
-        <div className={cn("flex-1 flex flex-col w-full h-full relative", !noPadding && "px-10 py-10 pb-24")}>
-            {children}
-        </div>
-      </main>
-
-      {/* 3. Clinical Right Sidebar (Patient Context) */}
-      {!collapsed && !hideRightPanel && (
-        <aside className="hidden xl:flex w-80 lg:w-[400px] bg-white border-l border-slate-200 flex-col z-40">
-          <div className="p-10 flex-1 overflow-y-auto custom-scrollbar">
-              {rightPanel || (
-                  <PatientContextPanel 
-                    user={user} 
-                    clinicalProfile={clinicalProfile}
-                    displayName={displayName}
-                    displayAvatar={displayAvatar}
-                    specialty={clinicalProfile?.specialty || (activeRole === 'nurse' ? 'Clinical Nurse' : 'Practitioner')} 
-                  />
-              )}
-          </div>
-        </aside>
-      )}
+        {/* 3. Clinical Right Sidebar (Patient Context) */}
+        {!collapsed && !hideRightPanel && (
+          <aside className="hidden xl:flex w-80 lg:w-[400px] bg-white border-l border-slate-200 flex-col z-40">
+            <div className="p-10 flex-1 overflow-y-auto custom-scrollbar">
+                {rightPanel || (
+                    <PatientContextPanel 
+                      user={user} 
+                      clinicalProfile={clinicalProfile}
+                      displayName={displayName}
+                      displayAvatar={displayAvatar}
+                      specialty={clinicalProfile?.specialty || (activeRole === 'nurse' ? 'Clinical Nurse' : 'Practitioner')} 
+                    />
+                )}
+            </div>
+          </aside>
+        )}
+      </div>
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
@@ -267,7 +163,7 @@ export function TabletDashboardLayout({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AppFrameLayout>
   );
 }
 

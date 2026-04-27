@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Search, WifiOff } from 'lucide-react';
+import { Search, WifiOff, TrendingUp, Clock } from 'lucide-react';
 import ClinicHeader from './ClinicHeader';
 import AppointmentList from './AppointmentList';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
@@ -21,8 +21,7 @@ type LiveDashboardProps = {
 export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data, loading, error, updateDoctorStatus, updateAppointmentStatus } = useNurseDashboard(clinicId);
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(searchParams.get('doctor') || '');
+  const { data, loading, error, updateDoctorStatus, updateAppointmentStatus, selectedDoctorId, setSelectedDoctorId } = useNurseDashboard(clinicId);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('arrived');
   const { toast } = useToast();
@@ -47,7 +46,6 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
 
   const handleDoctorChange = (id: string) => {
     setSelectedDoctorId(id);
-    localStorage.setItem('selectedDoctorId', id);
     const params = new URLSearchParams(searchParams.toString());
     params.set('doctor', id);
     router.replace(`?${params.toString()}`);
@@ -71,7 +69,9 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(a => 
         a.patientName.toLowerCase().includes(lowerSearch) || 
-        a.tokenNumber.toLowerCase().includes(lowerSearch)
+        a.tokenNumber.toLowerCase().includes(lowerSearch) ||
+        a.communicationPhone?.toLowerCase().includes(lowerSearch) ||
+        (a as any).phone?.toLowerCase().includes(lowerSearch)
       );
     }
     return filtered;
@@ -142,7 +142,7 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
     <div className={cn("flex-1 flex flex-col min-h-0 bg-slate-50", theme === 'modern' && "bg-transparent")}>
       <ClinicHeader
         doctors={data?.doctors || []}
-        selectedDoctor={selectedDoctorId}
+        selectedDoctor={selectedDoctorId || ''}
         onDoctorChange={handleDoctorChange}
         consultationStatus={currentDoctor?.consultationStatus as 'In' | 'Out'}
         onStatusChange={handleStatusChange}
@@ -162,6 +162,58 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+
+        {/* 📊 DYNAMIC SESSION HEALTH & GOALS */}
+        {theme === 'modern' && selectedDoctorId && data?.doctorAnalytics?.[selectedDoctorId] && (
+          <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-4 duration-700">
+            {(() => {
+              const currentAnalytics = data.doctorAnalytics[selectedDoctorId];
+              return (
+                <>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Session Health</span>
+                  
+                  {/* Wait Time Trend Card */}
+                  <div className="border shadow-sm rounded-[2.5rem] border-none shadow-premium bg-gradient-to-br from-emerald-500 to-teal-600 p-8 text-white relative overflow-hidden group">
+                    <TrendingUp className="absolute top-[-10%] right-[-5%] w-32 h-32 opacity-10 rotate-12 transition-transform duration-700 group-hover:scale-110 group-hover:rotate-0" />
+                    <div className="relative z-10">
+                      <p className="text-white/70 text-xs font-black uppercase tracking-widest">Wait Time Trend</p>
+                      <h3 className="text-4xl font-black mt-2">~{currentAnalytics.waitTimeTrend}m</h3>
+                      <div className="flex items-center gap-2 mt-4 bg-white/20 w-fit px-3 py-1 rounded-full text-[10px] font-bold">
+                        <Clock className="h-3 w-3" />
+                        {currentAnalytics.waitTimeTrend < 20 ? 'STABLE CONTEXT' : 'HIGH DEMAND'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Today's Goal Card */}
+                  <div className="border text-card-foreground shadow-sm rounded-[2.5rem] border-none shadow-premium bg-white/60 backdrop-blur-md p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-slate-900 font-black text-sm uppercase tracking-tight">Today's Goal</p>
+                      <span className={cn(
+                        "text-[10px] px-2 py-0.5 rounded-full font-black",
+                        currentAnalytics.todayGoalPercentage > 70 ? "bg-emerald-100 text-emerald-700" : "bg-theme-blue/10 text-theme-blue"
+                      )}>
+                        {currentAnalytics.todayGoalPercentage}% DONE
+                      </span>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        <span className="text-xs text-slate-600 font-medium flex-1">Completed Appointments</span>
+                        <span className="text-xs font-black text-slate-900">{currentAnalytics.completedCount}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-primary"></div>
+                        <span className="text-xs text-slate-600 font-medium flex-1">Upcoming Visits</span>
+                        <span className="text-xs font-black text-slate-900">{currentAnalytics.upcomingCount}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
