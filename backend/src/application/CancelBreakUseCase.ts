@@ -9,6 +9,7 @@ import {
     differenceInMinutes
 } from '../domain/services/DateUtils';
 import { KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { db } from '../infrastructure/firebase/config';
 
 export interface CancelBreakRequest {
     clinicId: string;
@@ -211,6 +212,11 @@ export class CancelBreakUseCase {
             availabilityExtensions,
             updatedAt: new Date()
         });
+
+        // Dual-write: write to breaks subcollection
+        const safeDateId = date.replace(/\//g, '-');
+        const breaksSubRef = db.collection('doctors').doc(doctorId).collection('breaks').doc(safeDateId);
+        await breaksSubRef.set({ breaks: breakPeriods[date] || [], date }, { merge: true });
 
         // ── 9. AUDIT LOG ──────────────────────────────────────────────────────
         await this.activityRepo.save({

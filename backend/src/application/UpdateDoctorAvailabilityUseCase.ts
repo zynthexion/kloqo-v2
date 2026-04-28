@@ -103,6 +103,15 @@ export class UpdateDoctorAvailabilityUseCase {
             updatedAt: new Date()
         });
 
+        // Dual-write: write overrides to subcollection
+        if (dateOverrides) {
+            for (const [dateStr, override] of Object.entries(dateOverrides)) {
+                const safeDateId = dateStr.replace(/\//g, '-');
+                const overrideSubRef = doctorRef.collection('overrides').doc(safeDateId);
+                batch.set(overrideSubRef, { ...override, date: dateStr }, { merge: true });
+            }
+        }
+
         // 2. Stage Appointments Cancellations (if forced)
         if (forceCancelConflicts && conflicts.length > 0) {
             conflicts.forEach(appt => {

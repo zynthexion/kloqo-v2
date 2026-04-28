@@ -56,6 +56,20 @@ export class MarkDoctorLeaveUseCase {
       leaves: updatedLeaves
     });
 
+    // Dual-write to subcollections
+    const dualWriteBatch = db.batch();
+    datesToBlock.forEach(date => {
+        const safeDateId = date.replace(/\//g, '-');
+        const doctorRef = db.collection('doctors').doc(doctorId);
+        
+        const overrideSubRef = doctorRef.collection('overrides').doc(safeDateId);
+        dualWriteBatch.set(overrideSubRef, { isOff: true, date }, { merge: true });
+
+        const leavesSubRef = doctorRef.collection('leaves').doc(safeDateId);
+        dualWriteBatch.set(leavesSubRef, { date, reason: `Doctor on leave (${isSelfInitiated ? 'Self' : 'Admin'})` }, { merge: true });
+    });
+    await dualWriteBatch.commit();
+
     // 4. FinOps Query: Fetch all actionable appointments in range
     const snapshot = await db.collection('appointments')
       .where('doctorId', '==', doctorId)

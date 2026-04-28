@@ -124,14 +124,17 @@ export interface Doctor {
   userId?: string;
   updatedAt?: any;
   avatar?: string;
+  /** @deprecated Slated for removal. Data migrated to 'breaks' subcollection. */
   breakPeriods?: Record<string, BreakPeriod[]>;
   doctorDelayMinutes?: number;
   schedule?: string;
+  /** @deprecated Slated for removal. Data migrated to 'leaves' subcollection. */
   leaves?: { date: string; reason?: string }[];
   appointmentMoves?: Record<string, any>;
   consultationFee?: number;
   freeFollowUpDays?: number;
   availabilityExtensions?: Record<string, { sessions: { sessionIndex: number; totalExtendedBy: number; newEndTime: string; breaks?: any[] }[] }>;
+  /** @deprecated Slated for removal. Data migrated to 'overrides' subcollection. */
   dateOverrides?: Record<string, DoctorOverride>; // date string "YYYY-MM-DD" -> explicit override state
   advanceBookingDays?: number;
   accessibleMenus?: string[];
@@ -146,6 +149,7 @@ export interface Doctor {
   degrees?: string[];
   rating?: number;
   reviews?: number;
+  /** @deprecated Slated for removal. Data migrated to 'reviews' subcollection. */
   reviewList?: any[];
   preferences?: string;
   sessions?: any[];

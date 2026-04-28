@@ -8,6 +8,7 @@
     "dev": "nodemon src/infrastructure/webserver/express/index.ts",
     "dev:prod": "node dist/backend/src/infrastructure/webserver/express/index.js",
     "backup": "ts-node src/scripts/backup-firestore.ts",
+    "backup:v2": "ts-node src/scripts/backup-v2.ts",
     "build": "tsc",
     "lint": "tsc --noEmit",
     "test": "jest"

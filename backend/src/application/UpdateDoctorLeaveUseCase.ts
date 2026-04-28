@@ -4,7 +4,7 @@ import {
     getClinicISODateString
 } from '../domain/services/DateUtils';
 import { KloqoRole } from '../../../packages/shared/src/index';
-
+import { db } from '../infrastructure/firebase/config';
 export interface UpdateDoctorLeaveRequest {
     clinicId: string;
     doctorId: string;
@@ -108,6 +108,11 @@ export class UpdateDoctorLeaveUseCase {
             breakPeriods,
             updatedAt: new Date()
         });
+
+        // Dual-write: write to breaks subcollection
+        const safeDateId = date.replace(/\//g, '-');
+        const breaksSubRef = db.collection('doctors').doc(doctorId).collection('breaks').doc(safeDateId);
+        await breaksSubRef.set({ breaks: breakPeriods[date] || [], date }, { merge: true });
 
         // Audit Log
         await this.activityRepo.save({

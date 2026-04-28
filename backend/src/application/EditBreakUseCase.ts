@@ -8,6 +8,7 @@ import {
 } from '../domain/services/DateUtils';
 import { BreakPeriod, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { format, subMinutes } from 'date-fns';
+import { db } from '../infrastructure/firebase/config';
 
 export interface EditBreakRequest {
     clinicId: string;
@@ -113,6 +114,11 @@ export class EditBreakUseCase {
             availabilityExtensions,
             updatedAt: new Date()
         });
+
+        // Dual-write: write to breaks subcollection
+        const safeDateId = date.replace(/\//g, '-');
+        const breaksSubRef = db.collection('doctors').doc(doctorId).collection('breaks').doc(safeDateId);
+        await breaksSubRef.set({ breaks: breakPeriods[date], date }, { merge: true });
 
         // 5. Audit Log
         await this.activityRepo.save({

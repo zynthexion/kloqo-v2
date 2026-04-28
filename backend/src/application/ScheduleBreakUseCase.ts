@@ -362,6 +362,11 @@ export class ScheduleBreakUseCase {
                 updatedAt: new Date()
             });
 
+            // Dual-write: write to breaks subcollection
+            const safeDateId = date.replace(/\//g, '-');
+            const breaksSubRef = doctorRef.collection('breaks').doc(safeDateId);
+            batch.set(breaksSubRef, { breaks: breakPeriods[date], date }, { merge: true });
+
             // ── 9. AUDIT LOG ─────────────────────────────────────────────────
             await this.activityRepo.save({
                 id:          '', // Repository will generate if missing or add via collection.add
