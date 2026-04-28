@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, ClipboardList, BarChart2, Loader2, Clock, Check } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api-client';
@@ -51,6 +51,38 @@ function StatCard({ title, value, sub, icon: Icon, color = 'blue', badge }: {
   );
 }
 
+const playNotificationSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    // Create a pleasant double-chime sound
+    osc.type = 'sine';
+    
+    // First chime
+    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    
+    // Second chime
+    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.3); // E5
+    gainNode.gain.setValueAtTime(0, ctx.currentTime + 0.3);
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.35);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
+    
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.9);
+  } catch (e) {
+    console.error('Audio play failed (browser might require user interaction first):', e);
+  }
+};
+
 export default function PrescriptionsPage() {
   const { currentUser } = useAuth();
   const { prescriptionUrl, isOpen, openViewer, closeViewer } = usePrescriptionViewer();
@@ -58,30 +90,55 @@ export default function PrescriptionsPage() {
   const [queue, setQueue] = useState<Appointment[]>([]);
   const [period, setPeriod] = useState<'today' | 'month'>('month');
   const [loading, setLoading] = useState(true);
+  const prevQueueLengthRef = useRef(0);
 
   const clinicId = currentUser?.clinicId;
 
-  useEffect(() => {
+  const fetchDashboardData = useCallback(async (isInitialLoad = false) => {
     if (!clinicId) return;
-    setLoading(true);
+    if (isInitialLoad) setLoading(true);
 
-    Promise.all([
-      apiRequest<RxStats>(`/clinic/prescriptions/stats?clinicId=${clinicId}&period=${period}`),
-      apiRequest<Appointment[]>(`/clinic/prescriptions?clinicId=${clinicId}&pharmacyStatus=pending`),
-    ])
-      .then(([s, q]) => {
-        setStats(s);
-        const parseDate = (d: any) => {
-          if (!d) return 0;
-          if (d.seconds) return d.seconds * 1000;
-          const date = new Date(d);
-          return isNaN(date.getTime()) ? 0 : date.getTime();
-        };
-        setQueue((q || []).sort((a: any, b: any) => parseDate(a.completedAt) - parseDate(b.completedAt)));
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    try {
+      const [s, q] = await Promise.all([
+        apiRequest<RxStats>(`/clinic/prescriptions/stats?clinicId=${clinicId}&period=${period}`),
+        apiRequest<Appointment[]>(`/clinic/prescriptions?clinicId=${clinicId}&pharmacyStatus=pending`),
+      ]);
+      
+      setStats(s);
+      
+      const parseDate = (d: any) => {
+        if (!d) return 0;
+        if (d.seconds) return d.seconds * 1000;
+        const date = new Date(d);
+        return isNaN(date.getTime()) ? 0 : date.getTime();
+      };
+      
+      const sortedQueue = (q || []).sort((a: any, b: any) => parseDate(a.completedAt) - parseDate(b.completedAt));
+      setQueue(sortedQueue);
+      
+      // Check for new prescriptions and trigger sound if not initial load
+      if (!isInitialLoad && sortedQueue.length > prevQueueLengthRef.current) {
+         playNotificationSound();
+      }
+      prevQueueLengthRef.current = sortedQueue.length;
+      
+    } catch (error) {
+      console.error(error);
+    } finally {
+      if (isInitialLoad) setLoading(false);
+    }
   }, [clinicId, period]);
+
+  useEffect(() => {
+    fetchDashboardData(true);
+    
+    // Poll every 15 seconds for real-time prescription queue updates
+    const interval = setInterval(() => {
+      fetchDashboardData(false);
+    }, 15000);
+    
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
 
   const roiPositive = (stats?.roi ?? 0) >= 0;
 
