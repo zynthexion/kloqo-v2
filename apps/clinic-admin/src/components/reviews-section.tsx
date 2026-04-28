@@ -76,7 +76,13 @@ export function ReviewsSection({ reviews }: ReviewsSectionProps) {
                                     {review.createdAt && (
                                         <p className="text-xs text-muted-foreground">
                                             {format(
-                                                review.createdAt?.toDate ? review.createdAt.toDate() : review.createdAt,
+                                                (() => {
+                                                    const d = review.createdAt;
+                                                    if (d?.toDate) return d.toDate();
+                                                    if (d?._seconds) return new Date(d._seconds * 1000);
+                                                    if (d instanceof Date) return d;
+                                                    return new Date(d);
+                                                })(),
                                                 'MMM d, yyyy'
                                             )}
                                         </p>
