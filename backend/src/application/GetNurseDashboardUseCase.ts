@@ -10,6 +10,12 @@ export interface NurseDashboardData {
   currentTime: string;
   totalCount?: number;
   hasMore?: boolean;
+  doctorAnalytics?: Record<string, {
+    waitTimeTrend: number;
+    todayGoalPercentage: number;
+    completedCount: number;
+    upcomingCount: number;
+  }>;
 }
 
 import { SyncClinicStatusesUseCase } from './SyncClinicStatusesUseCase';
@@ -159,6 +165,54 @@ export class GetNurseDashboardUseCase {
       };
     });
 
+    // 📊 ANALYTICS: Doctor-Specific Session Health & Goal Progress
+    const doctorAnalytics: Record<string, any> = {};
+
+    doctorsList.forEach((doctor: Doctor) => {
+      const doctorAppts = filteredAppointments.filter(a => a.doctorId === doctor.id);
+      const completedToday = doctorAppts.filter(a => a.status === 'Completed');
+      const upcomingToday = doctorAppts.filter(a => ['Confirmed', 'Pending'].includes(a.status));
+      
+      // 1. Today's Goal
+      const totalToday = completedToday.length + upcomingToday.length;
+      const todayGoalPercentage = totalToday > 0 ? Math.round((completedToday.length / totalToday) * 100) : 0;
+
+      // 2. Wait Time Trend
+      const recentCompleted = [...completedToday]
+        .sort((a, b) => {
+          const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+          const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+          return timeB - timeA;
+        })
+        .slice(0, 5);
+
+      let waitTimeTrend = 0;
+      if (recentCompleted.length > 0) {
+        const waitTimes = recentCompleted.map(a => {
+          const arrived = a.confirmedAt ? new Date(a.confirmedAt).getTime() : 0;
+          const completed = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+          if (!arrived || !completed) return 0;
+
+          const totalMinutes = (completed - arrived) / (60 * 1000);
+          const avgConsult = doctor.averageConsultingTime || 10;
+          return Math.max(1, Math.round(totalMinutes - avgConsult));
+        }).filter(w => w > 0);
+
+        waitTimeTrend = waitTimes.length > 0 
+          ? Math.round(waitTimes.reduce((sum, val) => sum + val, 0) / waitTimes.length)
+          : (doctor.averageConsultingTime || 15);
+      } else {
+        waitTimeTrend = doctor.averageConsultingTime || 15;
+      }
+
+      doctorAnalytics[doctor.id] = {
+        waitTimeTrend,
+        todayGoalPercentage,
+        completedCount: completedToday.length,
+        upcomingCount: upcomingToday.length
+      };
+    });
+
     return {
       clinic,
       doctors: doctorsList,
@@ -166,7 +220,8 @@ export class GetNurseDashboardUseCase {
       queues,
       currentTime: new Date().toISOString(),
       totalCount,
-      hasMore
+      hasMore,
+      doctorAnalytics
     };
   }
 }

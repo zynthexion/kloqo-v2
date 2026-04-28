@@ -15,6 +15,12 @@ interface NurseDashboardData {
   appointments: Appointment[];
   queues: Record<string, QueueState>;
   currentTime: string;
+  doctorAnalytics?: Record<string, {
+    waitTimeTrend: number;
+    todayGoalPercentage: number;
+    completedCount: number;
+    upcomingCount: number;
+  }>;
 }
 
 interface NurseDashboardContextType {
