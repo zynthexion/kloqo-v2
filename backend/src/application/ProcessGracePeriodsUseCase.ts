@@ -43,11 +43,11 @@ export class ProcessGracePeriodsUseCase {
       errors: [],
     };
 
-    // Fetch all Confirmed appointments for today in this clinic
+    // Fetch all Pending appointments for today in this clinic
     const todaysAppointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
-    const confirmedAppointments = todaysAppointments.filter(a => a.status === 'Confirmed');
+    const pendingAppointments = todaysAppointments.filter(a => a.status === 'Pending');
 
-    if (confirmedAppointments.length === 0) return result;
+    if (pendingAppointments.length === 0) return result;
 
     const clinic = await this.clinicRepo.findById(clinicId);
     if (!clinic) return result;
@@ -57,7 +57,7 @@ export class ProcessGracePeriodsUseCase {
 
     // 1. Identify all eligible appointments across all doctors in this clinic
     const toSkip: Appointment[] = [];
-    for (const appointment of confirmedAppointments) {
+    for (const appointment of pendingAppointments) {
       // EXEMPTION: Priority patients (PW tokens) are never auto-skipped
       if (appointment.tokenNumber?.startsWith('PW-')) {
         continue;

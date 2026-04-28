@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, CalendarDays, Map, Settings, UserCog, Loader2 } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Activity, Settings, UserCog, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -37,9 +37,9 @@ export function Sidebar() {
   };
 
   const navItems = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Dash' },
+    { href: '/day-snapshot', icon: LayoutDashboard, label: 'Dash' },
+    { href: '/dashboard', icon: Activity, label: 'Live' },
     { href: '/appointments', icon: CalendarDays, label: 'Appts' },
-    { href: '/day-snapshot', icon: Map, label: 'Maps' },
     { href: '/settings', icon: Settings, label: 'Setup' },
   ];
 

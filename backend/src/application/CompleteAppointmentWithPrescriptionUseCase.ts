@@ -94,35 +94,35 @@ export class CompleteAppointmentWithPrescriptionUseCase {
       );
     }
 
-    // 7. WhatsApp Dispatch (Pharmacy)
+    // 7. WhatsApp Dispatch (Pharmacy) - Fire and forget
     if (clinic.pharmacyPhone) {
-      await this.notificationService.sendPrescriptionToPharmacy({
+      this.notificationService.sendPrescriptionToPharmacy({
         pharmacyPhone: clinic.pharmacyPhone,
         prescriptionUrl: downloadURL,
         patientName: appointment.patientName,
         clinicName: clinic.name,
         clinicId: clinic.id
-      });
+      }).catch(err => console.error('[CompletePrescription] Error sending to pharmacy:', err));
     }
 
-    // 8. WhatsApp Dispatch (Patient Triage)
+    // 8. WhatsApp Dispatch (Patient Triage) - Fire and forget
     if (appointment.communicationPhone) {
-      await this.notificationService.sendPrescriptionTriageToPatient({
+      this.notificationService.sendPrescriptionTriageToPatient({
         phone: appointment.communicationPhone,
         patientName: appointment.patientName,
         clinicName: clinic.name,
         clinicId: clinic.id,
         appointmentId: appointment.id
-      });
+      }).catch(err => console.error('[CompletePrescription] Error sending triage to patient:', err));
     }
 
-    // 9. Notify next patients
-    await this.notificationService.notifyNextPatientsWhenCompleted({
+    // 9. Notify next patients - Fire and forget
+    this.notificationService.notifyNextPatientsWhenCompleted({
       clinicId,
       completedAppointmentId: appointmentId,
       completedAppointment: { ...appointment, ...updatedData },
       clinicName: clinic.name
-    });
+    }).catch(err => console.error('[CompletePrescription] Error notifying next patients:', err));
 
     return { ...appointment, ...updatedData };
   }

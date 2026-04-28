@@ -85,6 +85,12 @@ export class SyncClinicStatusesUseCase {
                 await this.doctorRepo.prunePastOverrides(doctor.id, expiredKeys);
             }
 
+            // 4. Do not force 'Out' if the doctor is currently 'In' manually.
+            // Let the doctor manually toggle 'Out', or let the EndSessionCleanupUseCase handle it overnight.
+            if (newStatus === 'Out' && doctor.consultationStatus === 'In') {
+                newStatus = 'In';
+            }
+
             if (doctor.consultationStatus !== newStatus) {
                 await this.doctorRepo.update(doctor.id, {
                     consultationStatus: newStatus,
@@ -147,6 +153,11 @@ export class SyncClinicStatusesUseCase {
         
         if (expiredKeys.length > 0) {
             await this.doctorRepo.prunePastOverrides(doctor.id, expiredKeys);
+        }
+
+        // 4. Do not force 'Out' if the doctor is currently 'In' manually.
+        if (newStatus === 'Out' && doctor.consultationStatus === 'In') {
+            newStatus = 'In';
         }
 
         if (doctor.consultationStatus !== newStatus) {
