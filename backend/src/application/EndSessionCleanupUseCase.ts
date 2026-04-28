@@ -30,7 +30,6 @@ export class EndSessionCleanupUseCase {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-    const yesterdayDisplayStr = format(yesterday, 'd MMMM yyyy');
 
     const result: CleanupResult = {
       skippedToNoShowCount: 0,
@@ -39,17 +38,17 @@ export class EndSessionCleanupUseCase {
     };
 
     try {
-      // 1. Convert Skipped -> No-show for yesterday
-      const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, yesterdayDisplayStr);
-      const skippedAppointments = appointments.filter(a => a.status === 'Skipped');
+      // 1. Convert Skipped, Pending, Confirmed -> No-show for yesterday
+      const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, yesterdayStr);
+      const unresolvedAppointments = appointments.filter(a => ['Skipped', 'Pending', 'Confirmed'].includes(a.status));
 
-      for (const appt of skippedAppointments) {
+      for (const appt of unresolvedAppointments) {
         try {
           await this.appointmentRepo.update(appt.id, {
             status: 'No-show',
             noShowAt: now,
             updatedAt: now,
-            cancellationReason: 'Session closed: Converted from Skipped to No-show.'
+            cancellationReason: `Session closed: Converted from ${appt.status} to No-show.`
           });
           result.skippedToNoShowCount++;
         } catch (err: any) {
