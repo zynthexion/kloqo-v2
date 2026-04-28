@@ -20,9 +20,6 @@ function BookAppointmentPageContent() {
   
   const doctorId = searchParams.get('doctor');
   const patientId = searchParams.get('patientId');
-  const { user } = useNurseBooking(doctorId, patientId); // Just to get user/clinicId
-  const { data: nurseDashData } = useNurseDashboard(user?.clinicId || '');
-
   const {
     selectedDate, setSelectedDate,
     slots, loading,
@@ -33,6 +30,8 @@ function BookAppointmentPageContent() {
     fetchingDoctor, dates,
     handleBook, user
   } = useNurseBooking(doctorId, patientId);
+
+  const { data: nurseDashData } = useNurseDashboard(user?.clinicId || '');
 
   const handleDoctorChange = (id: string) => {
     localStorage.setItem('selectedDoctorId', id);

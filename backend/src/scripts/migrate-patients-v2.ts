@@ -21,7 +21,7 @@ async function migratePatients() {
     let currentBatchSize = 0;
 
     for (const p of patients) {
-      const patientData: any = { ...p };
+      const patientData: any = { ...(p as object) };
 
       // 1. Exclude deprecated/unnecessary fields
       delete patientData.visitHistory;

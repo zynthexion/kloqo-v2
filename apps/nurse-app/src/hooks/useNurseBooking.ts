@@ -138,9 +138,9 @@ export function useNurseBooking(doctorId: string | null, patientId: string | nul
     step, setStep,
     patient, doctor,
     fetchingDoctor, dates,
-    handleBook
+    handleBook, user
   }), [
     selectedDate, slots, loading, booking, selectedSlot, step, 
-    patient, doctor, fetchingDoctor, dates, handleBook
+    patient, doctor, fetchingDoctor, dates, handleBook, user
   ]);
 }

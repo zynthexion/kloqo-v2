@@ -6,7 +6,7 @@ import { format, parse, isPast, isToday } from 'date-fns';
 import { cn, getArriveByTimeFromAppointment, parseAppointmentDateTime, parseClinicDate } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Star, Loader2 } from 'lucide-react';
+import { Star, Loader2, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';

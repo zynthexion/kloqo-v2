@@ -12,7 +12,6 @@ import {
   Activity,
   Calendar,
   XCircle,
-  Clock,
   ChevronDown
 } from 'lucide-react';
 import { 

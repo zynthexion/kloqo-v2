@@ -95,7 +95,7 @@ export default function AppointmentList({
     if (file && appt) {
       setIsCapturing(true);
       try {
-        await completeWithPrescription(appt.id, appt.patientId, file);
+        await completeWithPrescription(appt.id, appt.patientId, file, new Blob([], { type: 'image/png' }));
         setPendingCompletionId(null);
       } catch (err) {
         alert("Failed to upload photo. Please try again.");

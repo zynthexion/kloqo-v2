@@ -10,7 +10,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { User, Settings, Coffee, CalendarX, Phone, ChevronDown } from 'lucide-react';
+import { User, Settings, Coffee, CalendarX, Phone, ChevronDown, ArrowLeft } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
@@ -38,6 +38,7 @@ type ClinicHeaderProps = {
     hasActiveAppointments?: boolean;
     className?: string;
     style?: React.CSSProperties;
+    onBack?: () => void;
 };
 
 export default function ClinicHeader({
@@ -59,6 +60,7 @@ export default function ClinicHeader({
     hasActiveAppointments = false,
     className,
     style,
+    onBack,
 }: ClinicHeaderProps) {
     const { theme } = useTheme();
     const currentDoctor = doctors.find(d => d.id === selectedDoctor);
@@ -317,7 +319,17 @@ export default function ClinicHeader({
                     </div>
                 </div>
                 {pageTitle && (
-                    <div className="mt-4">
+                    <div className="mt-4 relative flex items-center justify-center w-full">
+                        {onBack && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={onBack}
+                                className="absolute left-0 text-white hover:bg-white/10"
+                            >
+                                <ArrowLeft className="h-5 w-5" />
+                            </Button>
+                        )}
                         <h1 className="text-2xl font-bold text-center text-white">{pageTitle}</h1>
                     </div>
                 )}
