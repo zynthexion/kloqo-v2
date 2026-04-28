@@ -82,7 +82,11 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         doctors: filteredDoctors,
         appointments: (dashData.appointments || []).filter((appt: Appointment) =>
           filteredDoctors.some(d => d.id === appt.doctorId)
-        ),
+        ).sort((a, b) => {
+          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
+          return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+        }),
       };
 
       setData(dashData);
@@ -199,6 +203,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
               appointments: [...untouchedApts, ...p.updatedQueue].sort((a, b) => {
                 // Keep the global list sorted for the UI
                 if (a.date !== b.date) return a.date.localeCompare(b.date);
+                if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
                 return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
               })
             };
