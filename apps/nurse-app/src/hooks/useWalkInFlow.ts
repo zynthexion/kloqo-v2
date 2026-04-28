@@ -226,7 +226,8 @@ export function useWalkInFlow(overrides?: { doctorId?: string | null, clinicId?:
           patientId: selectedPatient.id,
           doctorId,
           clinicId,
-          date: dateStr
+          date: dateStr,
+          isForceBooked: true
         })
       });
 
