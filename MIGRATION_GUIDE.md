@@ -135,9 +135,14 @@ Ensure `.env` is set to the **NEW** project before running these.
    npx ts-node src/scripts/migrate-patients-v2.ts
    ```
 
-6. **Migrate Appointments (Future Phase)**:
+6. **Migrate January Appointments (V2 Schema Optimizations)**:
+   Transfer exclusively January 2026 appointments from the legacy backup to the V2 database, pruning decoupled fields (e.g., `age`, `doctor`, `department`) and mapping normalized timestamps (`noShowAt`).
+   ```bash
+   npx ts-node src/scripts/migrate-january-appointments.ts
+   ```
+
    > [!IMPORTANT]
-   > When migrating appointment data in the next iteration, **only include appointments from February onwards**. The January patient data has already been seeded and pruned, so earlier appointment records should be excluded to prevent data inconsistencies.
+   > When migrating additional appointment data in the next iteration, **only include appointments from February onwards**. The January patient data has already been seeded and pruned, so earlier appointment records should be excluded to prevent data inconsistencies.
 
 ### 5. Post-Migration Setup
 1. **Create Super Admin User**:
