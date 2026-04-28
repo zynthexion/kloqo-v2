@@ -124,6 +124,17 @@ Ensure `.env` is set to the **NEW** project before running these.
    npx ts-node src/scripts/migrate-doctor-distribution.ts
    ```
 
+5. **Migrate Patients Collection (V2 Schema Optimizations)**:
+   Transfer patients from the legacy backup to the V2 database while explicitly pruning deprecated fields to prevent document bloat and enforce structural bindings. Excluded fields:
+   - `visitHistory` (Decoupled to discrete appointments)
+   - `totalAppointments` (Dynamically aggregated)
+   - `tutorialVideoSentAt` (Offloaded to messaging logs)
+   - `isPrimary` / `isKloqoMember` (Replaced by structural bindings)
+   - `primaryUserId`
+   ```bash
+   npx ts-node src/scripts/migrate-patients-v2.ts
+   ```
+
 ### 5. Post-Migration Setup
 1. **Create Super Admin User**:
    If you need to create a new super admin account to access the dashboard:
