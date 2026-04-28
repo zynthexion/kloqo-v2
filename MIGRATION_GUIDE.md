@@ -135,6 +135,10 @@ Ensure `.env` is set to the **NEW** project before running these.
    npx ts-node src/scripts/migrate-patients-v2.ts
    ```
 
+6. **Migrate Appointments (Future Phase)**:
+   > [!IMPORTANT]
+   > When migrating appointment data in the next iteration, **only include appointments from February onwards**. The January patient data has already been seeded and pruned, so earlier appointment records should be excluded to prevent data inconsistencies.
+
 ### 5. Post-Migration Setup
 1. **Create Super Admin User**:
    If you need to create a new super admin account to access the dashboard:
