@@ -12,7 +12,6 @@ type AppFrameLayoutProps = {
 };
 
 import { Sidebar } from './Sidebar';
-import { NurseSidebar } from './NurseSidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function AppFrameLayout({ children, className, showBottomNav = false, isFullScreen = false }: AppFrameLayoutProps) {
@@ -20,13 +19,10 @@ export default function AppFrameLayout({ children, className, showBottomNav = fa
   const { user } = useAuth();
   const isModern = theme === 'modern' && !isFullScreen;
 
-  // Render the legacy perfect UI for doctors, and the new UI with the switcher for other roles.
-  const isDoctor = user?.role === 'doctor' || user?.roles?.includes('doctor');
-
   return (
     <div className="flex min-h-screen bg-white group/sidebar">
       {/* Sidebar for Desktop */}
-      {!isFullScreen && (isDoctor ? <NurseSidebar /> : <Sidebar />)}
+      {!isFullScreen && <Sidebar />}
 
       <main className={cn(
         "flex-1 flex flex-col items-center justify-start min-h-screen transition-all duration-500",
