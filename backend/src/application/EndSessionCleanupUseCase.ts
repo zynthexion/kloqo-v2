@@ -1,7 +1,7 @@
 import { format, isAfter, addHours } from 'date-fns';
 import { IAppointmentRepository, IDoctorRepository } from '../domain/repositories';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
-import { getClinicNow } from '../domain/services/DateUtils';
+import { getClinicNow, getClinicISODateString, subMinutes } from '../domain/services/DateUtils';
 
 export interface CleanupResult {
   skippedToNoShowCount: number;
@@ -24,12 +24,14 @@ export class EndSessionCleanupUseCase {
 
   async execute(clinicId: string): Promise<CleanupResult> {
     const now = getClinicNow();
-    const todayStr = format(now, 'yyyy-MM-dd'); // Actual current date (1 AM)
+    
+    // CRITICAL FIX: Use getClinicISODateString to ensure we get the date in IST (Asia/Kolkata),
+    // otherwise the UTC server time at 1:00 AM IST (19:30 UTC) will result in the previous day!
+    const todayStr = getClinicISODateString(now); 
     
     // We want to clean up "yesterday's" data
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+    const yesterday = subMinutes(now, 24 * 60);
+    const yesterdayStr = getClinicISODateString(yesterday);
 
     const result: CleanupResult = {
       skippedToNoShowCount: 0,
