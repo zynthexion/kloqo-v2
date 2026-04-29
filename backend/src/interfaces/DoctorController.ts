@@ -113,17 +113,25 @@ export class DoctorController {
       const user = req.user;
       const docData = req.body;
 
+      // 🛡️ Ensure docData has the ID from the route path if passed
+      if (req.params?.id && !docData.id) {
+        docData.id = req.params.id;
+      }
+
+      let targetDoctor: any = null;
       if (docData.clinicId) {
         this.validateClinicAccess(req, docData.clinicId);
       } else if (docData.id || docData.userId) {
-        // If updating existing, fetch clinic context
         const { doctor } = await this.getDoctorDetailsUseCase.execute(docData.id || docData.userId);
-        if (doctor) this.validateClinicAccess(req, doctor.clinicId);
+        if (doctor) {
+          targetDoctor = doctor;
+          this.validateClinicAccess(req, doctor.clinicId);
+        }
       }
 
       // 🛡️ RBAC Guard: Only Admin or Self can update doctor meta-data (fees, avg time, etc)
       const isAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN]);
-      const isSelf = user.id === docData.userId || user.id === docData.id;
+      const isSelf = user.id === docData.userId || user.id === docData.id || (targetDoctor && user.id === targetDoctor.userId);
 
       if (!isAdmin && !isSelf) {
         return res.status(403).json({ error: 'Unauthorized: Only Admins or the Doctor themselves can update these settings.' });
