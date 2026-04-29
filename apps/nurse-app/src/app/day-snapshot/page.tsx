@@ -163,7 +163,7 @@ export default function DaySnapshotPage() {
 
   const mobileView = (
     <AppFrameLayout showBottomNav>
-      <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+      <div className="flex flex-col min-h-screen bg-slate-50 w-full max-w-md mx-auto">
         <ClinicHeader
           doctors={(data?.doctors ?? []) as Doctor[]}
           selectedDoctor={selectedDoctor}
@@ -173,7 +173,17 @@ export default function DaySnapshotPage() {
           showSettings={false}
         />
 
-        <main className="flex-1 p-4 -mt-6 z-10 bg-white rounded-t-3xl shadow-xl flex flex-col gap-6 overflow-hidden">
+        <main className="flex-1 p-4 -mt-6 z-10 bg-white rounded-t-3xl shadow-xl flex flex-col gap-6">
+          {activeRole === 'doctor' && (
+            <Button 
+              onClick={() => router.push(`/appointments/schedule?doctor=${selectedDoctor}`)}
+              className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-md flex items-center justify-center gap-2"
+            >
+              <CalendarIcon className="h-5 w-5" />
+              Update My Schedule
+            </Button>
+          )}
+
           {/* Date Selector */}
           <AppointmentDatePicker 
             dates={dates} 
@@ -181,13 +191,13 @@ export default function DaySnapshotPage() {
             onSelectDate={(d) => { setSelectedDate(d); setActiveSession('all'); }} 
           />
 
-          <div className="flex-1 overflow-y-auto pr-1 space-y-6 scrollbar-hide">
+          <div className="space-y-6 pb-24">
             {/* Session Tabs */}
             {sessions.length > 0 && (
               <div className="px-1">
                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Filter by Session</h3>
                 <Tabs value={activeSession} onValueChange={setActiveSession}>
-                  <TabsList className="bg-slate-100/50 h-auto p-1.5 w-full flex gap-1 border border-slate-100 rounded-2xl">
+                  <TabsList className="bg-slate-100/50 h-auto p-1.5 w-full flex gap-1 border border-slate-100 rounded-2xl overflow-x-auto no-scrollbar">
                     <TabsTrigger value="all" className="flex-1 rounded-xl py-2 font-bold text-xs data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
                       All Day
                     </TabsTrigger>
@@ -213,7 +223,7 @@ export default function DaySnapshotPage() {
                     <div className="bg-blue-100 p-2.5 rounded-2xl mb-3">
                       <Users className="h-5 w-5 text-blue-600" />
                     </div>
-                    <p className="text-3xl font-black text-blue-700">{stats.total}</p>
+                    <p className="text-2xl font-black text-blue-700">{stats.total}</p>
                     <p className="text-[10px] uppercase font-black text-blue-400 tracking-wider mt-1">Total Bookings</p>
                   </CardContent>
                 </Card>
@@ -223,7 +233,7 @@ export default function DaySnapshotPage() {
                     <div className="bg-amber-100 p-2.5 rounded-2xl mb-3">
                       <Clock className="h-5 w-5 text-amber-600" />
                     </div>
-                    <p className="text-3xl font-black text-amber-700">{stats.confirmed}</p>
+                    <p className="text-2xl font-black text-amber-700">{stats.confirmed}</p>
                     <p className="text-[10px] uppercase font-black text-amber-400 tracking-wider mt-1">Waiting in Clinic</p>
                   </CardContent>
                 </Card>
@@ -234,7 +244,7 @@ export default function DaySnapshotPage() {
                       <div className="bg-green-100 p-2.5 rounded-2xl mb-3">
                         <CheckCircle2 className="h-5 w-5 text-green-600" />
                       </div>
-                      <p className="text-3xl font-black text-green-700">{stats.completed}</p>
+                      <p className="text-2xl font-black text-green-700">{stats.completed}</p>
                       <p className="text-[10px] uppercase font-black text-green-400 tracking-wider mt-1">Completed</p>
                     </CardContent>
                   </Card>
@@ -244,7 +254,7 @@ export default function DaySnapshotPage() {
                       <div className="bg-slate-100 p-2.5 rounded-2xl mb-3">
                         <UserMinus className="h-5 w-5 text-slate-600" />
                       </div>
-                      <p className="text-3xl font-black text-slate-700">{stats.pending}</p>
+                      <p className="text-2xl font-black text-slate-700">{stats.pending}</p>
                       <p className="text-[10px] uppercase font-black text-slate-400 tracking-wider mt-1">Not Arrived</p>
                     </CardContent>
                   </Card>
@@ -256,7 +266,7 @@ export default function DaySnapshotPage() {
                       <div className="bg-red-100 p-2.5 rounded-2xl mb-3">
                         <XCircle className="h-5 w-5 text-red-600" />
                       </div>
-                      <p className="text-3xl font-black text-red-700">{stats.cancelled + stats.noshow + stats.skipped}</p>
+                      <p className="text-2xl font-black text-red-700">{stats.cancelled + stats.noshow + stats.skipped}</p>
                       <p className="text-[10px] uppercase font-black text-red-400 tracking-wider mt-1">
                         {isPastDate ? 'Missed/Cancelled' : 'Skipped/Missed'}
                       </p>

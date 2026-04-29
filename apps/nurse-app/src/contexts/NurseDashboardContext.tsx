@@ -63,13 +63,17 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
       let filteredDoctors = dashData.doctors || [];
       
       // 1. If user is a doctor, they should ONLY see themselves in the nurse app (privacy/focus)
-      const isDoctor = user?.roles?.includes('doctor') || user?.role === 'doctor';
-      const isNurseOrAdmin = user?.roles?.some(r => ['nurse', 'clinicAdmin', 'superadmin'].includes(r)) || 
-                             ['nurse', 'clinicAdmin', 'superadmin'].includes(user?.role as string);
+      const activeRole = typeof window !== 'undefined' ? localStorage.getItem('activeRole') : null;
+      const isDoctor = activeRole === 'doctor' || user?.role === 'doctor';
 
-      if (isDoctor && !isNurseOrAdmin) {
-        // Find the doctor record that belongs to this user
+      if (isDoctor) {
         filteredDoctors = filteredDoctors.filter((doc: Doctor) => doc.userId === user?.id || doc.userId === user?.uid);
+        
+        if (filteredDoctors.length === 0 && dashData.doctors?.length > 0) {
+          const storedDocId = typeof window !== 'undefined' ? localStorage.getItem('selectedDoctorId') : null;
+          const found = dashData.doctors.find((d: Doctor) => d.id === storedDocId);
+          filteredDoctors = found ? [found] : [dashData.doctors[0]];
+        }
       } 
       // 2. Otherwise apply assigned-doctor filtering for nurse/receptionist users if configured
       else if (user?.assignedDoctorIds && user.assignedDoctorIds.length > 0) {

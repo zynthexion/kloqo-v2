@@ -29,19 +29,11 @@ export default function HomePage() {
 
   const isInitialLoading = authLoading || (user && dashLoading && !dashData);
 
-  // Auth guard and role-based mobile redirect
+  // Auth guard
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login');
       return;
-    }
-
-    if (user && !authLoading) {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-      const activeRole = localStorage.getItem('activeRole') || user.role;
-      if (isMobile && activeRole === 'doctor') {
-        router.replace('/day-snapshot');
-      }
     }
   }, [user, authLoading, router]);
 
@@ -86,6 +78,8 @@ export default function HomePage() {
 
   if (!user) return null;
 
+  const { displayName, activeRole } = useActiveIdentity();
+
   const mainMenuItems = [
     {
       icon: Phone,
@@ -107,7 +101,18 @@ export default function HomePage() {
     },
   ];
 
-  const { displayName, activeRole } = useActiveIdentity();
+  if (activeRole === 'doctor') {
+    mainMenuItems.push({
+      icon: Loader2, // Replace later if needed or add Calendar icon
+      title: 'Update Schedule',
+      subtitle: 'Manage availability & clinical pauses',
+      action: () => router.push(`/appointments/schedule?doctor=${selectedDoctor}`),
+      disabled: !selectedDoctor,
+      colors: isModern ? 'bg-gradient-to-br from-[#4F46E5] to-[#6366F1] text-white' : 'bg-gradient-to-br from-[#10B981] to-[#34D399] text-white',
+      iconContainer: 'bg-white/20',
+    });
+  }
+
 
   return (
     <>

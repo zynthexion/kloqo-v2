@@ -30,8 +30,14 @@ export function ActiveIdentityProvider({ children }: { children: React.ReactNode
     if (!user) return [];
     
     const rawRoles = user.roles && user.roles.length > 0 ? user.roles : (user.role ? [user.role] : []);
+    const isDoctor = rawRoles.includes('doctor');
     const operationalRoles: Role[] = ['doctor', 'nurse', 'pharmacist', 'receptionist', 'clinicAdmin'];
-    return rawRoles.filter(r => operationalRoles.includes(r as Role)) as Role[];
+    
+    let filtered = rawRoles.filter(r => operationalRoles.includes(r as Role)) as Role[];
+    if (isDoctor) {
+      filtered = filtered.filter(r => r !== 'clinicAdmin');
+    }
+    return filtered;
   }, [user]);
 
   // 1.5 Clinical Identity Hydration (Read-Repair triggered via backend)

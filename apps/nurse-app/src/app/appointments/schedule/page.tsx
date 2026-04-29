@@ -202,7 +202,7 @@ function ScheduleContent() {
 
   const mobileView = (
     <AppFrameLayout showBottomNav>
-      <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
+      <div className="flex flex-col min-h-screen bg-slate-50 font-pt-sans w-full max-w-md mx-auto">
         <ClinicHeader 
           doctors={filteredDoctors as Doctor[]}
           selectedDoctor={selectedDoctorId || ''}
@@ -211,7 +211,7 @@ function ScheduleContent() {
           pageTitle="Schedule Ops"
           showSettings={false}
         />
-        <main className="flex-1 p-4 -mt-6 z-10 bg-slate-50 rounded-t-3xl overflow-y-auto">
+        <main className="flex-1 p-4 -mt-6 z-10 bg-slate-50 rounded-t-3xl pb-24">
           {pageContent}
         </main>
       </div>

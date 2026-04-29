@@ -100,7 +100,7 @@ export function MobileDashboardView({
                 </div>
               ))}
 
-              {activeRole === 'nurse' && (
+              {['nurse', 'doctor'].includes(activeRole) && (
                 <>
                   {/* Left Side: Snapshot Icon */}
                   <button
