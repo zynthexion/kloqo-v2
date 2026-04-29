@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { LayoutDashboard, CalendarDays, Activity, Settings, UserCog, Loader2 } from 'lucide-react';
+import { Home, Calendar, LayoutDashboard, CalendarDays, Activity, Settings, UserCog, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -37,47 +37,78 @@ export function Sidebar() {
   };
 
   const navItems = [
-    { href: '/day-snapshot', icon: LayoutDashboard, label: 'Dash' },
+    { href: '/', icon: Home, label: 'Home' },
     { href: '/dashboard', icon: Activity, label: 'Live' },
     { href: '/appointments', icon: CalendarDays, label: 'Appts' },
-    { href: '/settings', icon: Settings, label: 'Setup' },
+    { href: '/appointments/schedule', icon: Calendar, label: 'Schedule' },
   ];
 
   return (
-    <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-24 bg-white/40 backdrop-blur-xl border-r border-slate-200/50 flex-col items-center py-6 z-50 transition-all duration-500 hover:w-28 group/sidebar">
+    <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-[100px] bg-white/40 backdrop-blur-xl border-r border-slate-200/50 flex-col items-center py-8 z-50 transition-all duration-500 hover:w-[110px] group/sidebar">
       {/* Logo Section */}
-      <div className="mb-8 relative px-4 w-full">
-        <Link href="/" className="flex items-center justify-center group/logo">
-          <div className="w-10 h-10 shrink-0 group-hover/sidebar:hidden transition-all duration-300">
-            <img alt="Kloqo Icon" className="w-full h-full object-contain" src="/kloqo_Logo_twest.png" />
-          </div>
-          <div className="hidden group-hover/sidebar:flex w-full items-center justify-center transition-all duration-500 animate-in fade-in zoom-in-95">
-            <img alt="Kloqo Logo" className="h-8 w-auto object-contain" src="/kloqo_Logo_twest.png" />
+      <Link href="/" className="mb-12">
+        <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+          <img src="/kloqo_Logo_twest.png" alt="Kloqo" className="w-8 h-8 object-contain" />
+        </div>
+      </Link>
+
+      {/* Navigation Section */}
+      <nav className="flex-1 flex flex-col gap-6 w-full px-4">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href || (item.href === '/' && pathname === '/dashboard' && false); // exact match
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-300 gap-2 group relative",
+                isActive 
+                  ? "bg-primary text-white shadow-lg shadow-primary/25 scale-105" 
+                  : "text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+              )}
+            >
+              <item.icon className={cn(
+                "h-6 w-6 transition-transform group-hover:scale-110",
+                isActive ? "text-white" : "text-slate-400"
+              )} />
+              <span className={cn(
+                "text-[10px] font-black uppercase tracking-widest",
+                isActive ? "text-white" : "text-slate-400"
+              )}>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Profile/Settings & Doctor Switcher Section */}
+      <div className="mt-auto pt-8 flex flex-col items-center gap-6 w-full px-4 border-t border-slate-100/50">
+        <Link href="/settings" className="group">
+          <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-200 transition-all duration-300 group-hover:bg-primary/5 group-hover:border-primary/20">
+            <Settings className="h-6 w-6 text-slate-400 group-hover:text-primary transition-colors" />
           </div>
         </Link>
-      </div>
+        
+        <RoleSwitcher />
 
-      {/* Doctor Switcher (Top Position for Visibility) */}
-      <div className="mb-8 w-full px-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button 
-              className="flex flex-col items-center justify-center w-full p-3 rounded-2xl transition-all duration-300 gap-1 group hover:bg-slate-100/50"
+              className="flex flex-col items-center justify-center w-full p-2 rounded-2xl transition-all duration-300 gap-1 group hover:bg-slate-100/50"
               type="button"
             >
               <div className="relative">
-                <Avatar className="h-10 w-10 border-2 border-white shadow-premium transition-transform group-hover:scale-110">
+                <Avatar className="h-12 w-12 border-2 border-white shadow-premium transition-transform group-hover:scale-110">
                   <AvatarImage src={activeDoctor?.avatar} />
-                  <AvatarFallback className="bg-slate-100 text-[10px]">{activeDoctor?.name?.substring(0, 2).toUpperCase() || 'DR'}</AvatarFallback>
+                  <AvatarFallback className="bg-slate-100 text-xs font-bold">{activeDoctor?.name?.substring(0, 2).toUpperCase() || 'DR'}</AvatarFallback>
                 </Avatar>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white bg-emerald-500 flex items-center justify-center shadow-sm">
-                  <UserCog className="h-2 w-2 text-white" />
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white bg-emerald-500 flex items-center justify-center shadow-sm">
+                  <UserCog className="h-3 w-3 text-white" />
                 </div>
               </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-primary transition-colors">Context</span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover:text-primary transition-colors mt-1">Context</span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right" className="w-64 rounded-2xl p-2 shadow-premium border-white/40 bg-white/80 backdrop-blur-xl z-[100]">
+          <DropdownMenuContent align="start" side="right" className="w-64 rounded-2xl p-2 shadow-premium border-white/40 bg-white/80 backdrop-blur-xl z-[100] ml-4">
             <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-3 py-2">
               Switch Serving Context
             </DropdownMenuLabel>
@@ -111,41 +142,6 @@ export function Sidebar() {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
-      {/* Navigation Section */}
-      <nav className="flex-1 flex flex-col gap-2 w-full px-3">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.href === '/dashboard' && pathname === '/');
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 gap-1 group",
-                isActive 
-                  ? "bg-primary text-white shadow-lg scale-105" 
-                  : "text-slate-400 hover:bg-slate-100/50 hover:text-slate-600"
-              )}
-            >
-              <item.icon className={cn(
-                "h-6 w-6 transition-transform group-hover:scale-110",
-                isActive ? "text-white" : "text-slate-400"
-              )} />
-              <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Profile/Settings Section */}
-      <div className="mt-auto flex flex-col gap-4 items-center w-full px-3 pb-4">
-        <RoleSwitcher />
-        <Link href="/settings" className="group mt-2">
-          <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-200 transition-all duration-300 group-hover:bg-primary/5 group-hover:border-primary/20">
-            <Settings className="h-6 w-6 text-slate-400 group-hover:text-primary transition-colors" />
-          </div>
-        </Link>
       </div>
     </aside>
   );
