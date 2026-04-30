@@ -17,6 +17,8 @@ import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { useAppointmentManagement } from '@/hooks/useAppointmentManagement';
 import { AppointmentDatePicker } from '@/components/appointments/AppointmentDatePicker';
 import { AppointmentSearchAndList } from '@/components/appointments/AppointmentSearchAndList';
+import { useDashboardBooking } from '@/hooks/useDashboardBooking';
+import { BookingFlow } from '@/components/dashboard/BookingFlow';
 
 export default function AppointmentsPage() {
   const {
@@ -27,6 +29,27 @@ export default function AppointmentsPage() {
   } = useAppointmentManagement();
   const { activeRole } = useActiveIdentity();
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+
+  const booking = useDashboardBooking(selectedDoctor, user?.clinicId);
+
+  const handleReschedule = (appt: any) => {
+    booking.handleAdvancedOpen();
+    booking.setAdvancedStep('slots');
+    
+    const apptPatient = {
+      id: appt.patientId,
+      name: appt.patientName,
+      phone: appt.communicationPhone || '',
+      communicationPhone: appt.communicationPhone || '',
+      age: appt.age,
+      sex: appt.sex,
+      place: appt.place
+    };
+    
+    booking.walkIn.setPhoneNumber(appt.communicationPhone || '');
+    booking.walkIn.selectPatient(apptPatient, true);
+    booking.fetchSlots(booking.selectedDate);
+  };
 
   const isToday = isSameDay(selectedDate, new Date());
 
@@ -44,7 +67,7 @@ export default function AppointmentsPage() {
 
   const mobileView = (
     <AppFrameLayout showBottomNav>
-      <div className="flex flex-col h-full bg-muted/20 font-pt-sans">
+      <div className="flex flex-col h-full w-full max-w-full overflow-x-hidden bg-muted/20 font-pt-sans">
         <ClinicHeader
           doctors={(data?.doctors ?? []) as any}
           selectedDoctor={selectedDoctor}
@@ -54,7 +77,7 @@ export default function AppointmentsPage() {
           pageTitle="Bookings"
         />
 
-        <main className="flex-1 flex flex-col min-h-0 bg-card rounded-t-[2rem] -mt-4 z-10 shadow-premium overflow-hidden">
+        <main className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-x-hidden bg-card rounded-t-[2rem] -mt-4 z-10 shadow-premium">
           <AppointmentDatePicker dates={dates} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
           <AppointmentSearchAndList 
             searchTerm={searchTerm} 
@@ -65,6 +88,7 @@ export default function AppointmentsPage() {
             selectedDate={selectedDate} 
             consultationStatus={currentDoctor?.consultationStatus}
             onViewPrescription={setViewerUrl}
+            onReschedule={handleReschedule}
             page={page}
             setPage={setPage}
             totalCount={totalCount}
@@ -109,6 +133,7 @@ export default function AppointmentsPage() {
               isTablet 
               consultationStatus={currentDoctor?.consultationStatus}
               onViewPrescription={setViewerUrl}
+              onReschedule={handleReschedule}
               page={page}
               setPage={setPage}
               totalCount={totalCount}
@@ -182,6 +207,26 @@ export default function AppointmentsPage() {
           </div>
         </div>
       )}
+
+      <BookingFlow 
+        isOpen={booking.isBookingDrawerOpen}
+        onClose={() => booking.setIsBookingDrawerOpen(false)}
+        bookingMode={booking.bookingMode}
+        advancedStep={booking.advancedStep}
+        setAdvancedStep={booking.setAdvancedStep}
+        selectedDate={booking.selectedDate}
+        setSelectedDate={booking.setSelectedDate}
+        slots={booking.slots}
+        selectedSlot={booking.selectedSlot}
+        setSelectedSlot={booking.setSelectedSlot}
+        loadingSlots={booking.loadingSlots}
+        isBooking={booking.isBooking}
+        walkIn={booking.walkIn}
+        handleAdvancedBook={booking.handleAdvancedBook}
+        nextDates={booking.nextDates}
+        clinicId={user?.clinicId}
+        fetchSlots={booking.fetchSlots}
+      />
     </>
   );
 }

@@ -13,6 +13,7 @@ import { WalkInPlacementService } from '../domain/services/WalkInPlacementServic
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
 import { sseService } from '../domain/services/SSEService';
 import { getClinicNow, getClinicDateString, getClinicISODateString, parseClinicDate, getClinicTimeString } from '../domain/services/DateUtils';
+import { DuplicateBookingError } from '../domain/errors';
 
 export interface CreateWalkInAppointmentDTO {
   clinicId: string;
@@ -122,6 +123,17 @@ export class CreateWalkInAppointmentUseCase {
 
       const sessionSlots = allSlots.filter(s => s.sessionIndex === activeSessionIndex);
       const sessionAppointments = allAppointments.filter(a => a.sessionIndex === activeSessionIndex);
+
+      // 2b. DUPLICATE CHECK
+      const isDuplicate = sessionAppointments.some(a =>
+        a.patientId === patientId &&
+        a.status !== 'Cancelled'
+      );
+
+      if (isDuplicate) {
+        console.warn(`[CreateWalkInAppointmentUseCase] Duplicate walk-in blocked for patient ${patientId} in session ${activeSessionIndex}`);
+        throw new DuplicateBookingError();
+      }
 
       // 3. COMPUTE PATH (inside transaction — uses the locked read data)
       const targetSlot = WalkInPlacementService.findOptimalWalkInSlot(

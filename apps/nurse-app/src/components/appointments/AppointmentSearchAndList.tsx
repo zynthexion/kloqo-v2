@@ -22,6 +22,7 @@ interface AppointmentSearchAndListProps {
   totalCount?: number;
   hasMore?: boolean;
   limit?: number;
+  onReschedule?: (appt: Appointment) => void;
 }
 
 export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> = ({
@@ -38,7 +39,8 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
   setPage,
   totalCount = 0,
   hasMore = false,
-  limit = 10
+  limit = 10,
+  onReschedule
 }) => {
   console.log('[AppointmentSearchAndList] Rendering with:', { 
     searchTerm, 
@@ -46,7 +48,7 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
     isLoading 
   });
   const content = (
-    <div className={cn("flex flex-col h-full", isTablet && "bg-white shadow-premium rounded-[2.5rem] border border-slate-50 overflow-hidden min-h-[600px]")}>
+    <div className={cn("flex flex-col h-full w-full max-w-full overflow-x-hidden", isTablet && "bg-white shadow-premium rounded-[2.5rem] border border-slate-50 overflow-hidden min-h-[600px]")}>
       {isTablet && (
         <div className="p-8 border-b border-slate-50 bg-slate-50/30">
           <h3 className="text-xl font-black text-slate-900 tracking-tight">Appointments List</h3>
@@ -104,6 +106,7 @@ export const AppointmentSearchAndList: React.FC<AppointmentSearchAndListProps> =
               showTopRightActions={false}
               clinicStatus={consultationStatus as 'In' | 'Out'}
               onViewPrescription={onViewPrescription}
+              onReschedule={onReschedule}
             />
           </div>
         )}

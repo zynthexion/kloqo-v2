@@ -93,6 +93,8 @@ export class ProcessGracePeriodsUseCase {
       // Effective Deadline = ScheduledTime + LiveDelay + GracePeriod
       const effectiveDeadline = new Date(scheduledTime.getTime() + (liveDelayMinutes + gracePeriodMinutes) * 60 * 1000);
       
+      console.log(`[GracePeriodCheck] Appt: ${appointment.tokenNumber} (${appointment.id}) | Scheduled: ${appointment.time} | LiveDelay: ${liveDelayMinutes} | Grace: ${gracePeriodMinutes} | Now: ${format(now, 'HH:mm')} | Deadline: ${format(effectiveDeadline, 'HH:mm')} | ToSkip: ${now >= effectiveDeadline}`);
+
       if (now >= effectiveDeadline) {
         toSkip.push(appointment);
       }

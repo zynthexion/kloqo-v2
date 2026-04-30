@@ -117,6 +117,12 @@ export function usePrescriptionDrawing({
         ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr);
         draw();
       };
+      img.onerror = (err) => {
+        console.error("Prescription Drawing: Failed to load background image:", backgroundUrl, err);
+        const dpr = window.devicePixelRatio || 1;
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+        draw();
+      };
     } else {
       draw();
     }
@@ -583,14 +589,18 @@ export function usePrescriptionDrawing({
       }
 
       if (page.backgroundUrl) {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const image = new Image();
-          image.crossOrigin = 'anonymous';
-          image.src = page.backgroundUrl!;
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-        });
-        fctx.drawImage(img, 0, 0, A4_WIDTH, A4_HEIGHT);
+        try {
+          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.src = page.backgroundUrl!;
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+          });
+          fctx.drawImage(img, 0, 0, A4_WIDTH, A4_HEIGHT);
+        } catch (err) {
+          console.error("getFullBlob: Failed to load background image:", page.backgroundUrl, err);
+        }
       }
 
       page.strokes.forEach(s => {

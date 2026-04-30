@@ -154,12 +154,17 @@ export function NurseDesktopDashboard() {
   }, [data, selectedDoctorId, searchTerm]);
 
   const arrivedAppointments = useMemo(() => 
-    filteredAppointments.filter(a => ['Confirmed', 'Skipped'].includes(a.status)),
+    filteredAppointments.filter(a => a.status === 'Confirmed'),
     [filteredAppointments]
   );
 
   const pendingAppointments = useMemo(() => 
     filteredAppointments.filter(a => a.status === 'Pending'),
+    [filteredAppointments]
+  );
+
+  const skippedAppointments = useMemo(() => 
+    filteredAppointments.filter(a => ['Skipped', 'No-show'].includes(a.status)),
     [filteredAppointments]
   );
 
@@ -198,7 +203,7 @@ export function NurseDesktopDashboard() {
           <Card className="flex-1 flex flex-col min-h-0 rounded-[2.5rem] border-none shadow-premium bg-white/60 backdrop-blur-md overflow-hidden">
              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                 <div className="px-8 pt-6">
-                   <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-14 w-full grid grid-cols-2">
+                   <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-14 w-full grid grid-cols-3">
                       <TabsTrigger 
                          value="arrived" 
                          className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm font-bold flex items-center gap-2"
@@ -210,6 +215,12 @@ export function NurseDesktopDashboard() {
                          className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm font-bold flex items-center gap-2"
                       >
                          Pending <Badge className="bg-primary text-white rounded-md">{pendingAppointments.length}</Badge>
+                      </TabsTrigger>
+                      <TabsTrigger 
+                         value="skipped"
+                         className="rounded-xl data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm font-bold flex items-center gap-2"
+                      >
+                         Action Required <Badge className="bg-amber-500 text-white rounded-md">{skippedAppointments.length}</Badge>
                       </TabsTrigger>
                    </TabsList>
                 </div>
@@ -230,9 +241,22 @@ export function NurseDesktopDashboard() {
                          appointments={pendingAppointments}
                          onUpdateStatus={handleUpdateStatus}
                          onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
+                         onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          showTopRightActions={false}
                          clinicStatus={consultationStatus}
                          currentTime={new Date()}
+                      />
+                   </TabsContent>
+                   <TabsContent value="skipped" className="m-0 focus-visible:ring-0">
+                      <AppointmentList 
+                         appointments={skippedAppointments}
+                         onUpdateStatus={handleUpdateStatus}
+                         onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
+                         onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
+                         showTopRightActions={false}
+                         clinicStatus={consultationStatus}
+                         currentTime={new Date()}
+                         showStatusBadge={true}
                       />
                    </TabsContent>
                 </div>

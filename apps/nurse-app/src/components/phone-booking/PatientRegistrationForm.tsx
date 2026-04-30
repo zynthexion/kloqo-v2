@@ -132,7 +132,7 @@ export const PatientRegistrationForm: React.FC<PatientRegistrationFormProps> = (
                     render={({ field }) => (
                       <FormItem>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Gender</label>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} key={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
                           <FormControl>
                             <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold">
                               <SelectValue placeholder="Select" />

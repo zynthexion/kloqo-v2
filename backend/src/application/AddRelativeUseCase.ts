@@ -30,17 +30,26 @@ export class AddRelativeUseCase {
     if (primaryPatientId) {
       const p = await this.patientRepo.findById(primaryPatientId);
       primaryPatient = p || undefined;
-      if (primaryPatient) {
-        normalizedPrimaryPhone = this.normalizePhone(primaryPatient.phone || primaryPatient.communicationPhone || '');
-      }
     } else if (primaryPatientPhone) {
       normalizedPrimaryPhone = this.normalizePhone(primaryPatientPhone);
       const primaryPatients = await this.patientRepo.findByPhone(normalizedPrimaryPhone);
-      primaryPatient = primaryPatients.find(p => p.clinicIds?.includes(clinicId));
+      primaryPatient = primaryPatients.find(p => p.clinicIds?.includes(clinicId)) || primaryPatients[0];
     }
 
     if (!primaryPatient) {
       throw new Error('Primary member not found.');
+    }
+
+    normalizedPrimaryPhone = this.normalizePhone(primaryPatient.phone || primaryPatient.communicationPhone || '');
+
+    // Ensure primary patient is linked to the current clinic
+    if (!primaryPatient.clinicIds || !primaryPatient.clinicIds.includes(clinicId)) {
+      const updatedClinicIds = [...(primaryPatient.clinicIds || []), clinicId];
+      await this.patientRepo.update(primaryPatient.id, { 
+        clinicIds: updatedClinicIds,
+        updatedAt: new Date()
+      });
+      primaryPatient.clinicIds = updatedClinicIds;
     }
 
     const relativePhone = relative.phone ? this.normalizePhone(relative.phone) : '';

@@ -26,6 +26,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/comp
 import { useRouter } from 'next/navigation';
 import { useNurseDashboardContext } from '@/contexts/NurseDashboardContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 
 const SWIPE_COOLDOWN_MS = 30 * 1000;
 const ANIMATION_WINDOW = 8;
@@ -53,6 +54,7 @@ type AppointmentListProps = {
   onTogglePriority?: (appointment: Appointment) => void;
   tokenDistribution?: 'classic' | 'advanced';
   onViewPrescription?: (url: string) => void;
+  onReschedule?: (appt: Appointment) => void;
 };
 
 // Local parser removed in favor of shared-core parseClinicTime
@@ -76,11 +78,13 @@ export default function AppointmentList({
   breaks = [],
   onTogglePriority,
   tokenDistribution = 'advanced',
-  onViewPrescription
+  onViewPrescription,
+  onReschedule
 }: AppointmentListProps) {
   const { theme } = useTheme();
   const router = useRouter();
-  const { completeWithPrescription } = useNurseDashboardContext();
+  const { activeRole } = useActiveIdentity();
+  const { completeWithPrescription, data } = useNurseDashboardContext();
   const [pendingCompletionId, setPendingCompletionId] = useState<string | null>(null);
   const [swipeCooldownUntil, setSwipeCooldownUntil] = useState<number | null>(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
@@ -328,6 +332,89 @@ export default function AppointmentList({
   const isClinicOut = clinicStatus === 'Out';
   const swipeEnabled = enableSwipeCompletion && !!onUpdateStatus && !isClinicOut;
 
+  const calculateLiveDelay = (appt: Appointment) => {
+    const doctor = data?.doctors.find(d => d.id === appt.doctorId);
+    if (!doctor) return 0;
+
+    const sessionIndex = appt.sessionIndex || 0;
+    const now = currentTime ? new Date(currentTime) : new Date();
+    const allApts = data?.appointments || [];
+
+    if (doctor.consultationStatus !== 'In') {
+      const doctorApts = allApts.filter(a => a.doctorId === doctor.id && a.sessionIndex === sessionIndex);
+      if (doctorApts.length > 0) {
+        const earliestTimeStr = doctorApts.sort((a, b) => a.time.localeCompare(b.time))[0].time;
+        const [h, m] = earliestTimeStr.split(':').map(Number);
+        const sessionStart = new Date(now);
+        sessionStart.setHours(h, m, 0, 0);
+
+        if (now > sessionStart) {
+          const diffMs = now.getTime() - sessionStart.getTime();
+          return Math.max(0, Math.floor(diffMs / (60 * 1000)));
+        }
+      }
+      return 0;
+    }
+
+    const inConsultation = allApts.find(a => 
+      a.doctorId === doctor.id && 
+      a.sessionIndex === sessionIndex &&
+      a.status === 'InConsultation'
+    );
+
+    if (inConsultation) {
+      const updatedAt = (inConsultation as any).updatedAt ? new Date((inConsultation as any).updatedAt) : null;
+      if (updatedAt) {
+        const diffMs = now.getTime() - updatedAt.getTime();
+        const elapsed = Math.floor(diffMs / (60 * 1000));
+        const avgTime = doctor.averageConsultingTime || 15;
+        return Math.max(0, elapsed - avgTime);
+      }
+    }
+
+    const hasCompletedAny = allApts.some(a => 
+      a.doctorId === doctor.id && 
+      a.sessionIndex === sessionIndex && 
+      a.status === 'Completed'
+    );
+
+    if (!hasCompletedAny) {
+      const doctorApts = allApts.filter(a => a.doctorId === doctor.id && a.sessionIndex === sessionIndex);
+      if (doctorApts.length > 0) {
+        const earliestTimeStr = doctorApts.sort((a, b) => a.time.localeCompare(b.time))[0].time;
+        const [h, m] = earliestTimeStr.split(':').map(Number);
+        const sessionStart = new Date(now);
+        sessionStart.setHours(h, m, 0, 0);
+
+        if (now > sessionStart) {
+          const diffMs = now.getTime() - sessionStart.getTime();
+          return Math.max(0, Math.floor(diffMs / (60 * 1000)));
+        }
+      }
+    }
+
+    return 0;
+  };
+
+  const calculateDeadlineInfo = (appt: Appointment) => {
+    const doctor = data?.doctors.find(d => d.id === appt.doctorId);
+    const gracePeriod = doctor?.gracePeriodMinutes || 15;
+    const liveDelay = calculateLiveDelay(appt);
+
+    const [h, m] = appt.time.split(':').map(Number);
+    const scheduledTime = new Date(currentTime ? new Date(currentTime) : new Date());
+    scheduledTime.setHours(h, m, 0, 0);
+
+    const deadline = new Date(scheduledTime.getTime() + (liveDelay + gracePeriod) * 60 * 1000);
+    return {
+      deadline,
+      liveDelay,
+      gracePeriod,
+      scheduledTime,
+      doctorStatus: doctor?.consultationStatus || 'Out'
+    };
+  };
+
   const firstActionableAppointmentId = useMemo(() => {
     const actionableAppt = appointments.find(isActionable);
     return actionableAppt ? actionableAppt.id : null;
@@ -424,7 +511,7 @@ export default function AppointmentList({
           onMouseMove={swipeEnabled ? handleSwipeMove : undefined}
           onTouchMove={swipeEnabled ? handleSwipeMove : undefined}
         >
-          <div className="space-y-3 p-2">
+          <div className="space-y-3 p-2 w-full max-w-full overflow-x-hidden">
             {swipeEnabled && isSwipeOnCooldown && (
               <div className="text-xs text-amber-600 font-medium px-2">
                 Swipe-to-complete is temporarily disabled for 30 seconds after each completion.
@@ -505,6 +592,19 @@ export default function AppointmentList({
                       onMouseDown={(e) => handleCardTouchStart(e, appt)}
                       onTouchStart={(e) => handleCardTouchStart(e, appt)}
                       onClick={() => {
+                        if (activeRole === 'doctor') {
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          const isPast = (appt.date && appt.date < todayStr) || appt.status === 'Completed';
+                          
+                          if (isPast) {
+                            if (appt.prescriptionUrl && onViewPrescription) {
+                              onViewPrescription(appt.prescriptionUrl);
+                            }
+                          }
+                          // For future dates, it won't open.
+                          return;
+                        }
+
                         if (isActionable(appt)) {
                           if (isPhoneMode && ['Confirmed', 'Skipped'].includes(appt.status)) {
                             triggerCamera(appt.id);
@@ -573,6 +673,14 @@ export default function AppointmentList({
                                         <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
                                           Reporting: {format(subMinutes(parseClinicTime(displayTime, new Date()), 15), 'hh:mm a')}
                                         </span>
+                                        {appt.time && (() => {
+                                          const { deadline, liveDelay, gracePeriod, doctorStatus } = calculateDeadlineInfo(appt);
+                                          return (
+                                            <div className={cn("text-[8px] font-mono font-bold mt-1 tracking-tight text-slate-500", isSwiping && "text-white/60")}>
+                                              [DEBUG] Delay: {liveDelay}m | Grace: {gracePeriod}m | Doc: {doctorStatus} | Deadline: {format(deadline, 'hh:mm a')}
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                     );
                                   }
@@ -584,9 +692,19 @@ export default function AppointmentList({
                                         {getDisplayTime(appt.time)}
                                       </Badge>
                                       {appt.time && (
-                                        <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
-                                          Reporting: {format(subMinutes(parseClinicTime(appt.time, new Date()), 15), 'hh:mm a')}
-                                        </span>
+                                        <>
+                                          <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
+                                            Reporting: {format(subMinutes(parseClinicTime(appt.time, new Date()), 15), 'hh:mm a')}
+                                          </span>
+                                          {(() => {
+                                            const { deadline, liveDelay, gracePeriod, doctorStatus } = calculateDeadlineInfo(appt);
+                                            return (
+                                              <div className={cn("text-[8px] font-mono font-bold mt-1 tracking-tight text-slate-500", isSwiping && "text-white/60")}>
+                                                [DEBUG] Delay: {liveDelay}m | Grace: {gracePeriod}m | Doc: {doctorStatus} | Deadline: {format(deadline, 'hh:mm a')}
+                                              </div>
+                                            );
+                                          })()}
+                                        </>
                                       )}
                                     </div>
                                   );
@@ -724,22 +842,62 @@ export default function AppointmentList({
                                 )}
                               </div>
 
-                              {isPhoneMode && (
-                                <div className="mt-4 pt-4 border-t border-slate-100">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full h-10 gap-2 bg-green-50 text-green-700 hover:bg-green-100 border-green-200 font-bold"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (appt.communicationPhone) {
-                                        window.location.href = `tel:${appt.communicationPhone}`;
-                                      }
-                                    }}
-                                  >
-                                    <Phone className="h-4 w-4" />
-                                    <span>Call {appt.communicationPhone || 'No Number'}</span>
-                                  </Button>
+                              {(isPhoneMode || isActionable(appt)) && (
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2">
+                                  {isPhoneMode && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full h-10 gap-2 bg-green-50 text-green-700 hover:bg-green-100 border-green-200 font-bold"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (appt.communicationPhone) {
+                                          window.location.href = `tel:${appt.communicationPhone}`;
+                                        }
+                                      }}
+                                    >
+                                      <Phone className="h-4 w-4" />
+                                      <span>Call {appt.communicationPhone || 'No Number'}</span>
+                                    </Button>
+                                  )}
+                                  
+                                  {(['Pending', 'Skipped', 'Confirmed'].includes(appt.status) && 
+                                    !(appt.date && appt.date < new Date().toISOString().split('T')[0])) && (
+                                    <div className="flex gap-2 w-full">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 h-10 rounded-xl border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs flex items-center justify-center gap-1"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm("Are you sure you want to cancel this appointment?")) {
+                                            if (onUpdateStatus) {
+                                              onUpdateStatus(appt.id, 'Cancelled');
+                                            }
+                                          }
+                                        }}
+                                      >
+                                        <XCircle className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">Cancel</span>
+                                      </Button>
+                                      {appt.bookedVia !== 'Walk-in' && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="flex-1 h-10 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onReschedule) {
+                                              onReschedule(appt);
+                                            }
+                                          }}
+                                        >
+                                          <Edit className="h-3.5 w-3.5" />
+                                          <span className="hidden sm:inline">Reschedule</span>
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

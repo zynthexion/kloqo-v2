@@ -78,12 +78,17 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
   }, [data, selectedDoctorId, searchTerm]);
 
   const arrivedAppointments = useMemo(() => 
-    filteredAppointments.filter(a => ['Confirmed', 'Skipped'].includes(a.status)),
+    filteredAppointments.filter(a => a.status === 'Confirmed'),
     [filteredAppointments]
   );
 
   const pendingAppointments = useMemo(() => 
     filteredAppointments.filter(a => a.status === 'Pending'),
+    [filteredAppointments]
+  );
+
+  const skippedAppointments = useMemo(() => 
+    filteredAppointments.filter(a => ['Skipped', 'No-show'].includes(a.status)),
     [filteredAppointments]
   );
 
@@ -218,7 +223,7 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <div className={cn("px-4 pt-4 bg-white", theme === 'modern' && "bg-transparent")}>
-          <TabsList className={cn("w-full grid grid-cols-2 h-12 p-1 bg-slate-100 rounded-xl", theme === 'modern' && "bg-muted/30 border border-white/20 h-14 rounded-2xl")}>
+          <TabsList className={cn("w-full grid grid-cols-3 h-12 p-1 bg-slate-100 rounded-xl", theme === 'modern' && "bg-muted/30 border border-white/20 h-14 rounded-2xl")}>
             <TabsTrigger 
               value="arrived" 
               className={cn(
@@ -236,6 +241,15 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
               )}
             >
               Pending ({pendingAppointments.length})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="skipped"
+              className={cn(
+                "rounded-lg data-[state=active]:bg-white data-[state=active]:text-theme-blue data-[state=active]:shadow-sm font-bold",
+                theme === 'modern' && "rounded-xl data-[state=active]:text-primary data-[state=active]:bg-white/90"
+              )}
+            >
+              Action Required ({skippedAppointments.length})
             </TabsTrigger>
           </TabsList>
         </div>
@@ -263,6 +277,19 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
               currentTime={currentTime}
               showTopRightActions={false}
               showStatusBadge={false}
+              averageConsultingTime={currentDoctor?.averageConsultingTime}
+            />
+          </TabsContent>
+          <TabsContent value="skipped" className="m-0 focus-visible:ring-0">
+            <AppointmentList
+              appointments={skippedAppointments}
+              onUpdateStatus={handleUpdateAppointmentStatus}
+              onAddToQueue={(appt) => { handleUpdateAppointmentStatus(appt.id, 'Confirmed'); }}
+              onRejoinQueue={(appt) => { handleUpdateAppointmentStatus(appt.id, 'Confirmed'); }}
+              clinicStatus={currentDoctor?.consultationStatus as 'In' | 'Out'}
+              currentTime={currentTime}
+              showTopRightActions={false}
+              showStatusBadge={true}
               averageConsultingTime={currentDoctor?.averageConsultingTime}
             />
           </TabsContent>

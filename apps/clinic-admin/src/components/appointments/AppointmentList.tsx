@@ -88,7 +88,8 @@ export function AppointmentList({ state, actions }: AppointmentListProps) {
   }, [appointments]);
 
   const arrivedCount = todaysAppointments.filter(apt => apt.status === 'Confirmed').length;
-  const pendingCount = todaysAppointments.filter(apt => (apt.status === 'Pending' || apt.status === 'Skipped')).length;
+  const pendingCount = todaysAppointments.filter(apt => apt.status === 'Pending').length;
+  const skippedCount = todaysAppointments.filter(apt => ['Skipped', 'No-show'].includes(apt.status)).length;
 
   const isAuditMode = layoutMode !== 'registration';
 
@@ -138,9 +139,10 @@ export function AppointmentList({ state, actions }: AppointmentListProps) {
         ) : (
           <div className="flex flex-col gap-3">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-slate-100/50 p-1 rounded-xl">
+              <TabsList className="grid w-full grid-cols-3 bg-slate-100/50 p-1 rounded-xl">
                 <TabsTrigger value="arrived" className="rounded-lg font-bold">Arrived ({arrivedCount})</TabsTrigger>
                 <TabsTrigger value="pending" className="rounded-lg font-bold">Pending ({pendingCount})</TabsTrigger>
+                <TabsTrigger value="skipped" className="rounded-lg font-bold text-amber-600">Action Required ({skippedCount})</TabsTrigger>
               </TabsList>
             </Tabs>
             <div className="relative">
@@ -305,7 +307,7 @@ export function AppointmentList({ state, actions }: AppointmentListProps) {
                       {(() => {
                         let lastSessionIndex = -1;
                         return todaysAppointments
-                          .filter(apt => (apt.status === 'Pending' || apt.status === 'Skipped'))
+                          .filter(apt => apt.status === 'Pending')
                           .map((appointment) => {
                             const currentSessionIndex = appointment.sessionIndex ?? 0;
                             const showHeader = currentSessionIndex !== lastSessionIndex;
@@ -327,6 +329,55 @@ export function AppointmentList({ state, actions }: AppointmentListProps) {
                                       variant="ghost"
                                       size="icon"
                                       className="text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-full h-9 w-9"
+                                      onClick={() => handleAddToQueue(appointment)}
+                                    >
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              </Fragment>
+                            );
+                          });
+                      })()}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {activeTab === 'skipped' && (
+                <div className="space-y-2">
+                  <Table>
+                    <TableBody>
+                      {(() => {
+                        let lastSessionIndex = -1;
+                        return todaysAppointments
+                          .filter(apt => ['Skipped', 'No-show'].includes(apt.status))
+                          .map((appointment) => {
+                            const currentSessionIndex = appointment.sessionIndex ?? 0;
+                            const showHeader = currentSessionIndex !== lastSessionIndex;
+                            if (showHeader) lastSessionIndex = currentSessionIndex;
+
+                            return (
+                              <Fragment key={appointment.id}>
+                                {showHeader && (
+                                  <TableRow className="bg-slate-50/50 border-y">
+                                    <TableCell colSpan={2} className="py-1 px-4 font-black text-[9px] uppercase tracking-[0.2em] text-slate-300">
+                                      Session {currentSessionIndex + 1}
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                <TableRow className="bg-orange-50/20">
+                                  <TableCell className="font-bold text-slate-700 py-3">
+                                    {appointment.patientName}
+                                    <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-600 border-yellow-200 text-[8px] uppercase px-1 py-0 rounded">
+                                      {appointment.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right py-3">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-full h-9 w-9"
                                       onClick={() => handleAddToQueue(appointment)}
                                     >
                                       <CheckCircle2 className="h-4 w-4" />
