@@ -137,6 +137,12 @@ export class ProcessGracePeriodsUseCase {
                 -1,
                 txn
               );
+
+              // ── Release the Atomic Lock ──
+              if (appointment.slotIndex !== undefined) {
+                const lockId = `${appointment.doctorId}_${appointment.date}_s${appointment.sessionIndex}_slot${appointment.slotIndex}`;
+                await this.appointmentRepo.releaseSlotLock(lockId, txn).catch(() => {});
+              }
             }
             result.skippedAppointmentIds.push(appointment.id);
             result.processed++;

@@ -122,20 +122,21 @@ export class UpdateAppointmentStatusUseCase {
           reason: 'clinic adjustment'
         });
       }
+    }
 
-      // ── Release the Atomic Lock ─────────────────────────────────────────────
-      if (appointment.slotIndex !== undefined && appointment.sessionIndex !== undefined) {
-        const lockId = `${appointment.doctorId}_${appointment.date}_s${appointment.sessionIndex}_slot${appointment.slotIndex}`;
-        await this.appointmentRepo.releaseSlotLock(lockId).catch(err => {
-          console.warn(`[UpdateStatus] Failed to release lock ${lockId} for ${appointmentId}:`, err.message);
-        });
-      }
+    // ── Release the Atomic Lock for all terminal statuses ──────────────────────────
+    const isTerminalStatus = status === 'Skipped' || status === 'No-show' || status === 'Cancelled';
+    const hasSesssionInfo = appointment.sessionIndex !== undefined && appointment.slotIndex !== undefined;
+
+    if (isTerminalStatus && hasSesssionInfo) {
+      const lockId = `${appointment.doctorId}_${appointment.date}_s${appointment.sessionIndex}_slot${appointment.slotIndex}`;
+      await this.appointmentRepo.releaseSlotLock(lockId).catch(err => {
+        console.warn(`[UpdateStatus] Failed to release lock ${lockId} for ${appointmentId}:`, err.message);
+      });
     }
 
     // ── ATOMIC WRITE: Appointment update + counter maintenance ─────────────
     // Both operations must succeed together to prevent counter drift.
-    const isTerminalStatus = status === 'Skipped' || status === 'No-show' || status === 'Cancelled';
-    const hasSesssionInfo = appointment.sessionIndex !== undefined && appointment.slotIndex !== undefined;
 
     await this.appointmentRepo.runTransaction(async (txn) => {
       // 🧼 WALK-IN DOWNGRADE PROTOCOL (Scenario A: Rahul's Late Arrival)
