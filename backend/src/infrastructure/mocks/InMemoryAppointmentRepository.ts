@@ -96,6 +96,10 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     return next;
   }
 
+  async peekTokenCounter(counterId: string): Promise<number> {
+    return this.tokenCounters.get(counterId) || 0;
+  }
+
   async createSlotLock(lockId: string, _data: any, _transaction: ITransaction): Promise<void> {
     if (this.slotLocks.has(lockId)) {
       throw new Error(`Slot lock ${lockId} already exists`);
