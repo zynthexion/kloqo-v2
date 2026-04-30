@@ -62,27 +62,38 @@ export class QueueBubblingService {
         hasMutated = false;
 
         // 1. Identify all current gaps in the session
-        // A gap exists at slot index 'i' if:
-        // - There is no Confirmed/InConsultation appointment at 'i'
-        // - AND there is at least one Confirmed appointment at some 'j' where 'j > i'
         const activeAppts = sessionAppointments.filter(a => 
           a.status === 'Confirmed' || a.status === 'InConsultation' || a.status === 'Completed'
         );
         const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
         const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
 
-        if (maxOccupiedIndex <= 0) break;
+        // ── ACTIVE BUFFER PROTECTION ──
+        // Rule: The "Top 2" persons are locked. 1 is in the room, 1 is at the door.
+        // We find the highest index of anyone currently "Active" (InConsultation or isInBuffer).
+        const bufferedAppts = sessionAppointments.filter(a => 
+          a.status === 'InConsultation' || (a as any).isInBuffer === true
+        );
+        const highestBufferedIndex = bufferedAppts.length > 0 
+          ? Math.max(...bufferedAppts.map(a => a.slotIndex!)) 
+          : -1;
 
-        // Find the earliest gap
+        // The "Protected Zone" includes the lead patient + 1 buffer slot.
+        // Any gap at or before this index is IGNORED by the vacuum.
+        const protectedThreshold = highestBufferedIndex + 1;
+
+        if (maxOccupiedIndex <= protectedThreshold) break;
+
+        // Find the earliest gap AFTER the protected buffer
         let earliestGap = -1;
-        for (let i = 0; i < maxOccupiedIndex; i++) {
+        for (let i = protectedThreshold + 1; i < maxOccupiedIndex; i++) {
           if (!occupiedIndices.has(i)) {
             earliestGap = i;
             break;
           }
         }
 
-        if (earliestGap === -1) break; // No gaps found below the max index
+        if (earliestGap === -1) break; // No gaps found in the bubbling zone
 
         // 2. Find W-Token candidates to fill this specific gap
         const candidates = sessionAppointments
@@ -112,13 +123,28 @@ export class QueueBubblingService {
           candidate.time = getClinicTimeString(targetSlot.time);
           candidate.updatedAt = new Date();
 
+          // ── LOCK MIGRATION ──
+          // 1. Release the old lock
+          const oldLockId = `${doctorId}_${date}_s${sessionIndex}_slot${oldSlotIndex}`;
+          await this.appointmentRepo.releaseSlotLock(oldLockId, txn).catch(() => {});
+
+          // 2. Create the new lock
+          const newLockId = `${doctorId}_${date}_s${sessionIndex}_slot${earliestGap}`;
+          await this.appointmentRepo.createSlotLock(newLockId, {
+            appointmentId: candidate.id,
+            doctorId,
+            date,
+            sessionIndex,
+            slotIndex: earliestGap
+          }, txn);
+
           await this.appointmentRepo.update(candidate.id, {
             slotIndex: earliestGap,
             time: candidate.time,
             updatedAt: candidate.updatedAt
           }, txn);
         } else {
-          // Fallback for overtime slots (rare during bubbling but defensive)
+          // Fallback for overtime slots
           const lastSlot = slots[slots.length - 1];
           const avgTime = doctor.averageConsultingTime || 15;
           const virtualTime = addMinutes(lastSlot.time, avgTime * (earliestGap - lastSlot.index));
@@ -126,6 +152,19 @@ export class QueueBubblingService {
           candidate.slotIndex = earliestGap;
           candidate.time = getClinicTimeString(virtualTime);
           candidate.updatedAt = new Date();
+
+          // ── LOCK MIGRATION (Overtime) ──
+          const oldLockId = `${doctorId}_${date}_s${sessionIndex}_slot${oldSlotIndex}`;
+          await this.appointmentRepo.releaseSlotLock(oldLockId, txn).catch(() => {});
+
+          const newLockId = `${doctorId}_${date}_s${sessionIndex}_slot${earliestGap}`;
+          await this.appointmentRepo.createSlotLock(newLockId, {
+            appointmentId: candidate.id,
+            doctorId,
+            date,
+            sessionIndex,
+            slotIndex: earliestGap
+          }, txn);
 
           await this.appointmentRepo.update(candidate.id, {
             slotIndex: earliestGap,

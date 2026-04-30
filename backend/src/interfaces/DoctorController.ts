@@ -129,12 +129,12 @@ export class DoctorController {
         }
       }
 
-      // 🛡️ RBAC Guard: Only Admin or Self can update doctor meta-data (fees, avg time, etc)
-      const isAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN]);
+      // 🛡️ RBAC Guard: Only Admin, Nurse or Self can update doctor meta-data (fees, avg time, etc)
+      const isAdminOrNurse = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.NURSE]);
       const isSelf = user.id === docData.userId || user.id === docData.id || (targetDoctor && user.id === targetDoctor.userId);
 
-      if (!isAdmin && !isSelf) {
-        return res.status(403).json({ error: 'Unauthorized: Only Admins or the Doctor themselves can update these settings.' });
+      if (!isAdminOrNurse && !isSelf) {
+        return res.status(403).json({ error: 'Unauthorized: Only Admins, Nurses or the Doctor themselves can update these settings.' });
       }
 
       await this.saveDoctorUseCase.execute(docData);

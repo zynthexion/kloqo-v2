@@ -5,6 +5,7 @@ import {
   IClinicRepository 
 } from '../domain/repositories';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
+import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { computeWalkInSchedule, SchedulerAdvance, SchedulerWalkInCandidate } from '../domain/services/SlotScheduler';
 
 export interface WalkInPreviewDTO {
@@ -34,8 +35,14 @@ export class GetWalkInPreviewUseCase {
     const now = new Date();
     const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.date);
     const slots = SlotCalculator.generateSlots(doctor, now);
-    const activeSessionIndex = SlotCalculator.findActiveSessionIndex(
-      doctor, slots, now, doctor.tokenDistribution || clinic.tokenDistribution || 'advanced'
+    const tokenDistribution = (doctor as any).tokenDistribution || (clinic as any).tokenDistribution || 'advanced';
+    
+    const activeSessionIndex = BookingSessionEngine.findActiveSession(
+      doctor,
+      slots,
+      allAppointments,
+      now,
+      tokenDistribution as 'classic' | 'advanced'
     );
 
     if (activeSessionIndex === null) {

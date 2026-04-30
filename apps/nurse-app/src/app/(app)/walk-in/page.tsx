@@ -209,7 +209,9 @@ function WalkInContent() {
                           
                           <div className="flex items-end gap-2">
                             <span className="text-7xl font-black tracking-tighter leading-none">
-                              {walkInPreview?.placeholderAssignment?.numericToken || '??'}
+                              {walkInPreview?.placeholderAssignment?.numericToken || 
+                               (walkInPreview?.placeholderAssignment?.tokenNumber?.split('-')[1]) || 
+                               '??'}
                             </span>
                             <span className="text-2xl font-black opacity-50 mb-1">W</span>
                           </div>
