@@ -174,6 +174,7 @@ export class AppointmentController {
       const data = await this.createWalkInAppointmentUseCase.execute({ ...req.body, clinicId });
       res.status(201).json(data);
     } catch (error: any) {
+      console.error('[createWalkIn error]', error.stack || error.message);
       res.status(500).json({ message: error.message });
     }
   }

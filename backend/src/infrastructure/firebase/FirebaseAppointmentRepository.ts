@@ -239,6 +239,12 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
+  async peekTokenCounter(counterId: string): Promise<number> {
+    const safeCounterId = counterId.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    const doc = await db.collection('token-counters').doc(safeCounterId).get();
+    return doc.exists ? (doc.data()?.count || 0) : 0;
+  }
+
   async findLatestByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment | null> {
     const snapshot = await this.collection
       .where('patientId', '==', patientId)

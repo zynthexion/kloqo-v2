@@ -50,7 +50,9 @@ export class TokenGeneratorService {
     } else if (type === 'W') {
       prefix = 'W-';
       // W-Tokens start AFTER physical capacity to prevent visual confusion
-      numericToken = Math.max(100, totalSessionSlots) + result;
+      // Using a stable base of 100 unless the session is massive (>100 slots)
+      const base = totalSessionSlots > 100 ? totalSessionSlots : 100;
+      numericToken = base + result;
     } else {
       prefix = 'A-';
       numericToken = result;
@@ -58,6 +60,53 @@ export class TokenGeneratorService {
     
     // ⚠️ ARCHITECT'S MANDATE: "Dropping the hyphen" is forbidden.
     // Unified Alphanumeric Base-100 Standard: [Prefix]-[XXX]
+    const tokenNumber = `${prefix}${String(numericToken).padStart(3, '0')}`;
+    return { tokenNumber, numericToken };
+  }
+
+  async peekToken(
+    clinicId: string,
+    doctorName: string,
+    date: string,
+    type: 'A' | 'W',
+    sessionIndex: number,
+    tokenDistribution: 'classic' | 'advanced' = 'advanced',
+    totalSessionSlots: number = 0,
+    isPriority: boolean = false,
+    slotIndex?: number
+  ): Promise<{ tokenNumber: string; numericToken: number }> {
+    const isClassic = tokenDistribution === 'classic';
+    
+    if (type === 'A' && typeof slotIndex === 'number' && !isPriority) {
+      const numericPart = slotIndex + 1;
+      return { tokenNumber: `A-${String(numericPart).padStart(3, '0')}`, numericToken: numericPart };
+    }
+
+    let counterDocId: string;
+    if (isClassic) {
+      counterDocId = `classic_${clinicId}_${doctorName}_${date}_s${sessionIndex}${isPriority ? '_PW' : (type === 'W' ? '_W' : '')}`;
+    } else {
+      counterDocId = `${clinicId}_${doctorName}_${date}${isPriority ? '_PW' : (type === 'W' ? '_W' : '')}`;
+    }
+
+    const currentCount = await this.appointmentRepo.peekTokenCounter(counterDocId);
+    const nextCount = currentCount + 1;
+
+    let numericToken: number;
+    let prefix: string;
+
+    if (isPriority) {
+      prefix = 'PW-';
+      numericToken = nextCount;
+    } else if (type === 'W') {
+      prefix = 'W-';
+      const base = totalSessionSlots > 100 ? totalSessionSlots : 100;
+      numericToken = base + nextCount;
+    } else {
+      prefix = 'A-';
+      numericToken = nextCount;
+    }
+
     const tokenNumber = `${prefix}${String(numericToken).padStart(3, '0')}`;
     return { tokenNumber, numericToken };
   }

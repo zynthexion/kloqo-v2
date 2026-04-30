@@ -34,6 +34,7 @@ export interface IAppointmentRepository {
   save(appointment: Appointment, transaction?: ITransaction): Promise<void>;
   update(id: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void>;
   incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number>;
+  peekTokenCounter(counterId: string): Promise<number>;
   countByStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
   countByPharmacyStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
   findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number; patientPhone?: string }): Promise<Appointment[]>;

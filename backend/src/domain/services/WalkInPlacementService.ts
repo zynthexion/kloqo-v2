@@ -35,7 +35,7 @@ export class WalkInPlacementService {
     walkInSpacing: number,
     isPriority: boolean = false
   ): DailySlot | null {
-    const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Skipped', 'Completed']);
+    const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Completed']);
 
     // Build set of occupied slot indices from active appointments
     const occupiedSlotIndices = new Set<number>(

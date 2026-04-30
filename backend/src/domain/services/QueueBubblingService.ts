@@ -1,7 +1,9 @@
+import { addMinutes, format } from 'date-fns';
 import { Appointment, Doctor } from '../../../../packages/shared/src/index';
 import { IAppointmentRepository, IDoctorRepository, ITransaction } from '../../domain/repositories';
 import { sseService } from './SSEService';
 import { DelayCalculatorService } from './DelayCalculatorService';
+import { SlotCalculator } from './SlotCalculator';
 
 /**
  * QueueBubblingService
@@ -44,6 +46,9 @@ export class QueueBubblingService {
     const { sessionIndex, doctorId, clinicId, date } = params;
 
     await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
+      const doctor = await this.doctorRepo.findById(doctorId);
+      if (!doctor) return;
+
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
       const sessionAppointments = allAppointments.filter(
         a => a.sessionIndex === sessionIndex && !a.isDeleted
@@ -94,13 +99,40 @@ export class QueueBubblingService {
         const candidate = candidates[0];
         const oldSlotIndex = candidate.slotIndex!;
         
-        candidate.slotIndex = earliestGap;
-        candidate.updatedAt = new Date();
+        // Find the time for the new slot index
+        const slots = SlotCalculator.generateSlots(doctor, new Date(date));
+        const targetSlot = slots.find(s => s.index === earliestGap);
+        
+        const getClinicTimeString = (date: Date) => {
+          return format(date, 'HH:mm');
+        };
 
-        await this.appointmentRepo.update(candidate.id, {
-          slotIndex: earliestGap,
-          updatedAt: candidate.updatedAt
-        }, txn);
+        if (targetSlot) {
+          candidate.slotIndex = earliestGap;
+          candidate.time = getClinicTimeString(targetSlot.time);
+          candidate.updatedAt = new Date();
+
+          await this.appointmentRepo.update(candidate.id, {
+            slotIndex: earliestGap,
+            time: candidate.time,
+            updatedAt: candidate.updatedAt
+          }, txn);
+        } else {
+          // Fallback for overtime slots (rare during bubbling but defensive)
+          const lastSlot = slots[slots.length - 1];
+          const avgTime = doctor.averageConsultingTime || 15;
+          const virtualTime = addMinutes(lastSlot.time, avgTime * (earliestGap - lastSlot.index));
+          
+          candidate.slotIndex = earliestGap;
+          candidate.time = getClinicTimeString(virtualTime);
+          candidate.updatedAt = new Date();
+
+          await this.appointmentRepo.update(candidate.id, {
+            slotIndex: earliestGap,
+            time: candidate.time,
+            updatedAt: candidate.updatedAt
+          }, txn);
+        }
 
         reslottedEvents.push({
           appointmentId: candidate.id,
@@ -109,6 +141,7 @@ export class QueueBubblingService {
           tokenNumber: candidate.tokenNumber,
           oldSlotIndex,
           newSlotIndex: earliestGap,
+          newTime: candidate.time
         });
 
         console.log(`[QueueBubbling] Vacuum: Promoted ${candidate.tokenNumber} from ${oldSlotIndex} to ${earliestGap}`);
@@ -119,7 +152,6 @@ export class QueueBubblingService {
       if (reslottedEvents.length > 0) {
         // Pulse Calculation: Add live delay to payload
         let liveDelayMinutes = 0;
-        const doctor = await this.doctorRepo.findById(doctorId) as Doctor;
         if (doctor) {
           liveDelayMinutes = DelayCalculatorService.calculate({
             doctor,
