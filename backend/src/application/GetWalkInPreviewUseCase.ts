@@ -50,8 +50,6 @@ export class GetWalkInPreviewUseCase {
       throw new Error('No active session found for walk-in preview.');
     }
 
-    const tokenDistribution = (doctor as any).tokenDistribution || (clinic as any).tokenDistribution || 'advanced';
-
     // 1. PEEK: Get the next available token without burning it (burn happens in CreateWalkInUseCase)
     const { tokenNumber, numericToken } = await this.tokenGenerator.peekToken(
       dto.clinicId,

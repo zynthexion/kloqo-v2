@@ -143,7 +143,11 @@ export class CreateWalkInAppointmentUseCase {
         const lastSessionSlot = sessionSlots[sessionSlots.length - 1];
         const overtimeIndex = Math.max(lastSessionSlot.index, maxOccupiedIndex) + 1;
         const avgConsultTime = (doctor as any).averageConsultingTime || 15;
-        const virtualTime = addMinutes(lastSessionSlot.time, avgConsultTime * (overtimeIndex - lastSessionSlot.index));
+
+        // ✅ FIX: Base virtual time on `now`, NOT the historical last slot time.
+        // The last slot may have been 9:30 AM; we are booking at 3 PM.
+        // We add one consulting-time unit to now to place them after the current patient.
+        const virtualTime = addMinutes(now, avgConsultTime);
 
         targetSlot = {
           index: overtimeIndex,
@@ -234,9 +238,12 @@ export class CreateWalkInAppointmentUseCase {
       targetSlot.index
     );
 
+    // ✅ Build the real appointment ID first so the lock references it correctly
+    const appointmentId = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
     const lockId = `${dto.doctorId}_${firestoreDateStr}_s${activeSessionIndex}_slot${targetSlot.index}`;
     await this.appointmentRepo.createSlotLock(lockId, {
-      appointmentId: `apt-${Date.now()}`,
+      appointmentId,
       doctorId: dto.doctorId,
       date: firestoreDateStr,
       sessionIndex: activeSessionIndex,
@@ -261,7 +268,7 @@ export class CreateWalkInAppointmentUseCase {
     });
 
     const appointment: Appointment = {
-      id: `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      id: appointmentId, // ✅ Use the pre-built ID (consistent with the lock)
       patientId,
       patientName: dto.patientName,
       doctorId: dto.doctorId,
