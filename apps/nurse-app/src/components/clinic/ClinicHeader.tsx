@@ -131,10 +131,10 @@ export default function ClinicHeader({
             theme === 'modern' && "modern-glass-header border-none"
         )} style={style}>
             {theme === 'normal' && (
-                <>
-                    <div className="absolute top-[-50px] left-[-50px] w-[150px] h-[150px] bg-white/20 rounded-full pointer-events-none" />
-                    <div className="absolute top-[30px] right-[-80px] w-[200px] h-[200px] border-[20px] border-white/20 rounded-full pointer-events-none" />
-                </>
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute top-[-50px] left-[-50px] w-[150px] h-[150px] bg-white/20 rounded-full" />
+                    <div className="absolute top-[30px] right-[-80px] w-[200px] h-[200px] border-[20px] border-white/20 rounded-full" />
+                </div>
             )}
             {theme === 'modern' && (
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">

@@ -134,7 +134,32 @@ export function useAppointmentManagement() {
       .filter(a =>
         !searchTerm.trim() ||
         a.patientName?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      )
+      .sort((a, b) => {
+        // Primary sort: Session
+        if ((a.sessionIndex ?? 0) !== (b.sessionIndex ?? 0)) {
+          return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
+        }
+        // Secondary sort: Slot position within session
+        if ((a.slotIndex ?? 0) !== (b.slotIndex ?? 0)) {
+          return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+        }
+        
+        // Tertiary sort: Smart time comparison
+        const timeToMinutes = (t: string) => {
+          if (!t) return 0;
+          const match = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+          if (!match) return 0;
+          let h = parseInt(match[1], 10);
+          const m = parseInt(match[2], 10);
+          const ampm = match[3]?.toUpperCase();
+          if (ampm === 'PM' && h < 12) h += 12;
+          if (ampm === 'AM' && h === 12) h = 0;
+          return h * 60 + m;
+        };
+        
+        return timeToMinutes(a.time || "") - timeToMinutes(b.time || "");
+      });
   }, [dateAppointments, selectedDoctor, searchTerm]);
 
   const dates = useMemo(() => {

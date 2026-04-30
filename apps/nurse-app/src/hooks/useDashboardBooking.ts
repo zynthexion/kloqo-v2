@@ -17,6 +17,7 @@ export function useDashboardBooking(selectedDoctor: string, clinicId?: string) {
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  const [reschedulingApptId, setReschedulingApptId] = useState<string | null>(null);
 
   // Walk-in Flow Hook - Pass current state IDs
   const walkIn = useWalkInFlow({ doctorId: selectedDoctor, clinicId });
@@ -36,6 +37,27 @@ export function useDashboardBooking(selectedDoctor: string, clinicId?: string) {
     walkIn.setPhoneNumber('');
     walkIn.selectPatient(null);
     walkIn.setCurrentStep('identify'); 
+    setReschedulingApptId(null);
+  };
+
+  const startReschedule = (appt: any) => {
+    handleAdvancedOpen();
+    setAdvancedStep('slots');
+    setReschedulingApptId(appt.id);
+    
+    const apptPatient = {
+      id: appt.patientId,
+      name: appt.patientName,
+      phone: appt.communicationPhone || '',
+      communicationPhone: appt.communicationPhone || '',
+      age: appt.age,
+      sex: appt.sex,
+      place: appt.place
+    };
+    
+    walkIn.setPhoneNumber(appt.communicationPhone || '');
+    walkIn.selectPatient(apptPatient, true);
+    fetchSlots(selectedDate);
   };
 
   const fetchSlots = async (date: Date) => {
@@ -72,10 +94,12 @@ export function useDashboardBooking(selectedDoctor: string, clinicId?: string) {
           time: format(new Date(selectedSlot.time), 'hh:mm a'),
           slotIndex: selectedSlot.slotIndex,
           sessionIndex: selectedSlot.sessionIndex,
-          source: 'Tablet_Dashboard'
+          source: 'Tablet_Dashboard',
+          rescheduleFromId: reschedulingApptId || undefined
         })
       });
       setAdvancedStep('success');
+      setReschedulingApptId(null);
       toast({ title: '✅ Appointment Booked', description: 'Slot locked. Queue will update in real-time.' });
       // Remove setIsBookingDrawerOpen(false); - let the success screen handle it
     } catch (error: any) {
@@ -111,6 +135,9 @@ export function useDashboardBooking(selectedDoctor: string, clinicId?: string) {
     walkIn,
     handleWalkInOpen,
     handleAdvancedOpen,
+    startReschedule,
+    reschedulingApptId,
+    setReschedulingApptId,
     fetchSlots,
     handleAdvancedBook,
     nextDates,

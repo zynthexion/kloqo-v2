@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Search, WifiOff, TrendingUp, Clock } from 'lucide-react';
+import { Search, WifiOff, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import ClinicHeader from './ClinicHeader';
 import AppointmentList from './AppointmentList';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
@@ -249,7 +249,10 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
                 theme === 'modern' && "rounded-xl data-[state=active]:text-primary data-[state=active]:bg-white/90"
               )}
             >
-              Action Required ({skippedAppointments.length})
+              <div className="flex items-center justify-center gap-1.5">
+                <AlertCircle className="h-4 w-4" />
+                <span>({skippedAppointments.length})</span>
+              </div>
             </TabsTrigger>
           </TabsList>
         </div>

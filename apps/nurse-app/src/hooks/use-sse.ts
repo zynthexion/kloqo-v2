@@ -102,8 +102,18 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
   }, [clinicId, autoReconnect]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !esRef.current) {
+        console.log('[useSSE] Tab became visible and connection was dead. Reconnecting...');
+        connect();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
     connect();
+
     return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (esRef.current) {
         esRef.current.close();

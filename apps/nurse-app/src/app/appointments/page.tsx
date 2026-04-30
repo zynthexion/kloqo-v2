@@ -33,22 +33,7 @@ export default function AppointmentsPage() {
   const booking = useDashboardBooking(selectedDoctor, user?.clinicId);
 
   const handleReschedule = (appt: any) => {
-    booking.handleAdvancedOpen();
-    booking.setAdvancedStep('slots');
-    
-    const apptPatient = {
-      id: appt.patientId,
-      name: appt.patientName,
-      phone: appt.communicationPhone || '',
-      communicationPhone: appt.communicationPhone || '',
-      age: appt.age,
-      sex: appt.sex,
-      place: appt.place
-    };
-    
-    booking.walkIn.setPhoneNumber(appt.communicationPhone || '');
-    booking.walkIn.selectPatient(apptPatient, true);
-    booking.fetchSlots(booking.selectedDate);
+    booking.startReschedule(appt);
   };
 
   const isToday = isSameDay(selectedDate, new Date());

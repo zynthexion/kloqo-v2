@@ -55,6 +55,7 @@ export function NurseDesktopDashboard() {
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  const [reschedulingApptId, setReschedulingApptId] = useState<string | null>(null);
 
   // Walk-in Flow Hook (with override/bridge to context state)
   const walkIn = useWalkInFlow({ doctorId: selectedDoctorId, clinicId: data?.clinic?.id });
@@ -77,6 +78,27 @@ export function NurseDesktopDashboard() {
     walkIn.setPhoneNumber('');
     walkIn.selectPatient(null);
     walkIn.setCurrentStep('identify'); 
+    setReschedulingApptId(null);
+  };
+
+  const handleReschedule = (appt: any) => {
+    handleAdvancedOpen();
+    setAdvancedStep('slots');
+    setReschedulingApptId(appt.id);
+    
+    const apptPatient = {
+      id: appt.patientId,
+      name: appt.patientName,
+      phone: appt.communicationPhone || '',
+      communicationPhone: appt.communicationPhone || '',
+      age: appt.age,
+      sex: appt.sex,
+      place: appt.place
+    };
+    
+    walkIn.setPhoneNumber(appt.communicationPhone || '');
+    walkIn.selectPatient(apptPatient, true);
+    fetchSlots(selectedDate);
   };
 
   // Advanced Booking Functions
@@ -114,11 +136,13 @@ export function NurseDesktopDashboard() {
           time: format(new Date(selectedSlot.time), 'hh:mm a'),
           slotIndex: selectedSlot.slotIndex,
           sessionIndex: selectedSlot.sessionIndex,
-          source: 'Desktop_Hub'
+          source: 'Desktop_Hub',
+          rescheduleFromId: reschedulingApptId || undefined
         })
       });
       // Transition to success step
       setAdvancedStep('success');
+      setReschedulingApptId(null);
       toast({ title: '✅ Appointment Booked', description: 'Slot locked. Queue will update in real-time.' });
       // Remove setIsBookingDrawerOpen(false); - let the success screen handle it
 
@@ -231,6 +255,7 @@ export function NurseDesktopDashboard() {
                          appointments={arrivedAppointments}
                          onUpdateStatus={handleUpdateStatus}
                          onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
+                         onReschedule={handleReschedule}
                          showTopRightActions={false}
                          clinicStatus={consultationStatus}
                          currentTime={new Date()}
@@ -242,6 +267,7 @@ export function NurseDesktopDashboard() {
                          onUpdateStatus={handleUpdateStatus}
                          onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
+                         onReschedule={handleReschedule}
                          showTopRightActions={false}
                          clinicStatus={consultationStatus}
                          currentTime={new Date()}
@@ -251,8 +277,8 @@ export function NurseDesktopDashboard() {
                       <AppointmentList 
                          appointments={skippedAppointments}
                          onUpdateStatus={handleUpdateStatus}
-                         onAddToQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
                          onRejoinQueue={(appt) => { handleUpdateStatus(appt.id, 'Confirmed'); }}
+                         onReschedule={handleReschedule}
                          showTopRightActions={false}
                          clinicStatus={consultationStatus}
                          currentTime={new Date()}

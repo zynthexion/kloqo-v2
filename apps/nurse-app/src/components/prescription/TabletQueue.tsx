@@ -17,7 +17,15 @@ export function TabletQueue({ onSelect, selectedId }: TabletQueueProps) {
   const arrivedQueue = React.useMemo(() => {
     if (!data?.appointments) return [];
     // Only show "arrived" patients (Confirmed or Skipped)
-    return data.appointments.filter(a => ['Confirmed', 'Skipped'].includes(a.status));
+    const filtered = data.appointments.filter(a => ['Confirmed', 'Skipped'].includes(a.status));
+    
+    // Custom sort: Confirmed first, then Skipped. 
+    // Within each group, preserve the original chronological sort (slotIndex/time).
+    return [...filtered].sort((a, b) => {
+      if (a.status === 'Confirmed' && b.status === 'Skipped') return -1;
+      if (a.status === 'Skipped' && b.status === 'Confirmed') return 1;
+      return 0; // Maintain stable order from data.appointments
+    });
   }, [data]);
 
   if (arrivedQueue.length === 0) {

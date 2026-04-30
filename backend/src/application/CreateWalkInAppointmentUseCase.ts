@@ -31,6 +31,7 @@ export interface CreateWalkInAppointmentDTO {
   isPriority?: boolean; // Triage cases (PW-Tokens)
   userLat?: number;
   userLon?: number;
+  rescheduleFromId?: string;
 }
 
 export class CreateWalkInAppointmentUseCase {
@@ -102,6 +103,15 @@ export class CreateWalkInAppointmentUseCase {
     const result = await this.appointmentRepo.runTransaction(async (txn) => {
       const now = getClinicNow();
 
+      // 0. Load old appointment if rescheduling
+      let oldAppt: Appointment | null = null;
+      if (dto.rescheduleFromId) {
+        oldAppt = await this.appointmentRepo.findById(dto.rescheduleFromId);
+        if (oldAppt && oldAppt.patientId !== patientId) {
+          throw new Error('Unauthorized to reschedule this appointment');
+        }
+      }
+
       // 1. READ PATH (inside transaction — acquires Firestore read locks)
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
         dto.doctorId,
@@ -127,7 +137,8 @@ export class CreateWalkInAppointmentUseCase {
       // 2b. DUPLICATE CHECK
       const isDuplicate = sessionAppointments.some(a =>
         a.patientId === patientId &&
-        a.status !== 'Cancelled'
+        a.status !== 'Cancelled' &&
+        a.id !== dto.rescheduleFromId // Skip the one we are rescheduling
       );
 
       if (isDuplicate) {
@@ -168,12 +179,12 @@ export class CreateWalkInAppointmentUseCase {
             sessionIndex: activeSessionIndex
           };
 
-          return this._bookSlot(virtualSlot, sessionSlots.length, txn as unknown as ITransaction, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
+          return this._bookSlot(virtualSlot, sessionSlots.length, txn as unknown as ITransaction, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution, oldAppt);
         }
         throw new Error('No walk-in slots available. All buffer slots for this session are occupied.');
       }
 
-      return this._bookSlot(targetSlot, sessionSlots.length, txn as unknown as ITransaction, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution);
+      return this._bookSlot(targetSlot, sessionSlots.length, txn as unknown as ITransaction, dto, doctor, clinic, patientId, activeSessionIndex, firestoreDateStr, now, tokenDistribution, oldAppt);
     });
 
     // ── SSE: Push real-time update to nurse dashboard ─────────────────────────
@@ -206,7 +217,8 @@ export class CreateWalkInAppointmentUseCase {
     activeSessionIndex: number,
     firestoreDateStr: string,
     now: Date,
-    tokenDistribution: 'classic' | 'advanced'
+    tokenDistribution: 'classic' | 'advanced',
+    oldAppt: Appointment | null
   ): Promise<Appointment> {
     const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
       dto.clinicId,
@@ -231,6 +243,23 @@ export class CreateWalkInAppointmentUseCase {
       sessionIndex: activeSessionIndex,
       slotIndex: targetSlot.index
     }, txn);
+
+    // Cancel Old Appointment & Release Old Lock
+    if (oldAppt && oldAppt.status !== 'Cancelled') {
+      console.log(`[CreateWalkInAppointmentUseCase] Cancelling old appointment ${oldAppt.id} for reschedule`);
+      const oldLockId = `${oldAppt.doctorId}_${oldAppt.date}_s${oldAppt.sessionIndex}_slot${oldAppt.slotIndex}`;
+      
+      await this.appointmentRepo.update(oldAppt.id, {
+        status: 'Cancelled',
+        isRescheduled: true,
+        cancellationReason: 'Rescheduled by patient',
+        updatedAt: now
+      }, txn);
+      
+      await this.appointmentRepo.releaseSlotLock(oldLockId, txn).catch(e => {
+        console.warn(`[CreateWalkInAppointmentUseCase] Failed to release old lock ${oldLockId}:`, e.message);
+      });
+    }
 
     const isClassic = tokenDistribution === 'classic';
     const appointmentId = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;

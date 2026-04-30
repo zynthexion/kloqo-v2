@@ -105,6 +105,15 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
 
   // ── Initial fetch ────────────────────────────────────────────────────────
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[NurseDashboard] Tab visible, triggering refetch...');
+        fetchData(true);
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
     if (clinicId) {
       fetchData();
     } else {
@@ -112,6 +121,10 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       setSelectedDoctorId(null);
     }
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [clinicId, fetchData]);
 
   // Auto-select first doctor if none selected and data loaded
@@ -228,7 +241,8 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         method: 'PATCH',
         body: JSON.stringify({ status, sessionIndex }),
       });
-      // SSE will push the change back; no manual re-fetch needed
+      // Fallback: Immediate refresh in case SSE is slow or disconnected
+      await fetchData(true);
     } catch (err: any) {
       console.error('[NurseDashboard] updateDoctorStatus error:', err);
       throw err;
@@ -241,7 +255,8 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      // SSE pushes the change back — no manual re-fetch needed
+      // Fallback: Immediate refresh in case SSE is slow or disconnected
+      await fetchData(true);
     } catch (err: any) {
       console.error('[NurseDashboard] updateAppointmentStatus error:', err);
       throw err;

@@ -379,15 +379,22 @@ export default function AppointmentList({
     );
 
     if (!hasCompletedAny) {
-      const doctorApts = allApts.filter(a => a.doctorId === doctor.id && a.sessionIndex === sessionIndex);
-      if (doctorApts.length > 0) {
-        const earliestTimeStr = doctorApts.sort((a, b) => a.time.localeCompare(b.time))[0].time;
+      // Find the earliest appointment that has actually ARRIVED (Confirmed)
+      // This prevents Pending (not arrived) patients from pushing their own deadlines.
+      const arrivedApts = allApts.filter(a => 
+        a.doctorId === doctor.id && 
+        a.sessionIndex === sessionIndex && 
+        a.status === 'Confirmed'
+      );
+      
+      if (arrivedApts.length > 0) {
+        const earliestTimeStr = arrivedApts.sort((a, b) => a.time.localeCompare(b.time))[0].time;
         const [h, m] = earliestTimeStr.split(':').map(Number);
-        const sessionStart = new Date(now);
-        sessionStart.setHours(h, m, 0, 0);
+        const earliestTarget = new Date(now);
+        earliestTarget.setHours(h, m, 0, 0);
 
-        if (now > sessionStart) {
-          const diffMs = now.getTime() - sessionStart.getTime();
+        if (now > earliestTarget) {
+          const diffMs = now.getTime() - earliestTarget.getTime();
           return Math.max(0, Math.floor(diffMs / (60 * 1000)));
         }
       }
@@ -419,6 +426,29 @@ export default function AppointmentList({
     const actionableAppt = appointments.find(isActionable);
     return actionableAppt ? actionableAppt.id : null;
   }, [appointments]);
+
+  // ── Auto-Skip Logic ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!onUpdateStatus || !currentTime) return;
+
+    const checkSkips = () => {
+      appointments.forEach(appt => {
+        if (appt.status === 'Pending') {
+          const { deadline } = calculateDeadlineInfo(appt);
+          if (currentTime > deadline) {
+            console.log(`[Auto-Skip] Skipping ${appt.patientName} (${appt.id}) - Deadline was ${deadline.toLocaleTimeString()}`);
+            onUpdateStatus(appt.id, 'Skipped');
+          }
+        }
+      });
+    };
+
+    // Check immediately on mount/update
+    checkSkips();
+
+    // Also check every minute if needed, but since currentTime updates from parent, 
+    // it will naturally re-run when the clock ticks.
+  }, [appointments, currentTime, onUpdateStatus]);
 
   useEffect(() => {
     if (firstActionableAppointmentId && (!selectedAppointmentId || !appointments.some(a => a.id === selectedAppointmentId))) {

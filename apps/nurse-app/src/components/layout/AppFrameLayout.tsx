@@ -20,12 +20,12 @@ export default function AppFrameLayout({ children, className, showBottomNav = fa
   const isModern = theme === 'modern' && !isFullScreen;
 
   return (
-    <div className="flex min-h-screen bg-white group/sidebar">
+    <div className="flex min-h-screen bg-white group/sidebar overflow-x-hidden max-w-full">
       {/* Sidebar for Desktop */}
       {!isFullScreen && <Sidebar />}
 
       <main className={cn(
-        "flex-1 flex flex-col items-center justify-start min-h-screen transition-all duration-500",
+        "flex-1 flex flex-col items-center justify-start min-h-screen transition-all duration-500 overflow-x-hidden max-w-full",
         !isFullScreen && "md:pl-24 group-hover/sidebar:md:pl-28",
         isModern && "bg-transparent backdrop-blur-sm",
         isFullScreen && "bg-[#020617]"

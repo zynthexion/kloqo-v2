@@ -138,6 +138,7 @@ export function useBookingSummaryState() {
             sex: urlPatientData.sex,
             place: urlPatientData.place,
             phone: urlPatientData.phone,
+            rescheduleFromId: appointmentId || undefined,
         };
 
         setIsSubmitting(true);

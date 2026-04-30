@@ -30,6 +30,7 @@ export interface BookAdvancedAppointmentRequest {
   sessionIndex: number;
   slotTime: string; // "HH:mm"
   source?: string;
+  rescheduleFromId?: string;
 }
 
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
@@ -115,8 +116,19 @@ export class BookAdvancedAppointmentUseCase {
         const isDuplicate = existingAppts.some(a =>
           a.patientId === finalPatientId &&
           a.sessionIndex === sessionIndex &&
-          a.status !== 'Cancelled'
+          a.status !== 'Cancelled' &&
+          a.id !== request.rescheduleFromId // Don't count the one we're rescheduling as a duplicate
         );
+
+        // 0a. Load old appointment if rescheduling (ALL READS MUST HAPPEN BEFORE WRITES)
+        let oldAppt: Appointment | null = null;
+        if (request.rescheduleFromId) {
+          oldAppt = await this.appointmentRepo.findById(request.rescheduleFromId);
+          if (oldAppt && oldAppt.patientId !== finalPatientId) {
+            console.warn(`[BookAdvancedAppointmentUseCase] Reschedule mismatch: Old patient ${oldAppt.patientId} != New ${finalPatientId}`);
+            throw new Error('Unauthorized to reschedule this appointment');
+          }
+        }
 
         if (isDuplicate) {
           console.warn(`[BookAdvancedAppointmentUseCase] Duplicate booking blocked for patient ${finalPatientId} in session ${sessionIndex}`);
@@ -157,6 +169,23 @@ export class BookAdvancedAppointmentUseCase {
           sessionIndex,
           slotIndex
         }, transaction);
+
+        // 2b. Cancel Old Appointment & Release Old Lock
+        if (oldAppt && oldAppt.status !== 'Cancelled') {
+          console.log(`[BookAdvancedAppointmentUseCase] Cancelling old appointment ${oldAppt.id} for reschedule`);
+          const oldLockId = `${oldAppt.doctorId}_${oldAppt.date}_s${oldAppt.sessionIndex}_slot${oldAppt.slotIndex}`;
+          
+          await this.appointmentRepo.update(oldAppt.id, {
+            status: 'Cancelled',
+            isRescheduled: true,
+            cancellationReason: 'Rescheduled by patient',
+            updatedAt: new Date()
+          }, transaction);
+          
+          await this.appointmentRepo.releaseSlotLock(oldLockId, transaction).catch(e => {
+            console.warn(`[BookAdvancedAppointmentUseCase] Failed to release old lock ${oldLockId}:`, e.message);
+          });
+        }
 
         // 3. Create Appointment object
         const appt: Appointment = {
