@@ -8,7 +8,7 @@ import type { Appointment } from '@kloqo/shared';
  * useAppointments (V2 REST Bridge)
  * Fetches appointments for a specific patient via the backend API.
  */
-export function useAppointments(patientId?: string) {
+export function useAppointments(patientId?: string, scope?: 'upcoming' | 'past') {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -23,8 +23,9 @@ export function useAppointments(patientId?: string) {
         const fetchAppointments = async () => {
             setLoading(true);
             try {
-                console.log(`[useAppointments] Fetching for patientId: ${patientId}`);
-                const res = await apiRequest(`/appointments?patientId=${patientId}`);
+                console.log(`[useAppointments] Fetching for patientId: ${patientId}, scope: ${scope}`);
+                const scopeQuery = scope ? `&scope=${scope}` : '';
+                const res = await apiRequest(`/appointments?patientId=${patientId}${scopeQuery}`);
                 console.log('[useAppointments] Raw response:', res);
                 // Handle V2 response { appointments: [...] } or direct array
                 const data = res.appointments || (Array.isArray(res) ? res : (res.data || []));

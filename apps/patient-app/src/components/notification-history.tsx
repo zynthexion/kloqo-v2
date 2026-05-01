@@ -16,7 +16,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/contexts/language-context';
 import { apiRequest } from '@/lib/api-client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useSSE } from '@/hooks/use-sse';
 
 import {
     AlertDialog,
@@ -115,6 +116,8 @@ export function NotificationHistory() {
     const { user } = useUser();
     const { language } = useLanguage();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const clinicId = searchParams.get('clinicId');
 
     const fetchNotifications = useCallback(async () => {
         if (!user?.uid) return;
@@ -132,10 +135,15 @@ export function NotificationHistory() {
 
     useEffect(() => {
         fetchNotifications();
-        // Polling interval (2 minutes) as a replacement for onSnapshot
-        const interval = setInterval(fetchNotifications, 120000);
-        return () => clearInterval(interval);
     }, [fetchNotifications]);
+
+    // Replace Polling with SSE
+    useSSE({
+        clinicId,
+        onEvent: useCallback(() => {
+            fetchNotifications();
+        }, [fetchNotifications])
+    });
 
     const markAllAsRead = async () => {
         if (!user?.uid || notifications.length === 0) return;

@@ -37,16 +37,17 @@ export class QueueBubblingService {
    * @param date             - Firestore date string ('d MMMM yyyy').
    */
   async reoptimize(params: {
-    vacatedSlotIndex?: number; // Optional hint, used to start the scan
+    vacatedSlotIndex?: number;
     sessionIndex: number;
     doctorId: string;
     clinicId: string;
     date: string;
+    transaction?: ITransaction; // Optional: use existing txn if provided
   }): Promise<void> {
-    const { sessionIndex, doctorId, clinicId, date } = params;
+    const { sessionIndex, doctorId, clinicId, date, transaction } = params;
 
-    await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
-      const doctor = await this.doctorRepo.findById(doctorId);
+    const runWithTxn = async (txn: ITransaction) => {
+      const doctor = await this.doctorRepo.findById(doctorId, clinicId);
       if (!doctor) return;
 
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
@@ -54,137 +55,108 @@ export class QueueBubblingService {
         a => a.sessionIndex === sessionIndex && !a.isDeleted
       );
 
-      const reslottedEvents: any[] = [];
-      let hasMutated = true;
+      // 1. Identify "Protected Zone"
+      // Patients currently InConsultation or already in the buffer cannot be moved.
+      const bufferedAppts = sessionAppointments.filter(a => 
+        a.status === 'InConsultation' || (a as any).isInBuffer === true
+      );
+      const protectedThreshold = bufferedAppts.length > 0 
+        ? Math.max(...bufferedAppts.map(a => a.slotIndex!)) 
+        : -1;
 
-      // Iterative Vacuum Sweep
-      while (hasMutated) {
-        hasMutated = false;
+      // 2. Identify Gaps and Candidates
+      // Gaps: Empty slots below the maximum occupied index
+      // Candidates: Confirmed Walk-ins above the gaps and protected threshold
+      const activeAppts = sessionAppointments.filter(a => 
+        ['Confirmed', 'InConsultation', 'Completed'].includes(a.status)
+      );
+      const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
+      const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
 
-        // 1. Identify all current gaps in the session
-        const activeAppts = sessionAppointments.filter(a => 
-          a.status === 'Confirmed' || a.status === 'InConsultation' || a.status === 'Completed'
-        );
-        const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
-        const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
+      if (maxOccupiedIndex <= 0) return;
 
-        // ── ACTIVE BUFFER PROTECTION ──
-        // Rule: The "Top 2" persons are locked. 1 is in the room, 1 is at the door.
-        // We find the highest index of anyone currently "Active" (InConsultation or isInBuffer).
-        const bufferedAppts = sessionAppointments.filter(a => 
-          a.status === 'InConsultation' || (a as any).isInBuffer === true
-        );
-        const highestBufferedIndex = bufferedAppts.length > 0 
-          ? Math.max(...bufferedAppts.map(a => a.slotIndex!)) 
-          : -1;
-
-        // The "Protected Zone" includes the lead patient + 1 buffer slot.
-        // Any gap at or before this index is IGNORED by the vacuum.
-        const protectedThreshold = highestBufferedIndex + 1;
-
-        if (maxOccupiedIndex <= protectedThreshold) break;
-
-        // Find the earliest gap AFTER the protected buffer
-        let earliestGap = -1;
-        for (let i = protectedThreshold + 1; i < maxOccupiedIndex; i++) {
-          if (!occupiedIndices.has(i)) {
-            earliestGap = i;
-            break;
-          }
+      const gaps: number[] = [];
+      for (let i = 0; i <= maxOccupiedIndex; i++) {
+        if (!occupiedIndices.has(i)) {
+          gaps.push(i);
         }
+      }
 
-        if (earliestGap === -1) break; // No gaps found in the bubbling zone
+      if (gaps.length === 0) return;
 
-        // 2. Find W-Token candidates to fill this specific gap
-        const candidates = sessionAppointments
-          .filter(a =>
-            a.bookedVia === 'Walk-in' &&
-            a.status === 'Confirmed' &&
-            a.slotIndex! > earliestGap
-          )
-          .sort((a, b) => a.slotIndex! - b.slotIndex!);
+      const candidates = sessionAppointments
+        .filter(a =>
+          a.bookedVia === 'Walk-in' &&
+          a.status === 'Confirmed' &&
+          a.slotIndex! > protectedThreshold &&
+          !gaps.includes(a.slotIndex!) // Candidate must not already be in a gap (though shouldn't happen)
+        )
+        .sort((a, b) => a.slotIndex! - b.slotIndex!);
 
-        if (candidates.length === 0) break;
+      if (candidates.length === 0) return;
 
-        // 3. Promote the earliest candidate into the gap
-        const candidate = candidates[0];
+      const reslottedEvents: any[] = [];
+      const slots = SlotCalculator.generateSlots(doctor, new Date(date));
+      const getClinicTimeString = (d: Date) => format(d, 'HH:mm');
+
+      // 3. The Vacuum Sweep (Linear Pass)
+      // We fill gaps using candidates in FIFO order.
+      for (let i = 0; i < Math.min(gaps.length, candidates.length); i++) {
+        const gapIndex = gaps[i];
+        const candidate = candidates[i];
+        
+        // Safety: Candidate must be after the gap
+        if (candidate.slotIndex! <= gapIndex) continue;
+
         const oldSlotIndex = candidate.slotIndex!;
+        const targetSlot = slots.find(s => s.index === gapIndex);
         
-        // Find the time for the new slot index
-        const slots = SlotCalculator.generateSlots(doctor, new Date(date));
-        const targetSlot = slots.find(s => s.index === earliestGap);
-        
-        const getClinicTimeString = (date: Date) => {
-          return format(date, 'HH:mm');
-        };
-
+        let newTime = '';
         if (targetSlot) {
-          candidate.slotIndex = earliestGap;
-          candidate.time = getClinicTimeString(targetSlot.time);
-          candidate.updatedAt = new Date();
-
-          // ── LOCK MIGRATION ──
-          // 1. Release the old lock
-          const oldLockId = `${doctorId}_${date}_s${sessionIndex}_slot${oldSlotIndex}`;
-          await this.appointmentRepo.releaseSlotLock(oldLockId, txn).catch(() => {});
-
-          // 2. Create the new lock
-          const newLockId = `${doctorId}_${date}_s${sessionIndex}_slot${earliestGap}`;
-          await this.appointmentRepo.createSlotLock(newLockId, {
-            appointmentId: candidate.id,
-            doctorId,
-            date,
-            sessionIndex,
-            slotIndex: earliestGap
-          }, txn);
-
-          await this.appointmentRepo.update(candidate.id, {
-            slotIndex: earliestGap,
-            time: candidate.time,
-            updatedAt: candidate.updatedAt
-          }, txn);
+          newTime = getClinicTimeString(targetSlot.time);
         } else {
-          // Fallback for overtime slots
           const lastSlot = slots[slots.length - 1];
           const avgTime = doctor.averageConsultingTime || 15;
-          const virtualTime = addMinutes(lastSlot.time, avgTime * (earliestGap - lastSlot.index));
-          
-          candidate.slotIndex = earliestGap;
-          candidate.time = getClinicTimeString(virtualTime);
-          candidate.updatedAt = new Date();
-
-          // ── LOCK MIGRATION (Overtime) ──
-          const oldLockId = `${doctorId}_${date}_s${sessionIndex}_slot${oldSlotIndex}`;
-          await this.appointmentRepo.releaseSlotLock(oldLockId, txn).catch(() => {});
-
-          const newLockId = `${doctorId}_${date}_s${sessionIndex}_slot${earliestGap}`;
-          await this.appointmentRepo.createSlotLock(newLockId, {
-            appointmentId: candidate.id,
-            doctorId,
-            date,
-            sessionIndex,
-            slotIndex: earliestGap
-          }, txn);
-
-          await this.appointmentRepo.update(candidate.id, {
-            slotIndex: earliestGap,
-            time: candidate.time,
-            updatedAt: candidate.updatedAt
-          }, txn);
+          const virtualTime = addMinutes(lastSlot.time, avgTime * (gapIndex - lastSlot.index));
+          newTime = getClinicTimeString(virtualTime);
         }
+
+        // ── ATOMIC MIGRATION ──
+        // 1. Release Old Lock
+        const oldLockId = `${doctorId}_${date}_s${sessionIndex}_slot${oldSlotIndex}`;
+        await this.appointmentRepo.releaseSlotLock(oldLockId, txn).catch(() => {});
+
+        // 2. Create New Lock
+        const newLockId = `${doctorId}_${date}_s${sessionIndex}_slot${gapIndex}`;
+        await this.appointmentRepo.createSlotLock(newLockId, {
+          appointmentId: candidate.id,
+          doctorId,
+          date,
+          sessionIndex,
+          slotIndex: gapIndex
+        }, txn);
+
+        // 3. Update Appointment
+        await this.appointmentRepo.update(candidate.id, clinicId, {
+          slotIndex: gapIndex,
+          time: newTime,
+          updatedAt: new Date()
+        }, txn);
+
+        // Update local object for the SSE payload
+        candidate.slotIndex = gapIndex;
+        candidate.time = newTime;
 
         reslottedEvents.push({
           appointmentId: candidate.id,
           patientId: candidate.patientId,
-          patientName: candidate.patientName,
           tokenNumber: candidate.tokenNumber,
           oldSlotIndex,
-          newSlotIndex: earliestGap,
-          newTime: candidate.time
+          newSlotIndex: gapIndex,
+          newTime
         });
 
-        console.log(`[QueueBubbling] Vacuum: Promoted ${candidate.tokenNumber} from ${oldSlotIndex} to ${earliestGap}`);
-        hasMutated = true; // Continue sweeping
+        console.log(`[QueueBubbling] Vacuum: Promoted ${candidate.tokenNumber} from ${oldSlotIndex} to ${gapIndex}`);
       }
 
       // 4. BATCHED BROADCAST: Fire once per transaction commit
@@ -211,6 +183,12 @@ export class QueueBubblingService {
           liveDelayMinutes
         });
       }
-    });
+    };
+
+    if (transaction) {
+      await runWithTxn(transaction);
+    } else {
+      await this.appointmentRepo.runTransaction(runWithTxn);
+    }
   }
 }

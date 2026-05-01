@@ -4,7 +4,7 @@ import { Patient, PaginationParams, PaginatedResponse } from '../../../packages/
 export class GetAllPatientsUseCase {
   constructor(private patientRepo: IPatientRepository) {}
 
-  async execute(params?: PaginationParams): Promise<PaginatedResponse<Patient> | Patient[]> {
-    return this.patientRepo.findAll(params);
+  async execute(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Patient> | Patient[]> {
+    return this.patientRepo.findAll(clinicId, params);
   }
 }

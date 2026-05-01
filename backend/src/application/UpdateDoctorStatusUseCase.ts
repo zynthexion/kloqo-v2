@@ -2,33 +2,37 @@ import { IDoctorRepository, IAppointmentRepository, IClinicRepository } from '..
 import { compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
 import { NotificationService } from '../domain/services/NotificationService';
 import { format } from 'date-fns';
-import { sseService } from '../domain/services/SSEService';
+import { PrescriptionPDFService } from '../infrastructure/pdf/PrescriptionPDFService';
+import { getClinicNow } from '../domain/services/DateUtils';
 
 export class UpdateDoctorStatusUseCase {
   constructor(
     private doctorRepo: IDoctorRepository,
     private appointmentRepo: IAppointmentRepository,
     private clinicRepo: IClinicRepository,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private sseService: SSEService
   ) {}
 
   async execute(params: {
     doctorId: string;
+    clinicId: string;
     status: 'In' | 'Out';
     sessionIndex?: number;
   }): Promise<void> {
-    const { doctorId, status, sessionIndex } = params;
-    const doctor = await this.doctorRepo.findById(doctorId);
+    const { doctorId, clinicId, status, sessionIndex } = params;
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!doctor) throw new Error('Doctor not found');
 
-    await this.doctorRepo.update(doctorId, {
+    const now = getClinicNow();
+    await this.doctorRepo.update(doctorId, clinicId, {
         consultationStatus: status,
-        updatedAt: new Date()
+        updatedAt: now
     });
 
     // If doctor marks themselves as 'In', fill the initial buffer
     if (status === 'In') {
-        const today = format(new Date(), 'yyyy-MM-dd');
+        const today = format(now, 'yyyy-MM-dd');
         const clinic = await this.clinicRepo.findById(doctor.clinicId);
         const tokenDistribution = clinic?.tokenDistribution || 'classic';
 
@@ -41,10 +45,10 @@ export class UpdateDoctorStatusUseCase {
         const top2 = sorted.slice(0, 2);
         for (const apt of top2) {
             if (!apt.isInBuffer) {
-                await this.appointmentRepo.update(apt.id, {
+                await this.appointmentRepo.update(apt.id, doctor.clinicId, {
                     isInBuffer: true,
-                    bufferedAt: new Date(),
-                    updatedAt: new Date()
+                    bufferedAt: now,
+                    updatedAt: now
                 });
             }
         }
@@ -60,7 +64,7 @@ export class UpdateDoctorStatusUseCase {
     }
 
     // ── SSE: Broadcast doctor status change to all connected clinic clients ──
-    sseService.emit('doctor_status_changed', doctor.clinicId, {
+    this.sseService.emit('doctor_status_changed', doctor.clinicId, {
       doctorId: doctor.id,
       doctorName: doctor.name,
       status,

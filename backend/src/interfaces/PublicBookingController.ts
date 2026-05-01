@@ -59,11 +59,19 @@ export class PublicBookingController {
         return res.status(400).json({ error: 'doctorId, date and time are required' });
       }
 
-      const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, date as string);
+      // We need clinicId for the hardened repository call.
+      // Lookup doctor to find their clinicId.
+      const { doctor } = await this.getDoctorDetailsUseCase.execute(doctorId);
+      if (!doctor || !doctor.clinicId) {
+        return res.status(404).json({ error: 'Doctor or associated Clinic not found' });
+      }
+
+      const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, doctor.clinicId, date as string);
       const isTaken = appointments.some(a => a.time === time && a.status !== 'Cancelled');
       
       res.json({ available: !isTaken });
     } catch (error: any) {
+      console.error(`[PublicBooking] checkSlotAvailability error:`, error.message);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }

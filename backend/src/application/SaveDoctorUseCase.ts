@@ -24,12 +24,14 @@ export class SaveDoctorUseCase {
 
   async execute(doctor: Doctor): Promise<void> {
     // 1. Check-then-Act (Rule 10): determine NEW vs EDIT before any write.
-    const existingDoctor = await this.doctorRepo.findById(doctor.id);
+    // Use 'SYSTEM' to fetch the doctor regardless of clinic to check if they exist anywhere,
+    // or use the clinicId from the doctor object if we are strictly editing in a clinic context.
+    const existingDoctor = await this.doctorRepo.findById(doctor.id, doctor.clinicId || 'SYSTEM');
     const isNewDoctor = !existingDoctor;
 
     // 🛡️ EMAIL UNIQUENESS GUARD: Ensure no other doctor already uses this email
     if (doctor.email) {
-      const doctorWithSameEmail = await this.doctorRepo.findByEmail(doctor.email);
+      const doctorWithSameEmail = await this.doctorRepo.findByEmail(doctor.email, 'SYSTEM');
       if (doctorWithSameEmail && doctorWithSameEmail.id !== doctor.id) {
         throw new Error(`The email address ${doctor.email} is already registered to another doctor (ID: ${doctorWithSameEmail.id}).`);
       }
@@ -41,15 +43,15 @@ export class SaveDoctorUseCase {
     console.log('[SaveDoctorUseCase] Doctor data after normalization:', JSON.stringify(doctorDataOnly, null, 2));
 
     // 3. Save doctor data (WITHOUT roles, role, or menu fields)
-    await this.doctorRepo.save(doctorDataOnly as Doctor);
+    await this.doctorRepo.save(doctorDataOnly as Doctor, doctor.clinicId);
     console.log('[SaveDoctorUseCase] Successfully saved doctor:', doctorDataOnly.id);
 
     // 4. Synchronize roles to User collection
     if (doctor.email) {
-      const associatedUser = await this.userRepo.findByEmail(doctor.email);
+      const associatedUser = await this.userRepo.findByEmail(doctor.email, 'SYSTEM');
       if (associatedUser) {
         // ✅ LINK IDENTITY: Ensure the Doctor doc has the user's ID
-        await this.doctorRepo.update(doctor.id, { userId: associatedUser.id });
+        await this.doctorRepo.update(doctor.id, doctor.clinicId, { userId: associatedUser.id });
         
         // 🛡️ ADDITIVE RBAC: Merge roles instead of overwriting
         const existingRoles = RBACUtils.getNormalizedRoles(associatedUser);
@@ -64,7 +66,7 @@ export class SaveDoctorUseCase {
           ? KLOQO_ROLES.CLINIC_ADMIN 
           : (newRoles.includes(KLOQO_ROLES.SUPER_ADMIN) ? KLOQO_ROLES.SUPER_ADMIN : KLOQO_ROLES.DOCTOR);
 
-        await this.userRepo.update(associatedUser.id!, {
+        await this.userRepo.update(associatedUser.id!, associatedUser.clinicId || doctor.clinicId, {
           roles: newRoles,
           role: primaryRole
         });
@@ -78,7 +80,7 @@ export class SaveDoctorUseCase {
 
     // 6. If new doctor and has email, create user credentials (if not exists).
     if (isNewDoctor && doctor.email) {
-      const existingUser = await this.userRepo.findByEmail(doctor.email);
+      const existingUser = await this.userRepo.findByEmail(doctor.email, 'SYSTEM');
 
       if (!existingUser) {
         const tempPassword = this.generateTempPassword();
@@ -96,7 +98,7 @@ export class SaveDoctorUseCase {
           );
 
           // ✅ LINK IDENTITY: Stamp the newly created userId on the Doctor document
-          await this.doctorRepo.update(doctor.id, { userId: newUser.id });
+          await this.doctorRepo.update(doctor.id, doctor.clinicId, { userId: newUser.id });
 
           const clinic = await this.clinicRepo.findById(doctor.clinicId);
           await this.emailService.sendCredentials(

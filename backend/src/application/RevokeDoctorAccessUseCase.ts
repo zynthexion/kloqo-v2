@@ -35,7 +35,7 @@ export class RevokeDoctorAccessUseCase {
 
     // Also clear the accessibleMenus on the doctor to reflect "no access" if someone looks at it
     doctor.accessibleMenus = [];
-    await this.doctorRepo.save(doctor);
+    await this.doctorRepo.save(doctor, clinicId);
   }
 }
 

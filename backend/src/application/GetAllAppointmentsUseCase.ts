@@ -4,7 +4,7 @@ import { Appointment, PaginationParams, PaginatedResponse } from '../../../packa
 export class GetAllAppointmentsUseCase {
   constructor(private appointmentRepo: IAppointmentRepository) {}
 
-  async execute(params?: PaginationParams): Promise<PaginatedResponse<Appointment> | Appointment[]> {
-    return this.appointmentRepo.findAll(params);
+  async execute(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Appointment> | Appointment[]> {
+    return this.appointmentRepo.findAll(clinicId, params);
   }
 }

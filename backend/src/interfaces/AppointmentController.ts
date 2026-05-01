@@ -144,8 +144,8 @@ export class AppointmentController {
       this.validateClinicAccess(req, clinicId);
 
       // 🛡️ SECURITY: IDR-01 Ownership Guard
-      if (req.user?.role === KLOQO_ROLES.PATIENT) {
-        const appointment = await this.appointmentRepo.findById(id);
+      if (RBACUtils.hasRole(req.user, KLOQO_ROLES.PATIENT)) {
+        const appointment = await this.appointmentRepo.findById(id, clinicId);
         if (!appointment || appointment.patientId !== (req.user.id || req.user.patientId)) {
           return res.status(403).json({ error: 'Access Denied: You do not own this appointment.' });
         }
@@ -181,13 +181,20 @@ export class AppointmentController {
 
   async bookAdvanced(req: any, res: Response) {
     try {
-      const { clinicId } = req.body;
-      console.log('[BOOKING_ADVANCED] Initial Request:', { body: req.body, userClinicId: req.user?.clinicId });
-      
-      if (clinicId) {
-        this.validateClinicAccess(req, clinicId);
+      const clinicId = req.user?.clinicId;
+      if (!clinicId && !req.body.clinicId) {
+        return res.status(400).json({ error: 'Clinic ID is required' });
       }
-      const appointment = await this.bookAdvancedAppointmentUseCase.execute(req.body);
+      
+      const effectiveClinicId = clinicId || req.body.clinicId;
+      console.log('[BOOKING_ADVANCED] Initial Request:', { body: req.body, userClinicId: clinicId });
+      
+      this.validateClinicAccess(req, effectiveClinicId);
+      
+      const appointment = await this.bookAdvancedAppointmentUseCase.execute({ 
+        ...req.body, 
+        clinicId: effectiveClinicId 
+      });
       res.status(201).json(appointment);
     } catch (error: any) {
       if (error instanceof SlotAlreadyBookedError) {
@@ -267,7 +274,7 @@ export class AppointmentController {
       
       let appointments: Appointment[] = [];
       if (doctorId && date) {
-        appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, date as string);
+        appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, clinicId, date as string);
       } else if (date) {
         appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, date as string);
       } else {
@@ -298,8 +305,8 @@ export class AppointmentController {
       this.validateClinicAccess(req, clinicId);
 
       // 🛡️ SECURITY: IDR-01 Ownership Guard
-      if (req.user?.role === KLOQO_ROLES.PATIENT) {
-        const appointment = await this.appointmentRepo.findById(id);
+      if (RBACUtils.hasRole(req.user, KLOQO_ROLES.PATIENT)) {
+        const appointment = await this.appointmentRepo.findById(id, clinicId);
         if (!appointment || appointment.patientId !== (req.user.id || req.user.patientId)) {
           return res.status(403).json({ error: 'Access Denied: You do not own this appointment.' });
         }
@@ -367,16 +374,24 @@ export class AppointmentController {
     }
   }
 
-  async checkSlot(req: Request, res: Response) {
+  async checkSlot(req: any, res: Response) {
     try {
       const { doctorId, date, time } = req.query;
+      const clinicId = req.user?.clinicId;
+
+      if (!clinicId) {
+        return res.status(401).json({ error: 'Unauthorized: Clinic ID not found' });
+      }
+
       if (!doctorId || !date || !time) {
         return res.status(400).json({ error: 'doctorId, date and time are required' });
       }
-      const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, date as string);
+      
+      const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, clinicId, date as string);
       const isTaken = appointments.some(a => a.time === time && a.status !== 'Cancelled');
       res.json({ available: !isTaken });
     } catch (error: any) {
+      console.error('[checkSlot error]', error.message);
       res.status(500).json({ error: error.message });
     }
   }

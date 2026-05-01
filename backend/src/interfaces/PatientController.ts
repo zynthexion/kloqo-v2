@@ -247,10 +247,12 @@ export class PatientController {
       const { primaryId, relativeId } = req.body;
       const clinicId = req.user?.clinicId;
       
-      if (clinicId) {
-        this.validateClinicAccess(req, clinicId);
+      if (!clinicId) {
+        return res.status(400).json({ error: 'clinicId is required for this operation' });
       }
-      await this.unlinkRelativeUseCase.execute(primaryId, relativeId);
+      this.validateClinicAccess(req, clinicId);
+      
+      await this.unlinkRelativeUseCase.execute(primaryId, relativeId, clinicId);
       res.json({ message: 'Success' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

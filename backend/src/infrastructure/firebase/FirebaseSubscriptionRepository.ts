@@ -31,8 +31,20 @@ export class FirebaseSubscriptionRepository implements ISubscriptionRepository {
     return { id: ref.id, ...subscription };
   }
 
-  async update(id: string, data: Partial<Subscription>): Promise<void> {
-    await this.collection.doc(id).update({ ...data, updatedAt: new Date() });
+  async update(id: string, clinicId: string, data: Partial<Subscription>): Promise<void> {
+    const docRef = this.collection.doc(id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) throw new Error('Subscription not found');
+    const existingData = doc.data() as Subscription;
+
+    // SECURITY: IDOR Prevention.
+    if (clinicId !== 'SYSTEM' && existingData.clinicId !== clinicId) {
+      console.warn(`[SECURITY_ALERT] Potential IDOR attempt: Clinic ${clinicId} tried to update Subscription ${id}`);
+      throw new Error('Unauthorized');
+    }
+
+    await docRef.update({ ...data, updatedAt: new Date() });
   }
 
   async getAll(): Promise<Subscription[]> {

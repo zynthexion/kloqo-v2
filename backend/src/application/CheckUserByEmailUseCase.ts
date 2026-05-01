@@ -5,7 +5,7 @@ export class CheckUserByEmailUseCase {
   constructor(private userRepo: IUserRepository) {}
 
   async execute(email: string): Promise<User | null> {
-    const user = await this.userRepo.findByEmail(email);
+    const user = await this.userRepo.findByEmail(email, 'SYSTEM');
     if (!user) return null;
     
     // Safety check: only allow clinicAdmin to be checked for forgot password in this app context

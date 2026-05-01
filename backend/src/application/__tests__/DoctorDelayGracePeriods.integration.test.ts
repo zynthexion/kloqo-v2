@@ -12,7 +12,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
 
   const CLINIC_ID = 'clinic_1';
   const DOCTOR_ID = 'doctor_1';
-  const DATE = '21 April 2026';
+  const DATE = '2026-04-21';
 
   beforeEach(async () => {
     appointmentRepo = new InMemoryAppointmentRepository();
@@ -37,7 +37,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
 
     doctorRepo = {
       findById: jest.fn().mockResolvedValue(mockDoctor),
-      update: jest.fn().mockImplementation((id, data) => {
+      update: jest.fn().mockImplementation((id, clinicId, data) => {
         Object.assign(mockDoctor, data);
         return Promise.resolve(mockDoctor);
       }),
@@ -87,7 +87,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
     const result = await useCase.execute(CLINIC_ID);
     
     expect(result.skippedAppointmentIds).toHaveLength(0);
-    const apt = await appointmentRepo.findById('apt_1');
+    const apt = await appointmentRepo.findById('apt_1', CLINIC_ID);
     expect(apt?.status).toBe('Confirmed');
   });
 
@@ -101,7 +101,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
    */
   it('should shift skip deadline dynamically based on consultation drag', async () => {
     // 1. Doctor clocks 'In'
-    await doctorRepo.update(DOCTOR_ID, { consultationStatus: 'In' });
+    await doctorRepo.update(DOCTOR_ID, CLINIC_ID, { consultationStatus: 'In' });
 
     // 2. 10:00 AM Patient is in consultation
     await appointmentRepo.save({
@@ -136,7 +136,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
     expect(result.skippedAppointmentIds).toHaveLength(0);
 
     // 4. Doctor completes the long consultation
-    await appointmentRepo.update('apt_active', { status: 'Completed', completedAt: new Date('2026-04-21T10:25:00') });
+    await appointmentRepo.update('apt_active', CLINIC_ID, { status: 'Completed', completedAt: new Date('2026-04-21T10:25:00') });
     
     // Once completed, delay falls to 0. 
     // apt_waiting (10:15) + 10 grace = 10:25.
@@ -151,7 +151,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
    * PW-Tokens are late -> safe.
    */
   it('should NEVER auto-skip priority walk-ins (PW- tokens)', async () => {
-    await doctorRepo.update(DOCTOR_ID, { consultationStatus: 'In' });
+    await doctorRepo.update(DOCTOR_ID, CLINIC_ID, { consultationStatus: 'In' });
 
     await appointmentRepo.save({
       id: 'apt_pw',
@@ -170,7 +170,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
     const result = await useCase.execute(CLINIC_ID);
     expect(result.skippedAppointmentIds).not.toContain('apt_pw');
     
-    const apt = await appointmentRepo.findById('apt_pw');
+    const apt = await appointmentRepo.findById('apt_pw', CLINIC_ID);
     expect(apt?.status).toBe('Confirmed');
   });
 
@@ -193,7 +193,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
     } as Appointment);
 
     // It is 10:25 AM. Doctor just clocked IN.
-    await doctorRepo.update(DOCTOR_ID, { consultationStatus: 'In' });
+    await doctorRepo.update(DOCTOR_ID, CLINIC_ID, { consultationStatus: 'In' });
     jest.setSystemTime(new Date('2026-04-21T10:25:00'));
 
     // Note: No one has been completed yet.

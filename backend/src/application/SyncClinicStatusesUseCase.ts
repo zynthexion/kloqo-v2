@@ -92,7 +92,7 @@ export class SyncClinicStatusesUseCase {
             }
 
             if (doctor.consultationStatus !== newStatus) {
-                await this.doctorRepo.update(doctor.id, {
+                await this.doctorRepo.update(doctor.id, clinicId, {
                     consultationStatus: newStatus,
                     updatedAt: new Date()
                 });
@@ -100,8 +100,8 @@ export class SyncClinicStatusesUseCase {
         }
     }
 
-    async syncDoctor(doctorId: string): Promise<string> {
-        const doctor = await this.doctorRepo.findById(doctorId);
+    async syncDoctor(doctorId: string, clinicId: string): Promise<string> {
+        const doctor = await this.doctorRepo.findById(doctorId, clinicId);
         if (!doctor) throw new Error('Doctor not found');
 
         const now = getClinicNow();
@@ -161,7 +161,7 @@ export class SyncClinicStatusesUseCase {
         }
 
         if (doctor.consultationStatus !== newStatus) {
-            await this.doctorRepo.update(doctor.id, {
+            await this.doctorRepo.update(doctor.id, clinicId, {
                 consultationStatus: newStatus,
                 updatedAt: new Date()
             });

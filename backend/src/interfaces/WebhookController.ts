@@ -63,7 +63,7 @@ export class WebhookController {
     const newPeriodEnd = new Date();
     newPeriodEnd.setDate(newPeriodEnd.getDate() + 30);
 
-    await this.subscriptionRepo.update(sub.id, {
+    await this.subscriptionRepo.update(sub.id, sub.clinicId, {
       status: 'active',
       currentPeriodEnd: newPeriodEnd,
     });
@@ -87,7 +87,7 @@ export class WebhookController {
     const sub = await this.subscriptionRepo.findByRazorpaySubscriptionId(subscriptionData.id);
     if (!sub) return;
 
-    await this.subscriptionRepo.update(sub.id, { status });
+    await this.subscriptionRepo.update(sub.id, sub.clinicId, { status });
 
     if (sub.clinicId) {
       await this.clinicRepo.update(sub.clinicId, {

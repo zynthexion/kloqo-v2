@@ -6,6 +6,6 @@ export class GetPatientByIdUseCase {
 
   async execute(id: string, clinicId: string): Promise<Patient | null> {
     if (!id || !clinicId) return null;
-    return this.patientRepo.findById(id);
+    return this.patientRepo.findById(id, clinicId);
   }
 }

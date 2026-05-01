@@ -42,7 +42,8 @@ export class NotificationController {
 
   async getConfigs(req: Request, res: Response) {
     try {
-      const data = await this.getNotificationConfigsUseCase.execute();
+      const clinicId = (req as any).user?.clinicId || 'SYSTEM';
+      const data = await this.getNotificationConfigsUseCase.execute(clinicId);
       res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -52,8 +53,9 @@ export class NotificationController {
   async updateConfig(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      const clinicId = (req as any).user?.clinicId || 'SYSTEM';
       const data = req.body;
-      await this.updateNotificationConfigUseCase.execute({ id, data });
+      await this.updateNotificationConfigUseCase.execute({ id, clinicId, data });
       res.json({ message: 'Notification configuration updated successfully' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -62,7 +64,8 @@ export class NotificationController {
 
   async resetConfigs(req: Request, res: Response) {
     try {
-      await this.resetNotificationConfigsUseCase.execute();
+      const clinicId = (req as any).user?.clinicId || 'SYSTEM';
+      await this.resetNotificationConfigsUseCase.execute(clinicId);
       res.json({ message: 'Notification configurations reset to defaults' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

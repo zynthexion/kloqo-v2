@@ -46,7 +46,7 @@ export class EndSessionCleanupUseCase {
 
       for (const appt of unresolvedAppointments) {
         try {
-          await this.appointmentRepo.update(appt.id, {
+          await this.appointmentRepo.update(appt.id, clinicId, {
             status: 'No-show',
             noShowAt: now,
             updatedAt: now,
@@ -71,7 +71,7 @@ export class EndSessionCleanupUseCase {
             const sessionEndTime = addHours(lastSlot.time, 4); // 4-hour grace period after session end
 
             if (isAfter(now, sessionEndTime)) {
-              await this.doctorRepo.update(doctor.id, {
+               await this.doctorRepo.update(doctor.id, clinicId, {
                 consultationStatus: 'Out',
                 updatedAt: now
               });
@@ -80,7 +80,7 @@ export class EndSessionCleanupUseCase {
             }
           } else {
             // No slots configured for yesterday, but doctor is 'In' - auto checkout anyway
-            await this.doctorRepo.update(doctor.id, {
+             await this.doctorRepo.update(doctor.id, clinicId, {
                 consultationStatus: 'Out',
                 updatedAt: now
             });

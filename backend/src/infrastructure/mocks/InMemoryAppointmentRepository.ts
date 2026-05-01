@@ -48,8 +48,8 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     return resolveLock!;
   }
 
-  async findByDoctorAndDate(doctorId: string, date: string): Promise<Appointment[]> {
-    return this.appointments.filter(a => a.doctorId === doctorId && a.date === date);
+  async findByDoctorAndDate(doctorId: string, clinicId: string, date: string): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.doctorId === doctorId && a.clinicId === clinicId && a.date === date);
   }
 
   async findByClinicAndDate(clinicId: string, date: string): Promise<Appointment[]> {
@@ -74,16 +74,16 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     };
   }
 
-  async findById(id: string): Promise<Appointment | null> {
-    return this.appointments.find(a => a.id === id) || null;
+  async findById(id: string, clinicId: string): Promise<Appointment | null> {
+    return this.appointments.find(a => a.id === id && a.clinicId === clinicId) || null;
   }
 
   async save(appointment: Appointment, _transaction?: ITransaction): Promise<void> {
     this.appointments.push({ ...appointment });
   }
 
-  async update(id: string, data: Partial<Appointment>, _transaction?: ITransaction): Promise<void> {
-    const index = this.appointments.findIndex(a => a.id === id);
+  async update(id: string, clinicId: string, data: Partial<Appointment>, _transaction?: ITransaction): Promise<void> {
+    const index = this.appointments.findIndex(a => a.id === id && a.clinicId === clinicId);
     if (index !== -1) {
       this.appointments[index] = { ...this.appointments[index], ...data, updatedAt: new Date() };
     }
@@ -133,17 +133,29 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
 
   // --- Unimplemented/Not needed for these tests ---
   async findAll(_params?: PaginationParams): Promise<PaginatedResponse<Appointment> | Appointment[]> { return []; }
-  async findByClinicId(_clinicId: string): Promise<Appointment[]> { return []; }
-  async findLatestByPatientAndClinic(_patientId: string, _clinicId: string): Promise<Appointment | null> { return null; }
-  async findAllByPatientAndClinic(_patientId: string, _clinicId: string): Promise<Appointment[]> { return []; }
-  async findLatestByPatientIds(_patientIds: string[], _clinicId: string): Promise<Map<string, Appointment>> { return new Map(); }
-  async findByPatientId(_patientId: string): Promise<Appointment[]> { return []; }
-  async findByPatientIds(patientIds: string[]): Promise<Appointment[]> {
-    return this.appointments.filter(a => patientIds.includes(a.patientId));
+  async findAllGlobal(_startDate: Date, _endDate: Date): Promise<Appointment[]> { return []; }
+  async findByDoctorAndDates(doctorId: string, clinicId: string, dates: string[]): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.doctorId === doctorId && a.clinicId === clinicId && dates.includes(a.date));
   }
-  async countByStatus(_clinicId: string, _status: string): Promise<number> { return 0; }
-  async countByPharmacyStatus(_clinicId: string, _status: string): Promise<number> { return 0; }
+  async findByDoctorAndDateRange(doctorId: string, clinicId: string, startDate: string, endDate: string): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.doctorId === doctorId && a.clinicId === clinicId && a.date >= startDate && a.date <= endDate);
+  }
+  async findByPatientId(patientId: string, clinicId: string): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.patientId === patientId && a.clinicId === clinicId);
+  }
+  async findByPatientIds(patientIds: string[], clinicId: string): Promise<Appointment[]> {
+    return this.appointments.filter(a => patientIds.includes(a.patientId) && a.clinicId === clinicId);
+  }
+  
+  async countAll(): Promise<number> { return 0; }
+  async countByClinicId(_clinicId: string): Promise<number> { return 0; }
+  async countByDoctorAndDateRange(_doctorId: string, _start: Date, _end: Date): Promise<number> { return 0; }
+  async countByStatus(_clinicId: string, _status: string, _start?: Date, _end?: Date): Promise<number> { return 0; }
+  async countByPharmacyStatus(_clinicId: string, _status: string, _start?: Date, _end?: Date): Promise<number> { return 0; }
   async findCompletedByClinic(_clinicId: string, _filters: any): Promise<Appointment[]> { return []; }
   async findCompletedByPatientInClinic(_pId: string, _cId: string): Promise<Appointment[]> { return []; }
-  async delete(_id: string): Promise<void> {}
+
+  async delete(id: string, clinicId: string, _transaction?: ITransaction): Promise<void> {
+    this.appointments = this.appointments.filter(a => !(a.id === id && a.clinicId === clinicId));
+  }
 }

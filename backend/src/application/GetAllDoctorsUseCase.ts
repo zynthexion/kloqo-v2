@@ -11,11 +11,11 @@ export class GetAllDoctorsUseCase {
     let result: PaginatedResponse<Doctor> | Doctor[];
     
     if (doctorIds && doctorIds.length > 0) {
-      result = await this.doctorRepo.findByIds(doctorIds);
+      result = await this.doctorRepo.findByIds(doctorIds, clinicId || 'SYSTEM');
     } else if (clinicId) {
       result = await this.doctorRepo.findByClinicId(clinicId, params);
     } else {
-      result = await this.doctorRepo.findAll(params);
+      result = await this.doctorRepo.findAll(clinicId || 'SYSTEM', params);
     }
 
     // Hydrate doctors with roles from the User collection (authoritative source)
@@ -24,7 +24,7 @@ export class GetAllDoctorsUseCase {
       // For performance, we fetch all users in the clinic if clinicId is present
       // or match by email for each if it's a global search (rarer).
       const users = clinicId 
-        ? await this.userRepo.findAll({ clinicId, page: 1, limit: 100 } as any) 
+        ? await this.userRepo.findAll(clinicId, { page: 1, limit: 100 } as any) 
         : { data: [] }; // Fallback
       
       const userList = Array.isArray(users) ? users : users.data;

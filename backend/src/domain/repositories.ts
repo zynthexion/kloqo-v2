@@ -1,4 +1,4 @@
-import { Clinic, User, Patient, Appointment, TrafficData, Department, Doctor, CampaignSend, MarketingAnalytics, MarketingInteraction, WhatsappSession, NotificationConfig, PunctualityLog, ErrorLog, PaginationParams, PaginatedResponse, Prescription, Subscription } from '../../../packages/shared/src/index';
+import { Clinic, User, Patient, Appointment, TrafficData, Department, Doctor, CampaignSend, MarketingAnalytics, MarketingInteraction, WhatsappSession, NotificationConfig, PunctualityLog, ErrorLog, PaginationParams, PaginatedResponse, Prescription, Subscription, DoctorOverride } from '../../../packages/shared/src/index';
 
 /**
  * ITransaction
@@ -12,34 +12,44 @@ export interface ITransaction {}
 export type { WhatsappSession };
 
 export interface IDepartmentRepository {
-  findAll(params?: PaginationParams): Promise<PaginatedResponse<Department> | Department[]>;
-  findById(id: string): Promise<Department | null>;
-  save(department: Department): Promise<void>;
-  update(id: string, department: Partial<Department>): Promise<void>;
-  delete(id: string, soft?: boolean): Promise<void>;
+  findAll(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Department> | Department[]>;
+  findById(id: string, clinicId: string): Promise<Department | null>;
+  save(department: Department, clinicId: string): Promise<void>;
+  update(id: string, clinicId: string, department: Partial<Department>): Promise<void>;
+  delete(id: string, clinicId: string, soft?: boolean, transaction?: ITransaction): Promise<void>;
+  countAll(clinicId: string): Promise<number>;
+  countByClinicId(clinicId: string): Promise<number>;
 }
 
 export interface IAppointmentRepository {
   findAll(params?: PaginationParams & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]>;
-  findById(id: string): Promise<Appointment | null>;
-  findByDoctorAndDate(doctorId: string, date: string): Promise<Appointment[]>;
+  findAllGlobal(startDate: Date, endDate: Date): Promise<Appointment[]>;
+  findById(id: string, clinicId: string, transaction?: ITransaction): Promise<Appointment | null>;
+  findByDoctorAndDate(doctorId: string, clinicId: string, date: string, transaction?: ITransaction): Promise<Appointment[]>;
+  findByDoctorAndDates(doctorId: string, clinicId: string, dates: string[]): Promise<Appointment[]>;
+  findByDoctorAndDateRange(doctorId: string, clinicId: string, startDate: string, endDate: string): Promise<Appointment[]>;
   findByClinicAndDate(clinicId: string, date: string): Promise<Appointment[]>;
   findPaginatedByClinicAndDate(clinicId: string, date: string, params: PaginationParams): Promise<PaginatedResponse<Appointment>>;
   findByClinicId(clinicId: string, startDate?: Date, endDate?: Date): Promise<Appointment[]>;
   findLatestByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment | null>;
   findAllByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
   findLatestByPatientIds(patientIds: string[], clinicId: string): Promise<Map<string, Appointment>>;
-  findByPatientId(patientId: string): Promise<Appointment[]>;
-  findByPatientIds(patientIds: string[]): Promise<Appointment[]>;
-  save(appointment: Appointment, transaction?: ITransaction): Promise<void>;
-  update(id: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void>;
-  incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number>;
-  peekTokenCounter(counterId: string): Promise<number>;
+  findByPatientId(patientId: string, clinicId: string): Promise<Appointment[]>;
+  findByPatientIds(patientIds: string[], clinicId: string): Promise<Appointment[]>;
+  save(appointment: Appointment, clinicId: string, transaction?: ITransaction): Promise<void>;
+  update(id: string, clinicId: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void>;
+  incrementTokenCounter(clinicId: string, counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number>;
+  peekTokenCounter(clinicId: string, counterId: string): Promise<number>;
   countByStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
   countByPharmacyStatus(clinicId: string, status: string, start?: Date, end?: Date): Promise<number>;
+  countByClinicAndDateRange(clinicId: string, startDate: Date, endDate: Date): Promise<number>;
+  countTotalByClinic(clinicId: string): Promise<number>;
   findCompletedByClinic(clinicId: string, filters: { doctorId?: string; pharmacyStatus?: string; startDate?: Date; endDate?: Date; limit?: number; patientPhone?: string }): Promise<Appointment[]>;
   findCompletedByPatientInClinic(patientId: string, clinicId: string): Promise<Appointment[]>;
-  delete(id: string): Promise<void>;
+  delete(id: string, clinicId: string, transaction?: ITransaction): Promise<void>;
+  countAll(clinicId: string): Promise<number>;
+  countByClinicId(clinicId: string): Promise<number>;
+  countByDoctorAndDateRange(clinicId: string, doctorId: string, start: Date, end: Date): Promise<number>;
 
   // Transaction & Locking
   runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T>;
@@ -56,17 +66,22 @@ export interface IAppointmentRepository {
 }
 
 export interface IDoctorRepository {
-  findAll(params?: PaginationParams): Promise<PaginatedResponse<Doctor> | Doctor[]>;
-  findById(id: string): Promise<Doctor | null>;
-  findByIds(ids: string[]): Promise<Doctor[]>;
-  findByName(clinicId: string, name: string): Promise<Doctor | null>;
+  findAll(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Doctor> | Doctor[]>;
+  findById(id: string, clinicId: string, transaction?: ITransaction): Promise<Doctor | null>;
+  findByIds(ids: string[], clinicId: string, transaction?: ITransaction): Promise<Doctor[]>;
+  findByName(clinicId: string, name: string, transaction?: ITransaction): Promise<Doctor | null>;
   findByClinicId(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Doctor> | Doctor[]>;
-  findByEmail(email: string): Promise<Doctor | null>;
-  findByUserId(userId: string, email?: string): Promise<Doctor | null>;
-  update(id: string, data: Partial<Doctor>): Promise<void>;
-  save(doctor: Doctor): Promise<void>;
-  delete(id: string, soft?: boolean): Promise<void>;
-  prunePastOverrides(id: string, keys: string[]): Promise<void>;
+  findByEmail(email: string, clinicId: string, transaction?: ITransaction): Promise<Doctor | null>;
+  findByUserId(userId: string, clinicId: string, transaction?: ITransaction): Promise<Doctor | null>;
+  update(id: string, clinicId: string, data: Partial<Doctor>, transaction?: ITransaction): Promise<void>;
+  save(doctor: Doctor, clinicId: string, transaction?: ITransaction): Promise<void>;
+  saveOverride(doctorId: string, clinicId: string, dateStr: string, override: DoctorOverride, transaction?: ITransaction): Promise<void>;
+  saveBreaks(doctorId: string, clinicId: string, dateStr: string, breaks: any[], transaction?: ITransaction): Promise<void>;
+  saveLeave(doctorId: string, clinicId: string, dateStr: string, leave: any, transaction?: ITransaction): Promise<void>;
+  delete(id: string, clinicId: string, soft?: boolean, transaction?: ITransaction): Promise<void>;
+  countAll(clinicId: string): Promise<number>;
+  countByClinicId(clinicId: string): Promise<number>;
+  prunePastOverrides(id: string, clinicId: string, keys: string[]): Promise<void>;
   invalidateCache(id: string, clinicId?: string): void;
 }
 
@@ -77,44 +92,50 @@ export interface IClinicRepository {
   update(id: string, data: Partial<Clinic>): Promise<void>;
   updateLastSyncAt(id: string, date: Date): Promise<void>;
   save(clinic: Clinic): Promise<void>;
-  delete(id: string, soft?: boolean): Promise<void>;
+  delete(id: string, clinicId: string, soft?: boolean, transaction?: ITransaction): Promise<void>;
+  countAll(): Promise<number>;
+  countByClinicId(clinicId: string): Promise<number>;
   countActive(): Promise<number>;
   incrementDoctorCount(clinicId: string, delta: 1 | -1): Promise<void>;
   upgradeSubscriptionWithTransaction(clinicId: string, newSettings: any, paymentAmount: number): Promise<void>;
 }
 
 export interface IPatientRepository {
-  findAll(params?: PaginationParams): Promise<PaginatedResponse<Patient> | Patient[]>;
-  findById(id: string): Promise<Patient | null>;
-  findByPhone(phone: string): Promise<Patient[]>;
-  findByPhoneAndClinic(phone: string, clinicId: string): Promise<Patient[]>;
-  findByCommunicationPhone(phone: string): Promise<Patient[]>;
-  findByCommunicationPhoneAndClinic(phone: string, clinicId: string): Promise<Patient[]>;
+  findAll(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Patient> | Patient[]>;
+  findById(id: string, clinicId: string, transaction?: ITransaction): Promise<Patient | null>;
+  findByPhone(phone: string, clinicId: string, transaction?: ITransaction): Promise<Patient[]>;
+  findByCommunicationPhone(phone: string, clinicId: string, transaction?: ITransaction): Promise<Patient[]>;
+  findByNameAndPhone(name: string, phone: string, clinicId: string, transaction?: ITransaction): Promise<Patient | null>;
+  findByNameAndCommunicationPhone(name: string, phone: string, clinicId: string, transaction?: ITransaction): Promise<Patient | null>;
   findLinkPending(clinicId: string): Promise<Patient[]>;
   findByClinicId(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Patient> | Patient[]>;
-  countAll(): Promise<number>;
-  save(patient: Patient, transaction?: ITransaction): Promise<void>;
-  update(id: string, patient: Partial<Patient>, transaction?: ITransaction): Promise<void>;
-  delete(id: string, soft?: boolean): Promise<void>;
-  unlinkRelative(primaryId: string, relativeId: string): Promise<void>;
+  countAll(clinicId: string): Promise<number>;
+  save(patient: Patient, clinicId: string, transaction?: ITransaction): Promise<void>;
+  update(id: string, clinicId: string, patient: Partial<Patient>, transaction?: ITransaction): Promise<void>;
+  delete(id: string, clinicId: string, soft?: boolean, transaction?: ITransaction): Promise<void>;
+  countByClinicId(clinicId: string): Promise<number>;
+  findByPatientIds(ids: string[], clinicId: string): Promise<Patient[]>;
+  unlinkRelative(primaryId: string, relativeId: string, clinicId: string): Promise<void>;
+  runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T>;
 }
 
 export interface IUserRepository {
-  findAll(params?: PaginationParams): Promise<PaginatedResponse<User> | User[]>;
-  findById(id: string): Promise<User | null>;
-  findByPhone(phone: string): Promise<User | null>;
-  findByEmail(email: string): Promise<User | null>;
-  countByRole(role: string): Promise<number>;
-  save(user: User): Promise<void>;
-  update(id: string, data: Partial<User>): Promise<void>;
-  delete(id: string, soft?: boolean): Promise<void>;
+  findAll(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<User> | User[]>;
+  findById(id: string, clinicId: string): Promise<User | null>;
+  findByPhone(phone: string, clinicId: string): Promise<User | null>;
+  findByEmail(email: string, clinicId: string): Promise<User | null>;
+  countByRole(clinicId: string, role: string): Promise<number>;
+  save(user: User, clinicId: string, transaction?: ITransaction): Promise<void>;
+  update(id: string, clinicId: string, data: Partial<User>, transaction?: ITransaction): Promise<void>;
+  delete(id: string, clinicId: string, soft?: boolean, transaction?: ITransaction): Promise<void>;
   findAdminsByClinicId(clinicId: string): Promise<User[]>;
+  runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T>;
 }
 
 export interface INotificationRepository {
-  findAllConfigs(): Promise<NotificationConfig[]>;
-  updateConfig(id: string, data: Partial<NotificationConfig>): Promise<void>;
-  resetConfigsToDefaults(): Promise<void>;
+  findAllConfigs(clinicId: string): Promise<NotificationConfig[]>;
+  updateConfig(id: string, clinicId: string, data: Partial<NotificationConfig>): Promise<void>;
+  resetConfigsToDefaults(clinicId: string): Promise<void>;
 }
 
 export interface IConsultationCounterRepository {
@@ -123,12 +144,12 @@ export interface IConsultationCounterRepository {
 }
 
 export interface IPunctualityRepository {
-  findAll(): Promise<PunctualityLog[]>;
-  findByDoctorId(doctorId: string): Promise<PunctualityLog[]>;
+  findAll(clinicId: string): Promise<PunctualityLog[]>;
+  findByDoctorId(doctorId: string, clinicId: string): Promise<PunctualityLog[]>;
 }
 
 export interface IErrorLogRepository {
-  findAll(params?: PaginationParams): Promise<PaginatedResponse<ErrorLog> | ErrorLog[]>;
+  findAll(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<ErrorLog> | ErrorLog[]>;
   save(errorLog: ErrorLog): Promise<void>;
 }
 
@@ -158,9 +179,9 @@ export interface IGlobalSettingsRepository {
 
 export interface IPrescriptionRepository {
   save(prescription: Prescription): Promise<void>;
-  findById(id: string): Promise<Prescription | null>;
+  findById(id: string, clinicId: string): Promise<Prescription | null>;
   findByClinicId(clinicId: string): Promise<Prescription[]>;
-  findByPatientId(patientId: string): Promise<Prescription[]>;
+  findByPatientId(patientId: string, clinicId: string): Promise<Prescription[]>;
   findByClinicAndDateRange(clinicId: string, startDate: Date, endDate: Date): Promise<Prescription[]>;
 }
 
@@ -178,7 +199,7 @@ export interface ISubscriptionRepository {
   findByClinicId(clinicId: string): Promise<Subscription | null>;
   findByRazorpaySubscriptionId(razorpaySubscriptionId: string): Promise<Subscription | null>;
   save(subscription: Omit<Subscription, 'id'>): Promise<Subscription>;
-  update(id: string, data: Partial<Subscription>): Promise<void>;
+  update(id: string, clinicId: string, data: Partial<Subscription>): Promise<void>;
   getAll(): Promise<Subscription[]>;
   countByStatus(status: string): Promise<number>;
   sumMRR(): Promise<number>;

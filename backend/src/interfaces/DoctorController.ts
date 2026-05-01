@@ -172,7 +172,7 @@ export class DoctorController {
       
       this.validateClinicAccess(req, doctor.clinicId);
 
-      await this.updateDoctorStatusUseCase.execute({ doctorId: id, status, sessionIndex });
+      await this.updateDoctorStatusUseCase.execute({ doctorId: id, clinicId: doctor.clinicId, status, sessionIndex });
       res.status(204).send();
     } catch (error: any) {
       if (error.status === 403) return res.status(403).json({ error: error.message });
@@ -185,6 +185,17 @@ export class DoctorController {
       const user = req.user;
       const { availabilitySlots, dateOverrides, forceCancelConflicts = false } = req.body;
       const doctorId = req.params.id || req.body.doctorId;
+
+      console.log(`[updateAvailability] Incoming request:`, {
+        doctorId,
+        userId: user?.id,
+        userRoles: user?.roles,
+        userRole: user?.role,
+        hasAvailabilitySlots: !!availabilitySlots,
+        hasDateOverrides: !!dateOverrides,
+        dateOverrideKeys: dateOverrides ? Object.keys(dateOverrides) : [],
+        forceCancelConflicts
+      });
 
       if (!doctorId) {
         return res.status(400).json({ error: 'Doctor ID is required' });
@@ -200,23 +211,35 @@ export class DoctorController {
       const isElevatedStaff = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN, KLOQO_ROLES.NURSE]);
       const isSelf = user.id === doctorId || user.userId === doctorId;
 
+      console.log(`[updateAvailability] RBAC:`, {
+        isElevatedStaff,
+        isSelf,
+        resolvedRole: (user.roles && user.roles[0]) || user.role
+      });
+
       if (!isElevatedStaff && !isSelf) {
         return res.status(403).json({ error: "Access Denied: You are not authorized to modify this doctor's schedule." });
       }
+
+      const performedBy = {
+        id: user.id || user.uid || 'unknown',
+        name: user.name || user.email || 'Staff',
+        role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
+      };
+
+      console.log(`[updateAvailability] Calling use case with performedBy:`, performedBy);
 
       await this.updateDoctorAvailabilityUseCase.execute({ 
         doctorId, 
         availabilitySlots, 
         dateOverrides, 
         forceCancelConflicts,
-        performedBy: {
-          id: user.id || user.uid || 'unknown',
-          name: user.name || user.email || 'Staff',
-          role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
-        }
+        performedBy,
+        clinicId: doctor.clinicId
       });
       res.status(204).send();
     } catch (error: any) {
+      console.error(`[updateAvailability] ERROR:`, error.message, error.stack);
       res.status(400).json({ error: error.message });
     }
   }
@@ -368,7 +391,8 @@ export class DoctorController {
       }
 
       await this.markDoctorLeaveUseCase.execute(
-        doctorId, 
+        doctorId,
+        doctor.clinicId,
         startDate, 
         endDate, 
         {

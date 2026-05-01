@@ -19,7 +19,7 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
   const doctorId = 'doc-adv';
   const doctorName = 'Dr. Advanced';
   const dateStr = '22 April 2026';
-  const firestoreDate = '22 April 2026';
+  const firestoreDate = '2026-04-22';
 
   const mockDoctor = {
     id: doctorId,
@@ -39,14 +39,14 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
   };
 
   const mockPatientRepo = {
-    findById: jest.fn().mockImplementation((id) => Promise.resolve({ id, name: 'Test Patient' })),
+    findById: jest.fn().mockImplementation((id, clinicId) => Promise.resolve({ id, name: 'Test Patient', clinicIds: [clinicId] })),
     save: jest.fn(),
     update: jest.fn(),
     delete: jest.fn()
   } as any;
 
   const mockManagePatientUseCase = {
-    execute: jest.fn().mockResolvedValue('patient-adv-1')
+    execute: jest.fn().mockImplementation((dto) => Promise.resolve(`patient-${dto.name.replace(/\s+/g, '-').toLowerCase()}`))
   };
 
   beforeEach(() => {
@@ -68,7 +68,7 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
     tokenGenerator = new TokenGeneratorService(appointmentRepo);
 
     const mockManagePatientUseCase = {
-      execute: jest.fn().mockResolvedValue('patient-adv-1')
+      execute: jest.fn().mockImplementation((dto) => Promise.resolve(`patient-${dto.name.replace(/\s+/g, '-').toLowerCase()}`))
     };
 
     createWalkInUseCase = new CreateWalkInAppointmentUseCase(
@@ -252,14 +252,14 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
     appointmentRepo.setAppointments([a1, a2, wTail]);
 
     // Vacate a2
-    await appointmentRepo.update(a2.id, { status: 'Skipped' });
+    await appointmentRepo.update(a2.id, clinicId, { status: 'Skipped' });
 
     // Action: Vacuum sweep
     await bubblingService.reoptimize({
       clinicId, doctorId, date: firestoreDate, sessionIndex: 0
     });
 
-    const bubbledW = await appointmentRepo.findById(wTail.id);
+    const bubbledW = await appointmentRepo.findById(wTail.id, clinicId);
     expect(bubbledW?.slotIndex).toBe(1); // Jumped from 18 to 1!
   });
 

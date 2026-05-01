@@ -11,7 +11,7 @@ import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { WalkInPlacementService } from '../domain/services/WalkInPlacementService';
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
-import { sseService } from '../domain/services/SSEService';
+import { SSEService } from '../domain/services/SSEService';
 import { getClinicNow, getClinicDateString, getClinicISODateString, parseClinicDate, getClinicTimeString } from '../domain/services/DateUtils';
 import { DuplicateBookingError } from '../domain/errors';
 
@@ -40,12 +40,13 @@ export class CreateWalkInAppointmentUseCase {
     private doctorRepo: IDoctorRepository,
     private clinicRepo: IClinicRepository,
     private managePatientUseCase: ManagePatientUseCase,
-    private tokenGenerator: TokenGeneratorService
+    private tokenGenerator: TokenGeneratorService,
+    private sseService: SSEService
   ) {}
 
   async execute(dto: CreateWalkInAppointmentDTO): Promise<Appointment> {
     // ── FAIL FAST: Validate domain objects before any operations ──────────────
-    const doctor = await this.doctorRepo.findById(dto.doctorId);
+    const doctor = await this.doctorRepo.findById(dto.doctorId, dto.clinicId);
     if (!doctor) throw new Error('Doctor not found');
 
     const clinic = await this.clinicRepo.findById(dto.clinicId);
@@ -55,19 +56,6 @@ export class CreateWalkInAppointmentUseCase {
     const requestedDate = parseClinicDate(dto.date);
     const firestoreDateStr = getClinicISODateString(requestedDate);
     const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);
-
-    // ── PATIENT MANAGEMENT ────────────────────────────────────────────────────
-    const normalizedPhone = dto.phone ? dto.phone.replace(/\D/g, '').slice(-10) : '';
-    const patientId = await this.managePatientUseCase.execute({
-      id: dto.patientId,
-      name: dto.patientName,
-      phone: normalizedPhone,
-      communicationPhone: dto.communicationPhone,
-      age: dto.age,
-      sex: dto.sex,
-      place: dto.place,
-      clinicId: dto.clinicId,
-    });
 
     // ── PROXIMITY CHECK ───────────────────────────────────────────────────────
     if (!dto.isForceBooked && typeof dto.userLat === 'number' && typeof dto.userLon === 'number') {
@@ -82,17 +70,8 @@ export class CreateWalkInAppointmentUseCase {
 
     const now = getClinicNow();
     
-    // 0. Load old appointment if rescheduling
-    let oldAppt: Appointment | null = null;
-    if (dto.rescheduleFromId) {
-      oldAppt = await this.appointmentRepo.findById(dto.rescheduleFromId);
-      if (oldAppt && oldAppt.patientId !== patientId) {
-        throw new Error('Unauthorized to reschedule this appointment');
-      }
-    }
-
     // 1. READ ALL CURRENT APPOINTMENTS (to find a gap)
-    const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, firestoreDateStr);
+    const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.clinicId, firestoreDateStr);
 
     // 2. ACTIVE SESSION DISCOVERY
     const activeSessionIndex = BookingSessionEngine.findActiveSession(
@@ -110,18 +89,6 @@ export class CreateWalkInAppointmentUseCase {
 
     const sessionSlots = allSlots.filter(s => s.sessionIndex === activeSessionIndex);
     const sessionAppointments = allAppointments.filter(a => a.sessionIndex === activeSessionIndex);
-
-    // 2b. DUPLICATE CHECK
-    const isDuplicate = sessionAppointments.some(a =>
-      a.patientId === patientId &&
-      a.status !== 'Cancelled' &&
-      a.id !== dto.rescheduleFromId
-    );
-
-    if (isDuplicate) {
-      console.warn(`[CreateWalkInAppointment] Duplicate blocked for patient ${patientId}`);
-      throw new DuplicateBookingError();
-    }
 
     // 3. TARGET SLOT SELECTION
     const walkInSpacing = (clinic as any).walkInSpacing || (doctor as any).walkInSpacing || 0;
@@ -169,6 +136,39 @@ export class CreateWalkInAppointmentUseCase {
       attempts++;
       try {
         finalAppointment = await this.appointmentRepo.runTransaction(async (txn) => {
+          // ── PATIENT MANAGEMENT (Now inside transaction) ──────────────
+          const normalizedPhone = dto.phone ? dto.phone.replace(/\D/g, '').slice(-10) : '';
+          const patientId = await this.managePatientUseCase.execute({
+            id: dto.patientId,
+            name: dto.patientName,
+            phone: normalizedPhone,
+            communicationPhone: dto.communicationPhone,
+            age: dto.age,
+            sex: dto.sex,
+            place: dto.place,
+            clinicId: dto.clinicId,
+          }, txn as unknown as ITransaction);
+
+          // ── RESCHEDULING & DUPLICATE CHECKS (Inside transaction for atomic patientId safety) ──
+          let oldAppt: Appointment | null = null;
+          if (dto.rescheduleFromId) {
+            oldAppt = await this.appointmentRepo.findById(dto.rescheduleFromId, dto.clinicId);
+            if (oldAppt && oldAppt.patientId !== patientId) {
+              throw new Error('Unauthorized to reschedule this appointment');
+            }
+          }
+
+          const isDuplicate = sessionAppointments.some(a =>
+            a.patientId === patientId &&
+            a.status !== 'Cancelled' &&
+            a.id !== dto.rescheduleFromId
+          );
+
+          if (isDuplicate) {
+            console.warn(`[CreateWalkInAppointment] Duplicate blocked for patient ${patientId}`);
+            throw new DuplicateBookingError();
+          }
+
           return await this._bookSlot(
             currentTargetSlot as any,
             sessionSlots.length,
@@ -196,15 +196,8 @@ export class CreateWalkInAppointmentUseCase {
     if (!finalAppointment) throw new Error('Failed to find an available slot.');
 
     // ── SSE ──────────────────────────────────────────────────────────────────
-    sseService.emit('walk_in_created', dto.clinicId, {
-      appointmentId: finalAppointment.id,
-      patientName: finalAppointment.patientName,
-      doctorId: finalAppointment.doctorId,
-      doctorName: finalAppointment.doctorName,
-      tokenNumber: finalAppointment.tokenNumber,
-      classicTokenNumber: finalAppointment.classicTokenNumber,
-      sessionIndex: finalAppointment.sessionIndex,
-      slotIndex: finalAppointment.slotIndex,
+    this.sseService.emit('walk_in_created', dto.clinicId, {
+      appointment: finalAppointment
     });
 
     return finalAppointment;
@@ -251,7 +244,7 @@ export class CreateWalkInAppointmentUseCase {
     }, txn);
 
     if (oldAppt && oldAppt.status !== 'Cancelled') {
-      await this.appointmentRepo.update(oldAppt.id, {
+      await this.appointmentRepo.update(oldAppt.id, oldAppt.clinicId, {
         status: 'Cancelled',
         isRescheduled: true,
         updatedAt: now

@@ -46,3 +46,9 @@ export class SlotsFullError extends DomainError {
     super('No walk-in slots available');
   }
 }
+
+export class QueryBoundaryExceededError extends DomainError {
+  constructor(limit: number = 500) {
+    super(`[FINOPS_CRITICAL] Query hit the ${limit} document safety limit. Data truncation likely occurred. Please narrow your search/date range.`);
+  }
+}

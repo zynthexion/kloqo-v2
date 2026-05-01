@@ -8,7 +8,7 @@ export class UpdateDoctorAccessUseCase {
 
   async execute(doctorId: string, clinicId: string, accessibleMenus: string[]): Promise<void> {
     // 1. Find the doctor
-    const doctor = await this.doctorRepo.findById(doctorId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!doctor) {
       throw new Error('Doctor not found');
     }

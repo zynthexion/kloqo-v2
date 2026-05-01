@@ -1,9 +1,14 @@
-import { IDoctorRepository, IAppointmentRepository, IActivityRepository } from '../domain/repositories';
+import { IDoctorRepository, IAppointmentRepository, IActivityRepository, ITransaction } from '../domain/repositories';
 import { NotificationService } from '../domain/services/NotificationService';
-import { db } from '../infrastructure/firebase/config';
 import { addDays, format, parseISO } from 'date-fns';
-import { KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
+import { KloqoRole, KLOQO_ROLES, Appointment } from '../../../packages/shared/src/index';
 
+/**
+ * MarkDoctorLeaveUseCase
+ * 
+ * CLEAN ARCHITECTURE: This use case is infrastructure-agnostic.
+ * It manages doctor leave and automatic cancellation of conflicting appointments.
+ */
 export class MarkDoctorLeaveUseCase {
   constructor(
     private doctorRepo: IDoctorRepository,
@@ -12,38 +17,31 @@ export class MarkDoctorLeaveUseCase {
     private activityRepo: IActivityRepository
   ) {}
 
-  async execute(doctorId: string, startDate: string, endDate: string | undefined, performedBy: { id: string; name: string; role: KloqoRole }, forceCancelConflicts: boolean = false): Promise<void> {
-    const doctor = await this.doctorRepo.findById(doctorId);
+  async execute(doctorId: string, clinicId: string, startDate: string, endDate: string | undefined, performedBy: { id: string; name: string; role: KloqoRole }, forceCancelConflicts: boolean = false): Promise<void> {
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!doctor) throw new Error('Doctor not found');
 
-    // 1. RBAC Softening (Self-Management Check)
+    // RBAC
     const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
     const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(performedBy.role);
+    const isNurse = (performedBy.role as KloqoRole) === KLOQO_ROLES.NURSE;
 
-    if (!isAdmin && !isSelfInitiated) {
-        throw new Error('Unauthorized: You can only manage your own schedule or requires Admin privileges.');
-    }
+    if (!isAdmin && !isNurse && !isSelfInitiated) throw new Error('Unauthorized');
 
     const start = startDate;
     const end = endDate || startDate;
 
-    // 2. Calculate All Dates in Range
     const datesToBlock: string[] = [];
     let current = parseISO(start);
     const finalDate = parseISO(end);
-
     while (current <= finalDate) {
       datesToBlock.push(format(current, 'yyyy-MM-dd'));
       current = addDays(current, 1);
     }
 
-    // 3. Update Doctor dateOverrides (V2 Logic)
     const updatedOverrides = { ...(doctor.dateOverrides || {}) };
-    datesToBlock.forEach(date => {
-      updatedOverrides[date] = { isOff: true };
-    });
+    datesToBlock.forEach(date => { updatedOverrides[date] = { isOff: true }; });
     
-    // Also maintain legacy leaves array for backward compatibility
     const updatedLeaves = [...(doctor.leaves || [])];
     datesToBlock.forEach(date => {
       if (!updatedLeaves.some(l => l.date === date)) {
@@ -51,100 +49,60 @@ export class MarkDoctorLeaveUseCase {
       }
     });
 
-    await this.doctorRepo.update(doctorId, { 
-      dateOverrides: updatedOverrides,
-      leaves: updatedLeaves
-    });
+    const appointmentsToCancel = await this.appointmentRepo.findByDoctorAndDateRange(doctorId, clinicId, start, end);
+    const actionableAppointments = appointmentsToCancel.filter(appt => appt.status === 'Confirmed' || appt.status === 'Pending');
 
-    // Dual-write to subcollections
-    const dualWriteBatch = db.batch();
-    datesToBlock.forEach(date => {
-        const safeDateId = date.replace(/\//g, '-');
-        const doctorRef = db.collection('doctors').doc(doctorId);
-        
-        const overrideSubRef = doctorRef.collection('overrides').doc(safeDateId);
-        dualWriteBatch.set(overrideSubRef, { isOff: true, date }, { merge: true });
-
-        const leavesSubRef = doctorRef.collection('leaves').doc(safeDateId);
-        dualWriteBatch.set(leavesSubRef, { date, reason: `Doctor on leave (${isSelfInitiated ? 'Self' : 'Admin'})` }, { merge: true });
-    });
-    await dualWriteBatch.commit();
-
-    // 4. FinOps Query: Fetch all actionable appointments in range
-    const snapshot = await db.collection('appointments')
-      .where('doctorId', '==', doctorId)
-      .where('date', '>=', start)
-      .where('date', '<=', end)
-      .where('isDeleted', '==', false)
-      .get();
-
-    const appointmentsToCancel = snapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() } as any))
-      .filter(appt => appt.status === 'Confirmed' || appt.status === 'Pending');
-
-    if (appointmentsToCancel.length > 0) {
-        // 5. Safe Batching
-        const CHUNK_SIZE = 400;
-        for (let i = 0; i < appointmentsToCancel.length; i += CHUNK_SIZE) {
-          const chunk = appointmentsToCancel.slice(i, i + CHUNK_SIZE);
-          const batch = db.batch();
-
-          chunk.forEach(appt => {
-            const docRef = db.collection('appointments').doc(appt.id);
-            batch.update(docRef, {
-              status: 'Cancelled',
-              cancellationReason: 'Doctor on leave',
-              updatedAt: new Date()
-            });
-          });
-
-          await batch.commit();
+    // ATOMIC TRANSACTION
+    await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
+        // 1. Cancel Appointments
+        for (const appt of actionableAppointments) {
+            await this.appointmentRepo.update(appt.id, appt.clinicId, {
+                status: 'Cancelled',
+                cancellationReason: 'Doctor on leave'
+            }, txn);
         }
 
-        // 6. Dispatch Notifications (Async)
+        // 2. Update Doctor main doc
+        await this.doctorRepo.update(doctorId, doctor.clinicId, { 
+            dateOverrides: updatedOverrides,
+            leaves: updatedLeaves
+        }, txn);
+
+        // 3. Update Subcollections
+        for (const date of datesToBlock) {
+            await this.doctorRepo.saveOverride(doctorId, clinicId, date, { isOff: true }, txn);
+            await this.doctorRepo.saveLeave(doctorId, clinicId, date, { date, reason: `Doctor on leave` }, txn);
+        }
+    });
+
+    this.doctorRepo.invalidateCache(doctorId, doctor.clinicId);
+
+    // ASYNC NOTIFICATIONS
+    if (actionableAppointments.length > 0) {
         await Promise.allSettled(
-          appointmentsToCancel.map(appt => 
+          actionableAppointments.map(appt => 
             this.notificationService.sendAppointmentCancelledNotification({
-              patientId: appt.patientId,
-              appointmentId: appt.id,
-              doctorName: doctor.name,
-              clinicName: appt.clinicName || 'Clinic',
-              date: appt.date,
-              time: appt.time,
-              communicationPhone: appt.communicationPhone,
-              patientName: appt.patientName,
+              patientId: appt.patientId, appointmentId: appt.id, doctorName: doctor.name,
+              clinicName: appt.clinicName || 'Clinic', date: appt.date, time: appt.time,
+              communicationPhone: appt.communicationPhone, patientName: appt.patientName,
               reason: 'Doctor on leave'
             })
           )
         );
 
-        // 7. Active Integrity Alert (Zero-Trust)
-        // If a doctor self-initiates a leave that cancels appointments, notify Admins immediately.
         if (isSelfInitiated) {
           await this.notificationService.sendAdminAlert({
             clinicId: doctor.clinicId,
             title: 'Schedule Alert: Self-Initiated Leave',
-            body: `Dr. ${doctor.name} just scheduled a leave from ${start} to ${end}. ${appointmentsToCancel.length} appointments were automatically cancelled.`
+            body: `Dr. ${doctor.name} scheduled leave from ${start} to ${end}. ${actionableAppointments.length} appointments cancelled.`
           });
         }
     }
 
-    // 8. Audit Log
     await this.activityRepo.save({
-        id: '',
-        type: 'SCHEDULING_CHANGE',
-        action: 'MARK_LEAVE',
-        doctorId,
-        clinicId: doctor.clinicId,
-        performedBy,
-        details: {
-            startDate: start,
-            endDate: end,
-            cancellationCount: appointmentsToCancel.length,
-            isSelfInitiated
-        },
-        timestamp: new Date(),
-        expiresAt: null
+        id: '', type: 'SCHEDULING_CHANGE', action: 'MARK_LEAVE', doctorId, clinicId: doctor.clinicId, performedBy,
+        details: { startDate: start, endDate: end, cancellationCount: actionableAppointments.length, isSelfInitiated },
+        timestamp: new Date(), expiresAt: null
     });
   }
 }

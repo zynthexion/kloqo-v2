@@ -22,10 +22,10 @@ export interface FCMNotificationPayload {
 }
 
 export interface IFCMService {
-  sendToUser(userId: string, payload: FCMNotificationPayload): Promise<boolean>;
-  sendToMultipleUsers(userIds: string[], payload: FCMNotificationPayload): Promise<{ successCount: number; failureCount: number }>;
-  storeToken(userId: string, fcmToken: string): Promise<void>;
-  removeToken(userId: string, fcmToken: string): Promise<void>;
+  sendToUser(userId: string, clinicId: string, payload: FCMNotificationPayload): Promise<boolean>;
+  sendToMultipleUsers(userIds: string[], clinicId: string, payload: FCMNotificationPayload): Promise<{ successCount: number; failureCount: number }>;
+  storeToken(userId: string, clinicId: string, fcmToken: string): Promise<void>;
+  removeToken(userId: string, clinicId: string, fcmToken: string): Promise<void>;
 }
 
 export class FirebaseFCMService implements IFCMService {
@@ -35,9 +35,9 @@ export class FirebaseFCMService implements IFCMService {
    * Send a push notification to a single user.
    * Looks up stored FCM tokens from the user record.
    */
-  async sendToUser(userId: string, payload: FCMNotificationPayload): Promise<boolean> {
+  async sendToUser(userId: string, clinicId: string, payload: FCMNotificationPayload): Promise<boolean> {
     try {
-      const user = await this.userRepo.findById(userId);
+      const user = await this.userRepo.findById(userId, clinicId);
       const tokens: string[] = (user as any)?.fcmTokens || [];
 
       if (tokens.length === 0) {
@@ -78,7 +78,7 @@ export class FirebaseFCMService implements IFCMService {
         .filter(Boolean) as string[];
 
       for (const stale of staleTokens) {
-        await this.removeToken(userId, stale);
+        await this.removeToken(userId, clinicId, stale);
       }
 
       return response.successCount > 0;
@@ -93,6 +93,7 @@ export class FirebaseFCMService implements IFCMService {
    */
   async sendToMultipleUsers(
     userIds: string[],
+    clinicId: string,
     payload: FCMNotificationPayload
   ): Promise<{ successCount: number; failureCount: number }> {
     let successCount = 0;
@@ -100,7 +101,7 @@ export class FirebaseFCMService implements IFCMService {
 
     await Promise.allSettled(
       userIds.map(async (uid) => {
-        const ok = await this.sendToUser(uid, payload);
+        const ok = await this.sendToUser(uid, clinicId, payload);
         if (ok) successCount++; else failureCount++;
       })
     );
@@ -112,14 +113,14 @@ export class FirebaseFCMService implements IFCMService {
    * Store a new FCM token for a user (called when token is received from frontend).
    * Merges into the user's fcmTokens array — deduplicates in-place.
    */
-  async storeToken(userId: string, fcmToken: string): Promise<void> {
-    const user = await this.userRepo.findById(userId);
+  async storeToken(userId: string, clinicId: string, fcmToken: string): Promise<void> {
+    const user = await this.userRepo.findById(userId, clinicId);
     if (!user) throw new Error(`User ${userId} not found`);
 
     const existing: string[] = (user as any).fcmTokens || [];
     if (!existing.includes(fcmToken)) {
       const updated = [...existing, fcmToken].slice(-5); // keep max 5 tokens per user
-      await this.userRepo.update(userId, { fcmTokens: updated } as any);
+      await this.userRepo.update(userId, clinicId, { fcmTokens: updated } as any);
       console.log(`[FCM] Stored token for user ${userId}. Total tokens: ${updated.length}`);
     }
   }
@@ -127,13 +128,13 @@ export class FirebaseFCMService implements IFCMService {
   /**
    * Remove a stale or revoked FCM token.
    */
-  async removeToken(userId: string, fcmToken: string): Promise<void> {
-    const user = await this.userRepo.findById(userId);
+  async removeToken(userId: string, clinicId: string, fcmToken: string): Promise<void> {
+    const user = await this.userRepo.findById(userId, clinicId);
     if (!user) return;
 
     const existing: string[] = (user as any).fcmTokens || [];
     const updated = existing.filter((t) => t !== fcmToken);
-    await this.userRepo.update(userId, { fcmTokens: updated } as any);
+    await this.userRepo.update(userId, clinicId, { fcmTokens: updated } as any);
     console.log(`[FCM] Pruned stale token for user ${userId}`);
   }
 }

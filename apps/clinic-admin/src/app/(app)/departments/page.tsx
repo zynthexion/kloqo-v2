@@ -74,50 +74,29 @@ import { DepartmentDoctorsDialog } from "@/components/departments/department-doc
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const Pregnant = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M16 16.5a2.5 2.5 0 1 1-5 0c0-4.5 5-10.5 5-10.5s5 6 5 10.5a2.5 2.5 0 1 1-5 0Z" />
-    <path d="M10 16.5a2.5 2.5 0 1 0-5 0c0-4.5-5-10.5-5-10.5s5 6 5 10.5a2.5 2.5 0 1 0-5 0Z" />
-    <path d="M8 8a4 4 0 1 0 8 0c0-2.5-4-6-4-6s-4 3.5-4 6Z" />
-  </svg>
-);
-
-const Tooth = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20.3 13.4c.5-1 .5-2.2.1-3.2-.4-1-1.2-1.8-2.2-2.2-.9-.4-2-.5-3-.1-1.1.4-2.1 1.2-2.7 2.2-.6-1-1.6-1.8-2.7-2.2-1.1-.4-2.1-.2-3 .1-1 .4-1.8 1.2-2.2 2.2-.4 1-.4 2.2.1 3.2.5 1 1.2 1.8 2.2 2.2.9.4 2 .5 3 .1 1.1-.4 2.1-1.2 2.7-2.2.6 1 1.6 1.8 2.7 2.2 1 .4 2.1.2 3-.1 1-.4 1.8-1.2 2.2-2.2Z" />
-    <path d="m18 13-1.5-3.5" />
-    <path d="m6 13 1.5-3.5" />
-    <path d="M12 18.5V22" />
-    <path d="M9.5 15.5s-1-2-2-2" />
-    <path d="M14.5 15.5s1-2 2-2" />
-  </svg>
-);
-
-
-const iconMap: Record<string, LucideIcon | React.FC> = {
-  Stethoscope, HeartPulse, Baby, Sparkles, BrainCircuit, Bone, Award, Droplets, Filter, Droplet, Eye, Ear, Brain, PersonStanding, Radiation, Siren, Microwave, TestTube, Bug, Scissors, Ambulance, Wind, Pregnant, Tooth
-};
-
-const DynamicIcon = ({ name, className }: { name: string, className: string }) => {
-  const IconComponent = iconMap[name] || Stethoscope;
-  return <IconComponent className={className} />;
-};
-
+import { useDepartments } from "@/hooks/use-departments";
+import { DynamicIcon } from "@/components/departments/dynamic-icon";
+import { DepartmentCard } from "@/components/departments/department-card";
 
 export default function DepartmentsPage() {
-  const auth = useAuth();
-  const [clinicDepartments, setClinicDepartments] = useState<Department[]>([]);
-  const [masterDepartments, setMasterDepartments] = useState<Department[]>([]);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const {
+    clinicDepartments,
+    setClinicDepartments,
+    masterDepartments,
+    doctors,
+    loading,
+    clinicDetails,
+    setClinicDetails,
+    refresh
+  } = useDepartments();
+
   const { toast } = useToast();
   const [isAddDepartmentOpen, setIsAddDepartmentOpen] = useState(false);
   const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(null);
-  const [loading, setLoading] = useState(true);
   const [viewingDoctorsDept, setViewingDoctorsDept] = useState<Department | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [departmentsPerPage, setDepartmentsPerPage] = useState(8);
-  const [clinicDetails, setClinicDetails] = useState<any>(null);
 
   const filteredDepartments = useMemo(() => {
     return clinicDepartments.filter(department =>
@@ -131,159 +110,14 @@ export default function DepartmentsPage() {
     currentPage * departmentsPerPage
   );
 
-  useEffect(() => {
-    const fetchMasterDepartments = async () => {
-      try {
-        const response = await apiRequest<any>("/clinic/departments/master");
-        const masterDeptsList = Array.isArray(response) ? response : (response?.data || []);
-        setMasterDepartments(masterDeptsList);
-      } catch (error) {
-        console.error("Error fetching master departments:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load master department list." });
-      }
-    };
-    fetchMasterDepartments();
-  }, [toast]);
-
-  const fetchClinicData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [clinicData, doctorsList] = await Promise.all([
-        apiRequest<any>("/clinic/me"),
-        apiRequest<Doctor[]>("/clinic/doctors")
-      ]);
-
-      if (clinicData) {
-        setClinicDetails(clinicData);
-        const departmentIds: string[] = clinicData.departments || [];
-
-        if (departmentIds.length > 0 && masterDepartments.length > 0) {
-          const deptsForClinic = masterDepartments.filter(md => departmentIds.includes(md.id));
-          setClinicDepartments(deptsForClinic);
-        } else if (departmentIds.length === 0) {
-          setClinicDepartments([]);
-        }
-      }
-      setDoctors(doctorsList || []);
-    } catch (error) {
-      console.error("Error fetching departments data:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to load clinic-specific department data." });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast, masterDepartments]);
-
-  useEffect(() => {
-    if (masterDepartments.length > 0) {
-      fetchClinicData();
-    }
-  }, [fetchClinicData, masterDepartments.length]);
-
-  // Debug: Log all doctors data when it loads
-  useEffect(() => {
-    if (doctors.length > 0) {
-      console.log('📋 All doctors loaded:', doctors.length);
-    }
-  }, [doctors]);
-
-
   const getDoctorAvatar = (doctorName: string) => {
     const defaultDoctorImage = "https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e";
     const doctor = doctors.find((d) => d.name === doctorName);
-    const avatarUrl = doctor ? doctor.avatar : defaultDoctorImage;
-
-    // Simplified debugging - only log if it's a Firebase URL
-    if (avatarUrl?.includes('firebasestorage.googleapis.com')) {
-      console.log(`🔍 Firebase URL for ${doctorName}:`, avatarUrl.substring(0, 100) + '...');
-    }
-
-    return avatarUrl;
+    return doctor?.avatar || defaultDoctorImage;
   }
 
   const getDoctorsInDepartment = (departmentName: string) => {
     return doctors.filter(doctor => doctor.department === departmentName).map(d => d.name);
-  }
-
-  const DepartmentCard = ({ department, onDelete }: { department: Department, onDelete: (department: Department) => void }) => {
-    const doctorsInDept = getDoctorsInDepartment(department.name);
-    return (
-      <Card className="overflow-hidden flex flex-col aspect-square">
-        <div className="h-2/3 w-full flex items-center justify-center bg-muted/30">
-          <DynamicIcon name={department.icon} className="w-16 h-16 text-muted-foreground opacity-50" />
-        </div>
-        <CardContent className="p-3 flex-grow flex flex-col justify-center">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-base font-semibold truncate">{department.name}</h3>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-6 w-6 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setViewingDoctorsDept(department)}>
-                  <Users className="mr-2 h-4 w-4" />
-                  See All Doctors
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onDelete(department)} className="text-red-600">
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="flex items-center mt-1">
-            <div className="flex -space-x-2">
-              {doctorsInDept.slice(0, 3).map((doctorName, index) => {
-                const avatarUrl = getDoctorAvatar(doctorName);
-                return (
-                  <div key={index} className="relative">
-                    <Image
-                      src={avatarUrl || '/default-doctor.png'}
-                      alt={doctorName}
-                      width={24}
-                      height={24}
-                      className="w-6 h-6 rounded-full border-2 border-white object-cover"
-                      unoptimized={true}
-                      onError={(e) => {
-                        console.error(`❌ Failed to load doctor avatar for ${doctorName}`);
-                        console.error(`🔗 Avatar URL causing error:`, avatarUrl);
-                        console.error(`🔍 URL analysis:`, {
-                          length: avatarUrl?.length || 0,
-                          hasToken: avatarUrl?.includes('token='),
-                          domain: avatarUrl ? new URL(avatarUrl).hostname : '',
-                          path: avatarUrl ? new URL(avatarUrl).pathname : ''
-                        });
-
-                        // Prevent infinite retry loop
-                        if (!e.currentTarget.hasAttribute('data-error-handled')) {
-                          e.currentTarget.setAttribute('data-error-handled', 'true');
-                          const defaultDoctorImage = "https://firebasestorage.googleapis.com/v0/b/kloqo-nurse-dup-43384903-8d386.firebasestorage.app/o/doctor_male.webp?alt=media&token=b19d8fb5-1812-4eb5-a879-d48739eaa87e";
-                          e.currentTarget.src = defaultDoctorImage;
-                        }
-                      }}
-                      onLoad={() => {
-                        console.log(`✅ Doctor avatar loaded successfully for ${doctorName}`);
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            {doctorsInDept.length > 0 ? (
-              <span className="text-xs text-muted-foreground ml-2 truncate">
-                {doctorsInDept.length} {doctorsInDept.length > 1 ? 'doctors' : 'doctor'}
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">No doctors</span>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
   }
 
   const handleSaveDepartments = async (selectedDepts: Department[]) => {
@@ -297,7 +131,7 @@ export default function DepartmentsPage() {
         body: JSON.stringify({ departments: updatedIds })
       });
 
-      fetchClinicData();
+      refresh();
 
       toast({
         title: "Departments Added",
@@ -397,7 +231,14 @@ export default function DepartmentsPage() {
               ))
             ) : currentDepartments.length > 0 ? (
               currentDepartments.map((dept) => (
-                <DepartmentCard key={dept.id} department={dept} onDelete={() => setDeletingDepartment(dept)} />
+                <DepartmentCard 
+                  key={dept.id} 
+                  department={dept} 
+                  doctorsInDept={getDoctorsInDepartment(dept.name)}
+                  getDoctorAvatar={getDoctorAvatar}
+                  onViewDoctors={setViewingDoctorsDept}
+                  onDelete={setDeletingDepartment} 
+                />
               ))
             ) : (
               <div className="col-span-full text-center py-12">

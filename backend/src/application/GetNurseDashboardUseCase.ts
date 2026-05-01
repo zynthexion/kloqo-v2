@@ -77,8 +77,8 @@ export class GetNurseDashboardUseCase {
 
     if (this.patientRepo && appointments && appointments.length > 0) {
       const patientIds = [...new Set(appointments.map(a => a.patientId))];
-      const patients = await Promise.all(patientIds.map(id => this.patientRepo!.findById(id)));
-      const patientMap = new Map(patients.filter(p => p).map(p => [p!.id, p]));
+      const patients = await this.patientRepo!.findByPatientIds(patientIds);
+      const patientMap = new Map(patients.map(p => [p.id, p]));
 
       for (const apt of appointments) {
         const p = patientMap.get(apt.patientId);

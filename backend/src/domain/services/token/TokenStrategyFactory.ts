@@ -16,17 +16,18 @@ import { TokenGeneratorService } from './TokenGeneratorService';
 export type TokenDistribution = 'classic' | 'advanced';
 
 export class TokenStrategyFactory {
-  static create(
-    distribution: TokenDistribution | undefined,
-    tokenGenerator: TokenGeneratorService
-  ): ITokenStrategy {
+  constructor(
+    private classicStrategy: ITokenStrategy,
+    private advancedStrategy: ITokenStrategy
+  ) {}
+
+  create(distribution: TokenDistribution | undefined): ITokenStrategy {
     switch (distribution) {
       case 'classic':
-        return new ClassicTokenStrategy(tokenGenerator);
+        return this.classicStrategy;
       case 'advanced':
       default:
-        // Default to advanced if not explicitly set
-        return new AdvancedTokenStrategy(tokenGenerator);
+        return this.advancedStrategy;
     }
   }
 }

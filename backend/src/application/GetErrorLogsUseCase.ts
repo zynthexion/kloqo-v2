@@ -4,7 +4,7 @@ import { ErrorLog, PaginationParams, PaginatedResponse } from '../../../packages
 export class GetErrorLogsUseCase {
   constructor(private errorLogRepo: IErrorLogRepository) {}
 
-  async execute(params?: PaginationParams): Promise<ErrorLog[] | PaginatedResponse<ErrorLog>> {
-    return this.errorLogRepo.findAll(params);
+  async execute(clinicId: string, params?: PaginationParams): Promise<ErrorLog[] | PaginatedResponse<ErrorLog>> {
+    return this.errorLogRepo.findAll(clinicId, params);
   }
 }

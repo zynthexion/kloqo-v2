@@ -177,8 +177,22 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         }
 
         case 'walk_in_created': {
-          // A new walk-in arrived — do a full refresh to get accurate queue order
-          fetchData(true);
+          const p = event.payload as { appointment: Appointment };
+          setData((prev) => {
+            if (!prev) return prev;
+            // 1. Check if we already have this appointment (avoid duplicates from racing events)
+            if (prev.appointments.some(a => a.id === p.appointment.id)) return prev;
+            
+            // 2. Insert and Sort
+            return {
+              ...prev,
+              appointments: [...prev.appointments, p.appointment].sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
+                return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+              })
+            };
+          });
           break;
         }
 
@@ -241,8 +255,6 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         method: 'PATCH',
         body: JSON.stringify({ status, sessionIndex }),
       });
-      // Fallback: Immediate refresh in case SSE is slow or disconnected
-      await fetchData(true);
     } catch (err: any) {
       console.error('[NurseDashboard] updateDoctorStatus error:', err);
       throw err;
@@ -255,8 +267,6 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         method: 'PATCH',
         body: JSON.stringify({ status }),
       });
-      // Fallback: Immediate refresh in case SSE is slow or disconnected
-      await fetchData(true);
     } catch (err: any) {
       console.error('[NurseDashboard] updateAppointmentStatus error:', err);
       throw err;
@@ -293,7 +303,6 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
       formData.append('patientId', patientId);
 
       await apiRequest('/prescriptions/upload', { method: 'POST', body: formData });
-      await fetchData(true);
     } catch (err: any) {
       console.error('[NurseDashboard] completeWithPrescription error:', err);
       throw err;

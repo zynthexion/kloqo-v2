@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { getClinicNow } from "@kloqo/shared-core";
 
 interface AppointmentDatePickerProps {
   dates: Date[];
@@ -68,7 +69,7 @@ export const AppointmentDatePicker: React.FC<AppointmentDatePickerProps> = ({
         </Popover>
 
         <button
-          onClick={() => onSelectDate(new Date())}
+          onClick={() => onSelectDate(getClinicNow())}
           className={cn(
             "text-[10px] font-black uppercase tracking-wider transition-all shadow-sm active:scale-95",
             isTablet 
@@ -91,7 +92,7 @@ export const AppointmentDatePicker: React.FC<AppointmentDatePickerProps> = ({
       >
         {displayDates.map((d, index) => {
           const isSelected = isSameDay(d, selectedDate);
-          const isToday = isSameDay(d, new Date());
+          const isToday = isSameDay(d, getClinicNow());
           
           return (
             <button

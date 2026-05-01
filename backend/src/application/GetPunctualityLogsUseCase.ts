@@ -4,10 +4,10 @@ import { PunctualityLog } from '../../../packages/shared/src/index';
 export class GetPunctualityLogsUseCase {
   constructor(private punctualityRepo: IPunctualityRepository) {}
 
-  async execute(doctorId?: string): Promise<PunctualityLog[]> {
+  async execute(clinicId: string, doctorId?: string): Promise<PunctualityLog[]> {
     if (doctorId) {
-      return this.punctualityRepo.findByDoctorId(doctorId);
+      return this.punctualityRepo.findByDoctorId(doctorId, clinicId);
     }
-    return this.punctualityRepo.findAll();
+    return this.punctualityRepo.findAll(clinicId);
   }
 }

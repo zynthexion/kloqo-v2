@@ -25,14 +25,14 @@ export class GetWalkInEstimateUseCase {
   ) {}
 
   async execute(dto: WalkInEstimateDTO) {
-    const doctor = await this.doctorRepo.findById(dto.doctorId);
+    const doctor = await this.doctorRepo.findById(dto.doctorId, dto.clinicId);
     if (!doctor) throw new Error('Doctor not found');
 
     const clinic = await this.clinicRepo.findById(dto.clinicId);
     if (!clinic) throw new Error('Clinic not found');
 
     const now = new Date();
-    const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.date);
+    const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.clinicId, dto.date);
     const slots = SlotCalculator.generateSlots(doctor, now);
     const activeSessionIndex = SlotCalculator.findActiveSessionIndex(
       doctor, slots, now, doctor.tokenDistribution || clinic.tokenDistribution || 'advanced', allAppointments

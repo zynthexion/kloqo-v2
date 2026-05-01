@@ -2,6 +2,7 @@ import { IClinicRepository, IAppointmentRepository, IDoctorRepository, IPatientR
 import { ClinicNotApprovedError, OnboardingIncompleteError } from '../domain/errors';
 import { differenceInDays, parse, isWithinInterval, startOfDay, subDays, isToday, isFuture, eachDayOfInterval, format, eachMonthOfInterval, endOfMonth, endOfDay } from 'date-fns';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
+import { getClinicNow } from '../domain/services/DateUtils';
 
 export class GetClinicDashboardUseCase {
   constructor(
@@ -25,8 +26,9 @@ export class GetClinicDashboardUseCase {
         throw new OnboardingIncompleteError();
       }
 
-      const startDate = params?.startDate ? new Date(params.startDate) : subDays(new Date(), 6);
-      const endDate = params?.endDate ? new Date(params.endDate) : new Date();
+      const now = getClinicNow();
+      const startDate = params?.startDate ? new Date(params.startDate) : subDays(now, 6);
+      const endDate = params?.endDate ? new Date(params.endDate) : now;
       const doctorId = params?.doctorId;
 
       const diff = differenceInDays(endDate, startDate);
@@ -37,10 +39,14 @@ export class GetClinicDashboardUseCase {
       // ✅ FIX: Replace the cross-tenant `findAll()` on patients with a clinic-scoped call.
       //    The old code was calling this.patientRepo.findAll() which fetched EVERY patient
       //    in the entire Firestore database on every dashboard load.
-      const [appointmentsResult, doctorsResult, patientsResult, prescriptionsResult] = await Promise.all([
-        this.appointmentRepo.findByClinicId(clinicId),
+      // ✅ FINOPS: Optimized aggregate fetch. 
+      // 1. We fetch appointments spanning BOTH current and previous periods for trend analysis.
+      // 2. We removed the unused this.patientRepo.findByClinicId() which was a massive read leak.
+      // 3. We use .count() for the total patient metric.
+      const [appointmentsResult, doctorsResult, totalPatients, prescriptionsResult] = await Promise.all([
+        this.appointmentRepo.findByClinicId(clinicId, prevStart, endDate),
         this.doctorRepo.findByClinicId(clinicId),
-        this.patientRepo.findByClinicId(clinicId),
+        this.patientRepo.countByClinicId(clinicId),
         this.prescriptionRepo.findByClinicAndDateRange(clinicId, startDate, endDate),
       ]);
 
@@ -105,9 +111,9 @@ export class GetClinicDashboardUseCase {
             // Robust parsing for multiple formats (YYYY-MM-DD vs d MMMM yyyy)
             let aptDate: Date;
             if (apt.date.includes('-')) {
-              aptDate = parse(apt.date, 'yyyy-MM-dd', new Date());
+              aptDate = parse(apt.date, 'yyyy-MM-dd', getClinicNow());
             } else {
-              aptDate = parse(apt.date, 'd MMMM yyyy', new Date());
+              aptDate = parse(apt.date, 'd MMMM yyyy', getClinicNow());
             }
             
             if (isNaN(aptDate.getTime())) {
@@ -126,7 +132,8 @@ export class GetClinicDashboardUseCase {
         const cancelledAppointmentsCount = periodAppointments.filter(apt => apt.status === 'Cancelled' && !apt.cancelledByBreak).length;
         const upcomingAppointmentsList = periodAppointments.filter(apt => {
           try {
-            const aptDate = parse(apt.date, 'd MMMM yyyy', new Date());
+            const now = getClinicNow();
+            const aptDate = parse(apt.date, 'd MMMM yyyy', now);
             return (apt.status === 'Confirmed' || apt.status === 'Pending') && (isFuture(aptDate) || isToday(aptDate));
           } catch { return false; }
         });
@@ -145,7 +152,7 @@ export class GetClinicDashboardUseCase {
 
         for (const key in completedByPatientAndDoctor) {
           const appointments = completedByPatientAndDoctor[key].sort((a, b) =>
-            parse(a.date, 'd MMMM yyyy', new Date()).getTime() - parse(b.date, 'd MMMM yyyy', new Date()).getTime()
+            parse(a.date, 'd MMMM yyyy', getClinicNow()).getTime() - parse(b.date, 'd MMMM yyyy', getClinicNow()).getTime()
           );
           const doctor = allDoctors.find(d => d.id === appointments[0].doctorId);
           const freeFollowUpDays = doctor?.freeFollowUpDays ?? 0;
@@ -158,8 +165,8 @@ export class GetClinicDashboardUseCase {
             let isFree = false;
             if (previousApt && freeFollowUpDays > 0) {
               const daysBetween = differenceInDays(
-                parse(currentApt.date, 'd MMMM yyyy', new Date()),
-                parse(previousApt.date, 'd MMMM yyyy', new Date())
+                parse(currentApt.date, 'd MMMM yyyy', getClinicNow()),
+                parse(previousApt.date, 'd MMMM yyyy', getClinicNow())
               );
               if (daysBetween <= freeFollowUpDays) {
                 isFree = true;
@@ -250,6 +257,7 @@ export class GetClinicDashboardUseCase {
         },
         current: {
           totalPatients: current.totalPatients,
+          totalClinicPatients: totalPatients,
           completedAppointments: current.completedAppointments,
           cancelledAppointments: current.cancelledAppointments,
           upcomingAppointments: current.upcomingAppointments,

@@ -6,7 +6,6 @@ import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppointments } from '@/hooks/api/use-appointments';
-import { isPast, isToday, parse } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/contexts/language-context';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,52 +14,16 @@ import type { Appointment } from '@kloqo/shared';
 import { LottieAnimation } from '@/components/lottie-animation';
 import emptyStateAnimation from '@/lib/animations/empty-state.json';
 import { getClinicNow } from '@kloqo/shared-core';
-import { isSameDay } from 'date-fns';
-
-function computeUpcomingAppointments(appointments: Appointment[]) {
-    const now = getClinicNow();
-    return appointments
-        .filter(a => {
-            if (a.status === 'Cancelled' || a.status === 'Completed') {
-                return false;
-            }
-            let appointmentDate;
-            try {
-                appointmentDate = parse(a.date, 'd MMMM yyyy', new Date());
-            } catch {
-                appointmentDate = new Date(a.date);
-            }
-            return isSameDay(appointmentDate, now) || !isPast(appointmentDate);
-        })
-        .sort((a, b) => {
-            try {
-                const dateA = parse(a.date, 'd MMMM yyyy', new Date());
-                const dateB = parse(b.date, 'd MMMM yyyy', new Date());
-                const dateDiff = dateA.getTime() - dateB.getTime();
-                if (dateDiff !== 0) return dateDiff;
-                const timeA = parse(a.time, 'hh:mm a', dateA).getTime();
-                const timeB = parse(b.time, 'hh:mm a', dateB).getTime();
-                if (timeA !== timeB) return timeA - timeB;
-                if (a.tokenNumber?.startsWith('A') && b.tokenNumber?.startsWith('W')) return -1;
-                if (a.tokenNumber?.startsWith('W') && b.tokenNumber?.startsWith('A')) return 1;
-                return (parseInt(a.tokenNumber?.replace(/[A-W]/g, '') || '0', 10) -
-                    parseInt(b.tokenNumber?.replace(/[A-W]/g, '') || '0', 10));
-            } catch {
-                return 0;
-            }
-        });
-}
 
 import { AuthGuard } from '@/components/auth-guard';
 
 function LiveTokenEntryPage() {
     const router = useRouter();
     const { user, loading: userLoading } = useAuth();
-    const { appointments, loading: appointmentsLoading } = useAppointments(user?.patientId);
+    const { appointments, loading: appointmentsLoading } = useAppointments(user?.patientId, 'upcoming');
     const { t } = useLanguage();
 
-    const upcomingAppointments = useMemo(() => computeUpcomingAppointments(appointments), [appointments]);
-    const firstUpcoming = upcomingAppointments[0];
+    const firstUpcoming = appointments[0];
 
     useEffect(() => {
         console.log('[LiveTokenPage] State:', {

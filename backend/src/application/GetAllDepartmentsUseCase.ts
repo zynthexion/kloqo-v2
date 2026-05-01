@@ -4,7 +4,7 @@ import { Department, PaginationParams, PaginatedResponse } from '../../../packag
 export class GetAllDepartmentsUseCase {
   constructor(private departmentRepo: IDepartmentRepository) {}
 
-  async execute(params?: PaginationParams): Promise<PaginatedResponse<Department> | Department[]> {
-    return this.departmentRepo.findAll(params);
+  async execute(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Department> | Department[]> {
+    return this.departmentRepo.findAll(clinicId, params);
   }
 }

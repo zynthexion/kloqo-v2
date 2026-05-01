@@ -1,10 +1,8 @@
-import { format } from 'date-fns';
-import { IDoctorRepository, IActivityRepository, IAppointmentRepository } from '../domain/repositories';
+import { IDoctorRepository, IActivityRepository, IAppointmentRepository, ITransaction } from '../domain/repositories';
 import { DoctorAvailability, DoctorOverride, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { SSEService } from '../domain/services/SSEService';
 import { parseClinicTime, getClinicDayOfWeek, parseClinicDate } from '../domain/services/DateUtils';
 import { NotificationService } from '../domain/services/NotificationService';
-import { db } from '../infrastructure/firebase/config';
 
 export interface UpdateDoctorAvailabilityRequest {
     doctorId: string;
@@ -13,8 +11,15 @@ export interface UpdateDoctorAvailabilityRequest {
     schedule?: string;
     forceCancelConflicts?: boolean;
     performedBy: { id: string; name: string; role: KloqoRole };
+    clinicId: string;
 }
 
+/**
+ * UpdateDoctorAvailabilityUseCase
+ * 
+ * CLEAN ARCHITECTURE: This use case is infrastructure-agnostic.
+ * It coordinates doctor schedule updates and conflict resolution.
+ */
 export class UpdateDoctorAvailabilityUseCase {
     constructor(
         private doctorRepo: IDoctorRepository,
@@ -25,39 +30,39 @@ export class UpdateDoctorAvailabilityUseCase {
     ) {}
 
     async execute(request: UpdateDoctorAvailabilityRequest): Promise<void> {
-        const { doctorId, availabilitySlots, dateOverrides, schedule, forceCancelConflicts = false, performedBy } = request;
+        const { doctorId, clinicId, availabilitySlots, dateOverrides, schedule, forceCancelConflicts = false, performedBy } = request;
 
-        const doctor = await this.doctorRepo.findById(doctorId);
+        const doctor = await this.doctorRepo.findById(doctorId, clinicId);
         if (!doctor) throw new Error('Doctor not found');
 
-        // 1. RBAC Softening (Self-Management Check)
+        // 1. RBAC Check
         const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
         const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(performedBy.role);
+        const isNurse = (performedBy.role as KloqoRole) === KLOQO_ROLES.NURSE;
 
-        const isStructuralChange = JSON.stringify(doctor.availabilitySlots) !== JSON.stringify(availabilitySlots);
+        const isStructuralChange = availabilitySlots != null &&
+            JSON.stringify(doctor.availabilitySlots) !== JSON.stringify(availabilitySlots);
         
-        if (!isAdmin) {
-            if (!isSelfInitiated) {
-                throw new Error('Unauthorized: You can only manage your own schedule or requires Admin privileges.');
-            }
-            if (isStructuralChange) {
-                throw new Error('Unauthorized: Structural schedule changes (Weekly Availability) require Admin privileges.');
-            }
+        if (!isAdmin && !isNurse) {
+            if (!isSelfInitiated) throw new Error('Unauthorized: Admin/Nurse privileges required.');
+            if (isStructuralChange) throw new Error('Unauthorized: Structural changes require Admin privileges.');
         }
 
-        // ── 3. ATOMIC COMMIT ────────────────────────────────────────────────
-        //
-        // If forceCancelConflicts is TRUE, we must collect all conflicts and 
-        // commit them in a single batch alongside the Doctor record.
-        //
+        if (isNurse && !isAdmin && isStructuralChange) {
+            throw new Error('Unauthorized: Structural changes require Admin privileges.');
+        }
+
+        // 2. CONFLICT DISCOVERY (FINOPS: Batch Fetch)
         const conflicts: any[] = [];
-        
         if (dateOverrides) {
-            for (const dateStr of Object.keys(dateOverrides)) {
+            const affectedDates = Object.keys(dateOverrides);
+            // ✅ FIX: Resolve N+1 query trap. Fetch all appointments for all dates in one go.
+            const allAppointments = await this.appointmentRepo.findByDoctorAndDates(doctorId, affectedDates);
+
+            for (const dateStr of affectedDates) {
                 const override = dateOverrides[dateStr];
                 const baseDate = parseClinicDate(dateStr);
-                const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, dateStr);
-                const activeAppts  = appointments.filter(a => a.status !== 'Cancelled' && !a.isSystemBlocker);
+                const activeAppts = allAppointments.filter(a => a.date === dateStr && a.status !== 'Cancelled' && !a.isSystemBlocker);
 
                 if (activeAppts.length === 0) continue;
 
@@ -66,79 +71,60 @@ export class UpdateDoctorAvailabilityUseCase {
                 } else if (override.slots) {
                     for (const appt of activeAppts) {
                         const apptTime = parseClinicTime(appt.arriveByTime || appt.time, baseDate);
-                        const session  = override.slots[appt.sessionIndex || 0];
-                        
+                        const session = override.slots[appt.sessionIndex || 0];
                         if (!session) {
                             conflicts.push(appt);
-                            continue;
-                        }
-
-                        const sessionStart = parseClinicTime(session.from, baseDate);
-                        const sessionEnd   = parseClinicTime(session.to, baseDate);
-
-                        if (apptTime < sessionStart || apptTime >= sessionEnd) {
-                            conflicts.push(appt);
+                        } else {
+                            const sessionStart = parseClinicTime(session.from, baseDate);
+                            const sessionEnd = parseClinicTime(session.to, baseDate);
+                            if (apptTime < sessionStart || apptTime >= sessionEnd) {
+                                conflicts.push(appt);
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Handle blocked/orphaned tokens
         if (conflicts.length > 0 && !forceCancelConflicts) {
             const tokenList = conflicts.map(a => `#${a.tokenNumber} (${a.patientName})`).join(', ');
-            throw new Error(`ORPHANED_TOKENS_DETECTED: This change affects ${conflicts.length} patient(s): ${tokenList}. Please cancel them manually or resolve conflicts.`);
+            throw new Error(`ORPHANED_TOKENS_DETECTED: This change affects ${conflicts.length} patient(s): ${tokenList}.`);
         }
 
-        // Atomic transaction/batch
-        // TODO: Implement batch chunking if conflicts.length > 499 (Firestore limit)
-        const batch = db.batch();
+        // 3. ATOMIC COMMIT (Infrastructure-agnostic Transaction)
+        await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
+            // A. Update Doctor Record
+            await this.doctorRepo.update(doctorId, clinicId, {
+                availabilitySlots,
+                dateOverrides,
+                schedule
+            }, txn);
 
-        // 1. Stage Doctor Update
-        const doctorRef = db.collection('doctors').doc(doctorId);
-        batch.update(doctorRef, {
-            availabilitySlots,
-            dateOverrides,
-            schedule,
-            updatedAt: new Date()
+            // B. Update Overrides Subcollection
+            if (dateOverrides) {
+                for (const [dateStr, override] of Object.entries(dateOverrides)) {
+                    await this.doctorRepo.saveOverride(doctorId, clinicId, dateStr, override, txn);
+                }
+            }
+
+            // C. Cancel Conflicts
+            if (forceCancelConflicts && conflicts.length > 0) {
+                for (const appt of conflicts) {
+                    await this.appointmentRepo.update(appt.id, {
+                        status: 'Cancelled',
+                        cancellationReason: 'Doctor Schedule Override'
+                    }, txn);
+                }
+            }
         });
 
-        // Dual-write: write overrides to subcollection
-        if (dateOverrides) {
-            for (const [dateStr, override] of Object.entries(dateOverrides)) {
-                const safeDateId = dateStr.replace(/\//g, '-');
-                const overrideSubRef = doctorRef.collection('overrides').doc(safeDateId);
-                batch.set(overrideSubRef, { ...override, date: dateStr }, { merge: true });
-            }
-        }
-
-        // 2. Stage Appointments Cancellations (if forced)
-        if (forceCancelConflicts && conflicts.length > 0) {
-            conflicts.forEach(appt => {
-                const apptRef = db.collection('appointments').doc(appt.id);
-                batch.update(apptRef, {
-                    status: 'Cancelled',
-                    cancellationReason: 'Doctor Schedule Override',
-                    updatedAt: new Date()
-                });
-            });
-        }
-
-        // 3. Commit Everything
-        await batch.commit();
-
-        // 3.0 Invalidate Cache (Crucial since we bypassed the repository save/update methods)
+        // 4. POST-COMMIT
         this.doctorRepo.invalidateCache(doctor.id, doctor.clinicId);
-
-        // 3.1 Emit SSE event for real-time dashboard refresh
-        // We use 'walk_in_created' as a global refresh trigger as frontend apps 
-        // are already wired to re-fetch on this event.
         this.sseService.emit('walk_in_created', doctor.clinicId, {
             doctorId,
             type: 'DOCTOR_AVAILABILITY_CHANGED'
         });
 
-        // 4. POST-COMMIT: Notifications (Non-atomic, triggered only on success)
         if (forceCancelConflicts && conflicts.length > 0) {
             await Promise.allSettled(
                 conflicts.map(appt => 
@@ -157,20 +143,16 @@ export class UpdateDoctorAvailabilityUseCase {
             );
         }
 
-        // Audit Log
         await this.activityRepo.save({
-            id: '', // Generated by repo
+            id: '',
             type: 'SCHEDULING_CHANGE',
             action: isStructuralChange ? 'UPDATE_WEEKLY_AVAILABILITY' : 'UPDATE_DATE_OVERRIDES',
             doctorId,
             clinicId: doctor.clinicId,
             performedBy,
-            details: {
-                isStructuralChange,
-                dateOverridesCount: Object.keys(dateOverrides || {}).length
-            },
+            details: { isStructuralChange, dateOverridesCount: Object.keys(dateOverrides || {}).length },
             timestamp: new Date(),
-            expiresAt: null // Set by repo
+            expiresAt: null
         });
     }
 }

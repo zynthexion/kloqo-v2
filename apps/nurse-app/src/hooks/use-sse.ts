@@ -94,9 +94,14 @@ export function useSSE({ clinicId, onEvent, autoReconnect = true }: UseSSEOption
       esRef.current = null;
       
       if (autoReconnect) {
-        // Retry with a fresh token after 5 seconds (as per SRE recommendation)
-        console.log('[useSSE] Attempting custom reconnect in 5s...');
-        reconnectTimerRef.current = setTimeout(connect, 5000);
+        // 🌩️ THE KERALA WI-FI FIX: Add jitter to reconnection backoff.
+        // If 10 clinics lose Wi-Fi and it comes back, we don't want 100 iPads
+        // hitting the DB at the exact same millisecond.
+        const jitter = Math.floor(Math.random() * 5000); // 0-5s jitter
+        const delay = 2000 + jitter; // 2s base + jitter
+        
+        console.log(`[useSSE] Attempting custom reconnect in ${delay}ms...`);
+        reconnectTimerRef.current = setTimeout(connect, delay);
       }
     };
   }, [clinicId, autoReconnect]);

@@ -4,6 +4,7 @@ import { storage } from '../infrastructure/firebase/config';
 import { Appointment } from '../../../packages/shared/src/index';
 import { format } from 'date-fns';
 import { PrescriptionPDFService } from '../infrastructure/pdf/PrescriptionPDFService';
+import { getClinicNow } from '../domain/services/DateUtils';
 
 export class CompleteAppointmentWithPrescriptionUseCase {
   constructor(
@@ -27,19 +28,20 @@ export class CompleteAppointmentWithPrescriptionUseCase {
     const { appointmentId, clinicId, fullFileBuffer, fullFileMimeType, inkFileBuffer, inkFileMimeType, patientId } = params;
 
     // 1. Validate Entities
-    const appointment = await this.appointmentRepo.findById(appointmentId);
+    const appointment = await this.appointmentRepo.findById(appointmentId, clinicId);
     if (!appointment) throw new Error('Appointment not found');
     if (appointment.clinicId !== clinicId) throw new Error('Unauthorized');
 
     const [clinic, doctor] = await Promise.all([
       this.clinicRepo.findById(clinicId),
-      this.doctorRepo.findById(appointment.doctorId)
+      this.doctorRepo.findById(appointment.doctorId, clinicId)
     ]);
 
     if (!clinic) throw new Error('Clinic not found');
     if (!doctor) throw new Error('Doctor not found');
 
-    const dateStr = format(new Date(), 'yyyy-MM-dd');
+    const now = getClinicNow();
+    const dateStr = format(now, 'yyyy-MM-dd');
     const bucket = storage.bucket();
 
     // 2. AUDIT TRAIL: Upload Raw Handwriting (PNG)
@@ -79,10 +81,10 @@ export class CompleteAppointmentWithPrescriptionUseCase {
       rawInkUrl: rawInkUrl,
       isInkIsolated: true,
       pharmacyStatus: 'pending',
-      completedAt: new Date(),
+      completedAt: getClinicNow(),
     };
 
-    await this.appointmentRepo.update(appointmentId, updatedData);
+    await this.appointmentRepo.update(appointmentId, clinicId, updatedData);
 
     // 6. Side Effects: Consultation Counter
     if (appointment.sessionIndex !== undefined) {

@@ -1,4 +1,4 @@
-import { IAppointmentRepository, IDoctorRepository, IClinicRepository, IActivityRepository } from '../domain/repositories';
+import { IAppointmentRepository, IDoctorRepository, IClinicRepository, IActivityRepository, ITransaction } from '../domain/repositories';
 import { 
     parseClinicDate,
     getClinicDayOfWeek,
@@ -7,8 +7,7 @@ import {
     getClinicTimeString
 } from '../domain/services/DateUtils';
 import { BreakPeriod, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
-import { format, subMinutes } from 'date-fns';
-import { db } from '../infrastructure/firebase/config';
+import { subMinutes } from 'date-fns';
 
 export interface EditBreakRequest {
     clinicId: string;
@@ -20,6 +19,12 @@ export interface EditBreakRequest {
     performedBy: { id: string; name: string; role: KloqoRole };
 }
 
+/**
+ * EditBreakUseCase
+ * 
+ * CLEAN ARCHITECTURE: This use case is infrastructure-agnostic.
+ * It handles the ripple effects of editing a break on existing appointments.
+ */
 export class EditBreakUseCase {
     constructor(
         private appointmentRepo: IAppointmentRepository,
@@ -31,15 +36,14 @@ export class EditBreakUseCase {
     async execute(request: EditBreakRequest): Promise<void> {
         const { clinicId, doctorId, breakId, date, startTime, endTime, performedBy } = request;
 
-        const doctor = await this.doctorRepo.findById(doctorId);
+        const doctor = await this.doctorRepo.findById(doctorId, clinicId);
         if (!doctor) throw new Error('Doctor not found');
 
-        // RBAC Softening (Self-Management Check)
+        // RBAC
         const isSelfInitiated = performedBy.id === doctor.id || performedBy.id === doctor.userId;
         const isAdmin = ([KLOQO_ROLES.CLINIC_ADMIN, KLOQO_ROLES.SUPER_ADMIN] as KloqoRole[]).includes(performedBy.role);
-        if (!isAdmin && !isSelfInitiated) {
-            throw new Error('Unauthorized: You can only manage your own schedule.');
-        }
+        const isNurse = (performedBy.role as KloqoRole) === KLOQO_ROLES.NURSE;
+        if (!isAdmin && !isNurse && !isSelfInitiated) throw new Error('Unauthorized');
 
         const breakPeriods = doctor.breakPeriods || {};
         const dateBreaks = breakPeriods[date] || [];
@@ -55,35 +59,10 @@ export class EditBreakUseCase {
 
         if (newBreakEnd <= newBreakStart) throw new Error('End time must be after start time');
 
-        // 1. Identify all appointments in the session
-        const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
+        const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date);
         const sessionAppointments = allAppointments.filter(a => a.sessionIndex === oldBreak.sessionIndex && a.status !== 'Cancelled');
 
-        // 2. Perform Differential Shift
-        // Step A: "Undo" the previous drift for all appointments after the OLD break start
-        // Step B: "Apply" the new drift for all appointments after the NEW break start
-        for (const appt of sessionAppointments) {
-            let apptTime = parseClinicTime(appt.arriveByTime || appt.time, baseDate);
-            
-            // Revert old drift
-            if (apptTime >= oldBreakStart) {
-                apptTime = addMinutes(apptTime, -oldDuration);
-            }
-
-            // Apply new drift
-            if (apptTime >= newBreakStart) {
-                apptTime = addMinutes(apptTime, newDuration);
-            }
-
-            await this.appointmentRepo.update(appt.id, {
-                time: getClinicTimeString(apptTime),
-                arriveByTime: getClinicTimeString(subMinutes(apptTime, 15)),
-                cancelledByBreak: apptTime >= newBreakStart && apptTime < newBreakEnd,
-                updatedAt: new Date()
-            });
-        }
-
-        // 3. Update Doctor Record
+        // PREPARE UPDATES
         const updatedBreak: BreakPeriod = {
             ...oldBreak,
             startTime: newBreakStart.toISOString(),
@@ -96,7 +75,6 @@ export class EditBreakUseCase {
         const updatedBreaks = dateBreaks.map(b => b.id === breakId ? updatedBreak : b);
         breakPeriods[date] = updatedBreaks;
 
-        // 4. Update Session Extension
         const availabilityExtensions = doctor.availabilityExtensions || {};
         const dateExtensions = availabilityExtensions[date] || { sessions: [] };
         const sessionExtIndex = dateExtensions.sessions.findIndex((s: any) => s.sessionIndex === oldBreak.sessionIndex);
@@ -109,18 +87,33 @@ export class EditBreakUseCase {
             ext.newEndTime = getClinicTimeString(addMinutes(currentEndTime, driftDelta));
         }
 
-        await this.doctorRepo.update(doctorId, {
-            breakPeriods,
-            availabilityExtensions,
-            updatedAt: new Date()
+        // ATOMIC TRANSACTION
+        await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
+            // 1. Shift Appointments
+            for (const appt of sessionAppointments) {
+                let apptTime = parseClinicTime(appt.arriveByTime || appt.time, baseDate);
+                if (apptTime >= oldBreakStart) apptTime = addMinutes(apptTime, -oldDuration);
+                if (apptTime >= newBreakStart) apptTime = addMinutes(apptTime, newDuration);
+
+                await this.appointmentRepo.update(appt.id, appt.clinicId, {
+                    time: getClinicTimeString(apptTime),
+                    arriveByTime: getClinicTimeString(subMinutes(apptTime, 15)),
+                    cancelledByBreak: apptTime >= newBreakStart && apptTime < newBreakEnd
+                }, txn);
+            }
+
+            // 2. Update Doctor
+            await this.doctorRepo.update(doctorId, clinicId, {
+                breakPeriods,
+                availabilityExtensions
+            }, txn);
+
+            // 3. Update Breaks Subcollection
+            await this.doctorRepo.saveBreaks(doctorId, clinicId, date, updatedBreaks, txn);
         });
 
-        // Dual-write: write to breaks subcollection
-        const safeDateId = date.replace(/\//g, '-');
-        const breaksSubRef = db.collection('doctors').doc(doctorId).collection('breaks').doc(safeDateId);
-        await breaksSubRef.set({ breaks: breakPeriods[date], date }, { merge: true });
+        this.doctorRepo.invalidateCache(doctorId, clinicId);
 
-        // 5. Audit Log
         await this.activityRepo.save({
             id: '',
             type: 'SCHEDULING_CHANGE',
@@ -128,14 +121,7 @@ export class EditBreakUseCase {
             doctorId,
             clinicId,
             performedBy,
-            details: {
-                date,
-                breakId,
-                oldDuration,
-                newDuration,
-                startTime,
-                endTime
-            },
+            details: { date, breakId, oldDuration, newDuration, startTime, endTime },
             timestamp: new Date(),
             expiresAt: null
         });

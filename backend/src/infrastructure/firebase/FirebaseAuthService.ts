@@ -34,7 +34,7 @@ export class FirebaseAuthService implements IAuthService {
       throw new Error(data.error?.message || 'Login failed');
     }
 
-    const user = await this.userRepo.findById(data.localId);
+    const user = await this.userRepo.findById(data.localId, 'SYSTEM');
     if (!user) {
       throw new Error('User record not found in database.');
     }
@@ -77,10 +77,10 @@ export class FirebaseAuthService implements IAuthService {
   async verifyToken(token: string): Promise<any> {
     try {
       const decodedToken = await admin.auth().verifyIdToken(token);
-      let user = await this.userRepo.findById(decodedToken.uid) as any;
+      let user = await this.userRepo.findById(decodedToken.uid, 'SYSTEM') as any;
       
       if (!user && this.patientRepo) {
-        user = await this.patientRepo.findById(decodedToken.uid) as any;
+        user = await this.patientRepo.findById(decodedToken.uid, 'SYSTEM') as any;
       }
       
       if (!user) {
@@ -101,7 +101,7 @@ export class FirebaseAuthService implements IAuthService {
       // Auto-link patientId if missing but patient profile exists (syncs after manual registration)
       if (user && !user.patientId && user.phone) {
           try {
-              const patients = await this.patientRepo.findByPhone(user.phone);
+              const patients = await this.patientRepo.findByPhone(user.phone, 'SYSTEM');
               if (patients.length > 0) {
                   const primary = patients.find((p: any) => p.isPrimary) || patients[0];
                   user.patientId = primary.id;
@@ -239,12 +239,12 @@ export class FirebaseAuthService implements IAuthService {
       }
 
       // 4. Ensure User record exists in our DB and has patientId linked
-      let user = await this.userRepo.findById(userRecord.uid);
+      let user = await this.userRepo.findById(userRecord.uid, 'SYSTEM');
       
       // Look for existing patient profile
       let existingPatientId: string | null = null;
       try {
-        const patients = await this.patientRepo.findByPhone(phone);
+        const patients = await this.patientRepo.findByPhone(phone, 'SYSTEM');
         if (patients.length > 0) {
           const primary = patients.find((p: any) => p.isPrimary) || patients[0];
           existingPatientId = primary.id;

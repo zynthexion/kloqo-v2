@@ -8,7 +8,7 @@ export class FirebaseNotificationRepository implements INotificationRepository {
 
   constructor() {}
 
-  async findAllConfigs(): Promise<NotificationConfig[]> {
+  async findAllConfigs(clinicId: string): Promise<NotificationConfig[]> {
     const snapshot = await db.collection(this.collectionPath).get();
     const configs: Record<string, NotificationConfig> = {};
 
@@ -49,15 +49,16 @@ export class FirebaseNotificationRepository implements INotificationRepository {
     return Object.values(configs);
   }
 
-  async updateConfig(id: string, data: Partial<NotificationConfig>): Promise<void> {
+  async updateConfig(id: string, clinicId: string, data: Partial<NotificationConfig>): Promise<void> {
     const docRef = db.collection(this.collectionPath).doc(id);
     await docRef.set({
       ...data,
       updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: clinicId === 'SYSTEM' ? 'system' : `clinic:${clinicId}`
     }, { merge: true });
   }
 
-  async resetConfigsToDefaults(): Promise<void> {
+  async resetConfigsToDefaults(clinicId: string): Promise<void> {
     const batch = db.batch();
 
     Object.entries(NOTIFICATION_TYPES).forEach(([key, id]) => {

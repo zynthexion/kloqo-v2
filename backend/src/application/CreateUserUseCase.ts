@@ -72,29 +72,25 @@ export class CreateUserUseCase {
     }
 
     // 🛡️ ADDITIVE RBAC: Check for existing user and merge roles
-    const userRef = admin.firestore().collection('users').doc(uid);
-    const existingUserDoc = await userRef.get();
-    const existingRoles = existingUserDoc.exists ? (existingUserDoc.data()?.roles || [existingUserDoc.data()?.role]) : [];
+    const existingUser = await this.userRepo.findById(uid, 'SYSTEM');
+    const existingRoles = existingUser ? (existingUser.roles || [existingUser.role]) : [];
 
     const mergedRoles = Array.from(new Set([
       ...existingRoles,
       role
     ])).filter(Boolean) as KloqoRole[];
 
-    const newUser: Partial<User> = {
+    const newUser: User = {
       id: uid,
       email,
       name,
       role, // The newly assigned role is treated as primary for this context
       roles: mergedRoles,
-      clinicId,
+      clinicId: clinicId || '',
       updatedAt: new Date(),
-      isDeleted: false
+      isDeleted: false,
+      createdAt: existingUser?.createdAt || new Date()
     };
-
-    if (!existingUserDoc.exists) {
-      newUser.createdAt = new Date();
-    }
 
     if (phone) {
       newUser.phone = phone;
@@ -112,7 +108,7 @@ export class CreateUserUseCase {
       newUser.assignedDoctorIds = assignedDoctorIds;
     }
 
-    await userRef.set(newUser, { merge: true });
+    await this.userRepo.save(newUser);
 
     // 2. Send Credentials Email if new user and email service is available
     if (isNewAuthUser && this.emailService && password) {

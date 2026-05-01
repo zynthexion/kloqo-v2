@@ -106,6 +106,7 @@ export class GetAvailableSlotsUseCase {
     const firestoreDateStr = getClinicDateString(requestedDate);
     const appointments     = await this.appointmentRepo.findByDoctorAndDate(
       doctorId, 
+      clinicId,
       firestoreDateStr
     );
 

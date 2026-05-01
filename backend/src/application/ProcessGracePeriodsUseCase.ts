@@ -43,9 +43,9 @@ export class ProcessGracePeriodsUseCase {
       errors: [],
     };
 
-    // Fetch all Pending appointments for today in this clinic
+    // Fetch all Confirmed appointments for today in this clinic
     const todaysAppointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
-    const pendingAppointments = todaysAppointments.filter(a => a.status === 'Pending');
+    const pendingAppointments = todaysAppointments.filter(a => a.status === 'Confirmed');
 
     if (pendingAppointments.length === 0) return result;
 
@@ -65,7 +65,7 @@ export class ProcessGracePeriodsUseCase {
 
       let doctor = doctorCache.get(appointment.doctorId);
       if (!doctor) {
-        doctor = await this.doctorRepo.findById(appointment.doctorId) as Doctor;
+        doctor = await this.doctorRepo.findById(appointment.doctorId, clinicId) as Doctor;
         if (doctor) doctorCache.set(appointment.doctorId, doctor);
       }
 
@@ -110,7 +110,7 @@ export class ProcessGracePeriodsUseCase {
       groups.get(key)!.push(appt);
     }
 
-    // 3. Process Skips in Atomic Batches per Doctor/Session
+    // 3. Process Skips & Vacuum in ONE Atomic Transaction per Doctor/Session
     for (const [key, appts] of groups.entries()) {
       const first = appts[0];
       try {
@@ -118,6 +118,7 @@ export class ProcessGracePeriodsUseCase {
           for (const appointment of appts) {
             await this.appointmentRepo.update(
               appointment.id,
+              clinicId,
               {
                 status: 'Skipped',
                 skippedAt: now,
@@ -147,19 +148,20 @@ export class ProcessGracePeriodsUseCase {
             result.skippedAppointmentIds.push(appointment.id);
             result.processed++;
           }
+
+          // ── TRIGGER VACUUM WITHIN THE SAME TRANSACTION ──
+          if (first.slotIndex !== undefined && first.sessionIndex !== undefined) {
+            await this.bubblingService.reoptimize({
+              sessionIndex: first.sessionIndex,
+              doctorId: first.doctorId,
+              clinicId: first.clinicId,
+              date: first.date,
+              transaction: txn // Pass the current transaction
+            });
+          }
         });
 
-        // 4. TRIGGER ONE VACUUM PER SESSION
-        if (first.slotIndex !== undefined && first.sessionIndex !== undefined) {
-          await this.bubblingService.reoptimize({
-            sessionIndex: first.sessionIndex,
-            doctorId: first.doctorId,
-            clinicId: first.clinicId,
-            date: first.date,
-          });
-        }
-
-        console.log(`[GracePeriodSweep] Batch-skipped ${appts.length} appointments for doctor ${first.doctorId}`);
+        console.log(`[GracePeriodSweep] Atomic Skip + Vacuum completed for doctor ${first.doctorId}`);
       } catch (err: any) {
         console.error(`[GracePeriodSweep] Batch failed for ${key}:`, err.message);
         result.errors.push(`${key}: ${err.message}`);

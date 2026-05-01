@@ -29,12 +29,14 @@ export class SSEController {
       return;
     }
 
-    // ── SSE Headers ──────────────────────────────────────────────────────────
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Important for nginx proxies
-    res.flushHeaders();
+    // 🛡️ SSE Hardening: Prevent Node.js from severing long-lived connections
+    req.setTimeout(0);
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no' // Prevent Nginx/Vercel buffering
+    });
 
     const clientId = randomUUID();
 

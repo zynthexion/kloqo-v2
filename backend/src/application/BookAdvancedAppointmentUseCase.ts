@@ -13,7 +13,7 @@ import { parseClinicTime, parseClinicDate, getClinicISODateString, getClinicTime
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
-import { sseService } from '../domain/services/SSEService';
+import { SSEService } from '../domain/services/SSEService';
 
 export interface BookAdvancedAppointmentRequest {
   clinicId: string;
@@ -42,7 +42,9 @@ export class BookAdvancedAppointmentUseCase {
     private patientRepo: IPatientRepository,
     private clinicRepo: IClinicRepository,
     private managePatientUseCase: ManagePatientUseCase,
-    private tokenGenerator: TokenGeneratorService
+    private tokenGenerator: TokenGeneratorService,
+    private tokenStrategyFactory: TokenStrategyFactory,
+    private sseService: SSEService
   ) {}
 
   async execute(request: BookAdvancedAppointmentRequest): Promise<Appointment> {
@@ -59,11 +61,7 @@ export class BookAdvancedAppointmentUseCase {
     const firestoreDateStr = getClinicISODateString(date);
 
     // --- FAIL FAST: Validate all inputs ---
-    if (!doctorId) {
-        console.error('[BookAdvancedAppointmentUseCase] Error: doctorId is empty');
-        throw new Error('Doctor ID is required');
-    }
-    const doctor = await this.doctorRepo.findById(doctorId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!doctor) throw new Error('Doctor not found');
 
     if (!clinicId) {
@@ -73,31 +71,11 @@ export class BookAdvancedAppointmentUseCase {
     const clinic = await this.clinicRepo.findById(clinicId);
     if (!clinic) throw new Error('Clinic not found');
 
-    // --- PATIENT MANAGEMENT ---
-    const finalPatientId = await this.managePatientUseCase.execute({
-      id: patientId,
-      name: request.patientName || '',
-      phone: request.phone || '',
-      age: request.age,
-      sex: request.sex,
-      place: request.place,
-      communicationPhone: request.communicationPhone,
-      clinicId: clinicId
-    });
-
-    console.log('[BookAdvancedAppointmentUseCase] Patient managed:', finalPatientId);
-
-    if (!finalPatientId) {
-        console.error('[BookAdvancedAppointmentUseCase] Error: finalPatientId is empty after management');
-        throw new Error('Internal Error: Patient identification failed');
-    }
-    const patient = await this.patientRepo.findById(finalPatientId);
-    if (!patient) throw new Error('Patient not found after management');
-    const patientName = patient.name;
+    const patientName = ''; // Will be populated inside transaction
 
     // --- STRATEGY PATTERN: Factory picks the correct token strategy ---
     const tokenDistribution = (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
-    const tokenStrategy = TokenStrategyFactory.create(tokenDistribution, this.tokenGenerator);
+    const tokenStrategy = this.tokenStrategyFactory.create(tokenDistribution);
 
     // Calculate Arrive By Time (15 mins before)
     const appointmentTime = parseClinicTime(slotTime, date);
@@ -111,57 +89,62 @@ export class BookAdvancedAppointmentUseCase {
 
     try {
       const appointment = await this.appointmentRepo.runTransaction(async (transaction) => {
+        // --- STEP 1: READ PHASE ---
+        const finalPatientId = await this.managePatientUseCase.execute({
+          id: patientId,
+          name: request.patientName || '',
+          phone: request.phone || '',
+          age: request.age,
+          sex: request.sex,
+          place: request.place,
+          communicationPhone: request.communicationPhone,
+          clinicId: clinicId
+        }, transaction);
+
+        const patient = await this.patientRepo.findById(finalPatientId, clinicId, transaction);
+        if (!patient) throw new Error('Patient not found after management');
+
         // 0. Duplicate Check
-        const existingAppts = await this.appointmentRepo.findByDoctorAndDate(doctorId, firestoreDateStr);
+        const existingAppts = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, firestoreDateStr, transaction);
         const isDuplicate = existingAppts.some(a =>
           a.patientId === finalPatientId &&
           a.sessionIndex === sessionIndex &&
           a.status !== 'Cancelled' &&
-          a.id !== request.rescheduleFromId // Don't count the one we're rescheduling as a duplicate
+          a.id !== request.rescheduleFromId
         );
 
-        // 0a. Load old appointment if rescheduling (ALL READS MUST HAPPEN BEFORE WRITES)
+        // 0a. Load old appointment if rescheduling
         let oldAppt: Appointment | null = null;
         if (request.rescheduleFromId) {
-          oldAppt = await this.appointmentRepo.findById(request.rescheduleFromId);
+          oldAppt = await this.appointmentRepo.findById(request.rescheduleFromId, clinicId, transaction);
           if (oldAppt && oldAppt.patientId !== finalPatientId) {
-            console.warn(`[BookAdvancedAppointmentUseCase] Reschedule mismatch: Old patient ${oldAppt.patientId} != New ${finalPatientId}`);
             throw new Error('Unauthorized to reschedule this appointment');
           }
         }
 
         if (isDuplicate) {
-          console.warn(`[BookAdvancedAppointmentUseCase] Duplicate booking blocked for patient ${finalPatientId} in session ${sessionIndex}`);
           throw new DuplicateBookingError();
         }
 
-        // 0b. Buffer Slot Guard (Advanced Distribution Only)
-        // Reject the booking if the requested slotIndex falls in the last 15% of the session,
-        // which is reserved exclusively for walk-in patients.
+        // 0b. Buffer Slot Guard
         if (tokenDistribution === 'advanced') {
           const allSlots = SlotCalculator.generateSlots(doctor, date);
-          const now = parseClinicTime(slotTime, date); // use slot time as 'now' proxy
           const reservedSlotIndices = BookingSessionEngine.calculateReservedSlots(allSlots, parseClinicTime('00:00', date));
           if (reservedSlotIndices.has(slotIndex)) {
-            console.warn(`[BookAdvancedAppointmentUseCase] Slot ${slotIndex} is reserved for walk-ins. Blocking advance booking.`);
             throw new SlotAlreadyBookedError();
           }
         }
 
-        // 1. Generate Token safely within the same transaction to prevent gaps on rejection
-        // This MUST happen before createSlotLock because token generation performs a READ (get counter),
-        // and Firestore transactions require all reads before any writes.
         const tokenResult = await tokenStrategy.generateBookingToken({
           clinicId,
           doctorId,
           doctorName: doctor.name,
           date: firestoreDateStr,
           sessionIndex,
-          slotIndex // ← Pass the Orchestrate Position
+          slotIndex
         }, transaction);
 
-        // 2. Lock the Slot (Fails automatically if already exists)
-        // This is a WRITE operation.
+        // --- STEP 2: WRITE PHASE ---
         await this.appointmentRepo.createSlotLock(lockId, {
           appointmentId,
           doctorId,
@@ -170,28 +153,21 @@ export class BookAdvancedAppointmentUseCase {
           slotIndex
         }, transaction);
 
-        // 2b. Cancel Old Appointment & Release Old Lock
         if (oldAppt && oldAppt.status !== 'Cancelled') {
-          console.log(`[BookAdvancedAppointmentUseCase] Cancelling old appointment ${oldAppt.id} for reschedule`);
           const oldLockId = `${oldAppt.doctorId}_${oldAppt.date}_s${oldAppt.sessionIndex}_slot${oldAppt.slotIndex}`;
-          
-          await this.appointmentRepo.update(oldAppt.id, {
+          await this.appointmentRepo.update(oldAppt.id, oldAppt.clinicId, {
             status: 'Cancelled',
             isRescheduled: true,
             cancellationReason: 'Rescheduled by patient',
-            updatedAt: new Date()
+            updatedAt: getClinicNow()
           }, transaction);
-          
-          await this.appointmentRepo.releaseSlotLock(oldLockId, transaction).catch(e => {
-            console.warn(`[BookAdvancedAppointmentUseCase] Failed to release old lock ${oldLockId}:`, e.message);
-          });
+          await this.appointmentRepo.releaseSlotLock(oldLockId, transaction).catch(() => {});
         }
 
-        // 3. Create Appointment object
         const appt: Appointment = {
           id: appointmentId,
           patientId: finalPatientId,
-          patientName: patientName!,
+          patientName: patient.name!,
           doctorId,
           doctorName: doctor.name,
           clinicId,
@@ -205,30 +181,21 @@ export class BookAdvancedAppointmentUseCase {
           bookedVia: 'Advanced Booking',
           tokenNumber: (tokenResult?.tokenNumber ?? null) as any,
           numericToken: tokenResult?.numericToken,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          createdAt: getClinicNow(),
+          updatedAt: getClinicNow()
         };
 
-        if (source === 'phone') {
-          appt.notes = 'Booked via Phone';
-        }
+        if (source === 'phone') appt.notes = 'Booked via Phone';
 
-        // 4. Save Appointment within transaction
-        await this.appointmentRepo.save(appt, transaction);
+        await this.appointmentRepo.save(appt, clinicId, transaction);
         return appt;
       });
 
       // ── SSE: Push real-time update to nurse dashboard ─────────────────────────
       // We emit 'walk_in_created' specifically because it triggers a silent 
       // refresh in the Nurse App dashboard, ensuring real-time visibility.
-      sseService.emit('walk_in_created', appointment.clinicId, {
-        appointmentId: appointment.id,
-        patientName: appointment.patientName,
-        doctorId: appointment.doctorId,
-        doctorName: appointment.doctorName,
-        tokenNumber: appointment.tokenNumber,
-        sessionIndex: appointment.sessionIndex,
-        slotIndex: appointment.slotIndex,
+      this.sseService.emit('walk_in_created', appointment.clinicId, {
+        appointment
       });
 
       return appointment;

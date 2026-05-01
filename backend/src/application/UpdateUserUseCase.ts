@@ -6,7 +6,8 @@ export class UpdateUserUseCase {
   constructor(private userRepo: IUserRepository) {}
 
   async execute(id: string, data: Partial<User>, adminClinicId?: string): Promise<User> {
-    const targetUser = await this.userRepo.findById(id);
+    // Use 'SYSTEM' to fetch the target user regardless of clinic so we can check their current clinicId
+    const targetUser = await this.userRepo.findById(id, 'SYSTEM');
     if (!targetUser) {
       throw new NotFoundError('Target user not found');
     }
@@ -27,10 +28,12 @@ export class UpdateUserUseCase {
       data.roles = [data.role as KloqoRole];
     }
 
-    await this.userRepo.update(id, data);
+    // Use the adminClinicId or targetUser.clinicId to authorize the update
+    const effectiveClinicId = adminClinicId || targetUser.clinicId || 'SYSTEM';
+    await this.userRepo.update(id, effectiveClinicId, data);
     
     // Fetch and return the fully updated user for zero-latency UI updates
-    const updatedUser = await this.userRepo.findById(id);
+    const updatedUser = await this.userRepo.findById(id, effectiveClinicId);
     if (!updatedUser) throw new NotFoundError('Update failed: User disappeared');
     
     return updatedUser;

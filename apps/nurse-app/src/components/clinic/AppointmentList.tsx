@@ -6,7 +6,7 @@ import type { MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent } fro
 import type { Appointment } from '@kloqo/shared';
 import { parse, subMinutes, format, addMinutes, isAfter } from 'date-fns';
 import { cn, getDisplayTime } from '@/lib/utils';
-import { displayTime12h, parseClinicTime, getClinic12hTimeString } from '@kloqo/shared-core';
+import { displayTime12h, parseClinicTime, getClinic12hTimeString, getClinicNow } from '@kloqo/shared-core';
 import { Button } from '@/components/ui/button';
 import { User, XCircle, Edit, Check, CheckCircle2, SkipForward, Phone, Star, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,7 @@ export default function AppointmentList({
   onAddToQueue,
   showTopRightActions = true,
   clinicStatus = 'In',
-  currentTime = new Date(),
+  currentTime = getClinicNow(),
   isInBufferQueue,
   enableSwipeCompletion = true,
   showStatusBadge = true,
@@ -138,11 +138,11 @@ export default function AppointmentList({
     if (swipeState.id) return; // Don't start if swiping
 
     setPressState({ id, type: 'skip', progress: 0 });
-    pressStartTimeRef.current = Date.now();
+    pressStartTimeRef.current = getClinicNow().getTime();
 
     // Animate progress bar
     const animate = () => {
-      const elapsed = Date.now() - pressStartTimeRef.current;
+      const elapsed = getClinicNow().getTime() - pressStartTimeRef.current;
       const progress = Math.min((elapsed / 3000) * 100, 100); // 3 seconds for skip
 
       setPressState(prev => ({ ...prev, progress }));
@@ -186,13 +186,13 @@ export default function AppointmentList({
 
     const touch = 'touches' in e ? (e as React.TouchEvent).touches[0] : (e as React.MouseEvent);
     startPosRef.current = { x: touch.clientX, y: touch.clientY };
-    pressStartTimeRef.current = Date.now();
+    pressStartTimeRef.current = getClinicNow().getTime();
 
     // Start Priority Press
     setPressState({ id: appt.id, type: 'priority', progress: 0 });
 
     const animate = () => {
-      const elapsed = Date.now() - pressStartTimeRef.current;
+      const elapsed = getClinicNow().getTime() - pressStartTimeRef.current;
       const progress = Math.min((elapsed / 800) * 100, 100); // 800ms for priority
 
       setPressState(prev => ({ ...prev, progress }));
@@ -248,7 +248,7 @@ export default function AppointmentList({
     const getApptTime = (apt: Appointment) => {
       const est = estimatedTimes.find(e => e.appointmentId === apt.id);
       if (est) {
-        return parseClinicTime(est.estimatedTime, new Date());
+        return parseClinicTime(est.estimatedTime, getClinicNow());
       }
       return new Date(8640000000000000); // Push to end if no time
     };
@@ -337,7 +337,7 @@ export default function AppointmentList({
     if (!doctor) return 0;
 
     const sessionIndex = appt.sessionIndex || 0;
-    const now = currentTime ? new Date(currentTime) : new Date();
+    const now = currentTime ? new Date(currentTime) : getClinicNow();
     const allApts = data?.appointments || [];
 
     if (doctor.consultationStatus !== 'In') {
@@ -409,7 +409,7 @@ export default function AppointmentList({
     const liveDelay = calculateLiveDelay(appt);
 
     const [h, m] = appt.time.split(':').map(Number);
-    const scheduledTime = new Date(currentTime ? new Date(currentTime) : new Date());
+    const scheduledTime = new Date(currentTime ? new Date(currentTime) : getClinicNow());
     scheduledTime.setHours(h, m, 0, 0);
 
     const deadline = new Date(scheduledTime.getTime() + (liveDelay + gracePeriod) * 60 * 1000);
@@ -460,7 +460,7 @@ export default function AppointmentList({
 
   useEffect(() => {
     if (!swipeEnabled || swipeCooldownUntil === null) return;
-    const remaining = Math.max(0, swipeCooldownUntil - Date.now());
+    const remaining = Math.max(0, swipeCooldownUntil - getClinicNow().getTime());
     const timeout = window.setTimeout(() => {
       setSwipeCooldownUntil(null);
     }, remaining);
@@ -623,7 +623,7 @@ export default function AppointmentList({
                       onTouchStart={(e) => handleCardTouchStart(e, appt)}
                       onClick={() => {
                         if (activeRole === 'doctor') {
-                          const todayStr = new Date().toISOString().split('T')[0];
+                          const todayStr = getClinicNow().toISOString().split('T')[0];
                           const isPast = (appt.date && appt.date < todayStr) || appt.status === 'Completed';
                           
                           if (isPast) {
@@ -701,7 +701,7 @@ export default function AppointmentList({
                                           {displayTime}
                                         </Badge>
                                         <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
-                                          Reporting: {format(subMinutes(parseClinicTime(displayTime, new Date()), 15), 'hh:mm a')}
+                                          Reporting: {format(subMinutes(parseClinicTime(displayTime, getClinicNow()), 15), 'hh:mm a')}
                                         </span>
                                         {appt.time && (() => {
                                           const { deadline, liveDelay, gracePeriod, doctorStatus } = calculateDeadlineInfo(appt);
@@ -724,7 +724,7 @@ export default function AppointmentList({
                                       {appt.time && (
                                         <>
                                           <span className={cn("text-[9px] font-bold uppercase tracking-wider ml-1", isSwiping ? 'text-white/60' : 'text-emerald-600')}>
-                                            Reporting: {format(subMinutes(parseClinicTime(appt.time, new Date()), 15), 'hh:mm a')}
+                                            Reporting: {format(subMinutes(parseClinicTime(appt.time, getClinicNow()), 15), 'hh:mm a')}
                                           </span>
                                           {(() => {
                                             const { deadline, liveDelay, gracePeriod, doctorStatus } = calculateDeadlineInfo(appt);

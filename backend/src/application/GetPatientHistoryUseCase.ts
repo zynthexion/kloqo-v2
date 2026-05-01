@@ -13,7 +13,7 @@ export class GetPatientHistoryUseCase {
   ) {}
 
   async execute(patientId: string, clinicId: string): Promise<PatientHistoryResponse> {
-    const patient = await this.patientRepo.findById(patientId);
+    const patient = await this.patientRepo.findById(patientId, clinicId);
     if (!patient) {
       throw new Error('Patient not found');
     }

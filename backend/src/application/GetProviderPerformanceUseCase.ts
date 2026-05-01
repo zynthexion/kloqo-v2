@@ -29,7 +29,8 @@ export class GetProviderPerformanceUseCase {
     const doctors = Array.isArray(doctorsResult) ? doctorsResult : (doctorsResult as any).data as Doctor[];
     
     // 2. Fetch All Appointments for the clinic in date range
-    const appointments = await this.appointmentRepo.findByClinicId(clinicId);
+    // ✅ FINOPS: Scoping query to date range at DB level instead of in-memory filter
+    const appointments = await this.appointmentRepo.findByClinicId(clinicId, startDate, endDate);
 
     // 3. In-Memory Aggregation
     const leaderboard: ProviderPerformance[] = doctors.map((doctor: Doctor) => {

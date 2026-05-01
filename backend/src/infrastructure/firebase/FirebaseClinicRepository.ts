@@ -1,5 +1,5 @@
 import { Clinic, PaginationParams, PaginatedResponse } from '../../../../packages/shared/src/index';
-import { IClinicRepository } from '../../domain/repositories';
+import { IClinicRepository, ITransaction } from '../../domain/repositories';
 import { db, paginate } from './config';
 import * as admin from 'firebase-admin';
 import { cacheService, CACHE_TTL, CACHE_KEY } from '../services/CacheService';
@@ -92,16 +92,48 @@ export class FirebaseClinicRepository implements IClinicRepository {
     cacheService.del(CACHE_KEY.clinic(clinic.id));
   }
 
-  async delete(id: string, soft: boolean = true): Promise<void> {
-    if (soft) {
-      await this.collection.doc(id).update({
-        isDeleted: true,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+  async delete(id: string, clinicId: string, soft: boolean = true, transaction?: ITransaction): Promise<void> {
+    if (id !== clinicId) {
+      throw new Error("Security Violation: Clinic ID mismatch in deletion attempt.");
+    }
+
+    const docRef = this.collection.doc(id);
+    if (transaction) {
+      const t = transaction as admin.firestore.Transaction;
+      if (soft) {
+        t.update(docRef, {
+          isDeleted: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        t.delete(docRef);
+      }
     } else {
-      await this.collection.doc(id).delete();
+      if (soft) {
+        await docRef.update({
+          isDeleted: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        await docRef.delete();
+      }
     }
     cacheService.del(CACHE_KEY.clinic(id));
+  }
+
+  async countAll(): Promise<number> {
+    const snapshot = await this.collection.where('isDeleted', '==', false).count().get();
+    return snapshot.data().count;
+  }
+
+  async countByClinicId(clinicId: string): Promise<number> {
+    // For clinics, countByClinicId is just 1 if it exists and not deleted, but for parity:
+    const snapshot = await this.collection
+      .where(admin.firestore.FieldPath.documentId(), '==', clinicId)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    return snapshot.data().count;
   }
 
   async countActive(): Promise<number> {

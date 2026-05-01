@@ -127,7 +127,7 @@ export class NotificationService {
       await Promise.allSettled(admins.map(async admin => {
         // 1. PWA Push
         if (this.fcmService) {
-          await this.fcmService.sendToUser(admin.id!, {
+          await this.fcmService.sendToUser(admin.id!, clinicId, {
             title,
             body,
             data: { type: 'admin_alert', clinicId }
@@ -439,7 +439,7 @@ export class NotificationService {
     }
 
     if (config?.pwaEnabled && appointment.patientId && this.fcmService) {
-      this.fcmService.sendToUser(appointment.patientId, {
+      this.fcmService.sendToUser(appointment.patientId, clinicId, {
         title: `Dr. ${doctorName} has started consultations`,
         body: `Your token: ${appointment.tokenNumber || ''}. Clinic: ${clinicName}.`,
         data: {
@@ -515,13 +515,14 @@ export class NotificationService {
     clinicName: string;
     date: string;
     time: string;
+    clinicId: string;
     communicationPhone?: string;
     patientName?: string;
     reason?: string;
   }): Promise<void> {
     const { 
       patientId, appointmentId, communicationPhone, patientName, 
-      doctorName, clinicName, date, time, reason 
+      doctorName, clinicName, date, time, reason, clinicId 
     } = params;
  
     const isDoctorLeave = reason === 'Doctor on leave';
@@ -535,7 +536,7 @@ export class NotificationService {
  
     // 2. PWA / FCM Push Notification
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, {
+      this.fcmService.sendToUser(patientId, clinicId, {
         title: 'അപ്പോയ്ൻ്റ്മെന്റ് റദ്ദാക്കി (Cancelled)',
         body: `Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് (${date}) റദ്ദാക്കി. കാരണം: ${displayReason}.`,
         data: {

@@ -1,5 +1,4 @@
 import { IDoctorRepository, IClinicRepository, IDepartmentRepository, IAppointmentRepository, IUserRepository } from '../domain/repositories';
-import * as admin from 'firebase-admin';
 import { KLOQO_ROLES } from '@kloqo/shared';
 
 // Reusing firebase-admin since we have complex querying for appointments
@@ -14,14 +13,14 @@ export class GetDoctorDetailsUseCase {
 
   async execute(doctorId: string): Promise<any> {
     // 1. Try finding by ID directly (clinical ID)
-    let doctor = await this.doctorRepo.findById(doctorId);
+    let doctor = await this.doctorRepo.findById(doctorId, 'SYSTEM');
 
     // 2. IDENTITY FALLBACK (Read-Repair): If not found by document ID, 
     // it's likely a User UID. Fetch user email to enable legacy fallback/repair.
     if (!doctor) {
-      const user = await this.userRepo.findById(doctorId);
+      const user = await this.userRepo.findById(doctorId, 'SYSTEM');
       if (user) {
-        doctor = await this.doctorRepo.findByUserId(user.id as string, user.email);
+        doctor = await this.doctorRepo.findByUserId(user.id as string, 'SYSTEM');
       }
     }
 
@@ -31,7 +30,7 @@ export class GetDoctorDetailsUseCase {
 
     // Hydrate multi-role identity from Users collection
     if (doctor.email) {
-      const user = await this.userRepo.findByEmail(doctor.email);
+      const user = await this.userRepo.findByEmail(doctor.email, 'SYSTEM');
       if (user) {
         doctor.roles = user.roles || (user.role ? [user.role] as any : [KLOQO_ROLES.DOCTOR]);
         doctor.role = (user.role as any) || (doctor.roles?.[0] as any) || KLOQO_ROLES.DOCTOR;
@@ -61,7 +60,7 @@ export class GetDoctorDetailsUseCase {
         // Only try to find by ID if it doesn't look like a direct name (e.g. doesn't have slashes)
         // Firestore .doc() throws if path has odd components
         if (!doctor.department.includes('/')) {
-          const dept = await this.departmentRepo.findById(doctor.department);
+          const dept = await this.departmentRepo.findById(doctor.department, doctor.clinicId);
           if (dept) {
             departmentName = dept.name;
           } else {
@@ -95,7 +94,7 @@ export class GetDoctorDetailsUseCase {
       
       const avg = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
       if (avg && !isNaN(avg)) {
-        await this.doctorRepo.update?.(doctor.id, {
+        await this.doctorRepo.update?.(doctor.id, doctor.clinicId, {
           actualAverageConsultationTime: avg
         });
         doctor.actualAverageConsultationTime = avg;

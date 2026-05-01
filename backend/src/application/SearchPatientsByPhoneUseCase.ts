@@ -12,8 +12,8 @@ export class SearchPatientsByPhoneUseCase {
     const fullPhone = `+91${cleaned}`;
     
     const [byPhone, byComm] = await Promise.all([
-      this.patientRepo.findByPhone(fullPhone),
-      this.patientRepo.findByCommunicationPhone(fullPhone)
+      this.patientRepo.findByPhone(fullPhone, 'SYSTEM'),
+      this.patientRepo.findByCommunicationPhone(fullPhone, 'SYSTEM')
     ]);
 
     const combined = [...byPhone, ...byComm];

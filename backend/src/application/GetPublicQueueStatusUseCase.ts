@@ -41,8 +41,8 @@ export class GetPublicQueueStatusUseCase {
   async execute(clinicId: string, doctorId: string, date: string, patientId?: string): Promise<PublicQueueStatus> {
     const [clinic, doctor, appointments] = await Promise.all([
       this.clinicRepo.findById(clinicId),
-      this.doctorRepo.findById(doctorId),
-      this.appointmentRepo.findByDoctorAndDate(doctorId, date)
+      this.doctorRepo.findById(doctorId, clinicId),
+      this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date)
     ]);
 
     if (!clinic || !doctor) {

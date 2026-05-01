@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
 import { Clinic, User, KLOQO_ROLES, KloqoRole, RBACUtils } from '../../../packages/shared/src/index';
 import { IEmailService, IClinicRepository } from '../domain/repositories';
+import { getClinicNow } from '../domain/services/DateUtils';
 
 export interface RegisterClinicParams {
   clinicData: Omit<Clinic, 'id' | 'createdAt' | 'updatedAt' | 'registrationStatus' | 'onboardingStatus'>;
@@ -85,8 +86,8 @@ export class RegisterClinicUseCase {
       isUnlimited = false;
     }
 
-    const now = new Date();
-    const trialEndDate = new Date();
+    const now = getClinicNow();
+    const trialEndDate = getClinicNow();
     trialEndDate.setDate(now.getDate() + 30); // 30-day free trial for all plans
     const nextResetDate = trialEndDate; // WhatsApp resets exactly when billing cycle rolls over
 
@@ -157,13 +158,13 @@ export class RegisterClinicUseCase {
         role: KLOQO_ROLES.CLINIC_ADMIN, // Primary role for this app context
         roles: mergedRoles,
         clinicId: clinicId,
-        updatedAt: new Date(),
+        updatedAt: getClinicNow(),
         isDeleted: false
     };
 
     // Only set createdAt if it's a fresh user record
     if (!existingUserData) {
-      newUser.createdAt = new Date();
+      newUser.createdAt = getClinicNow();
     }
 
     const batch = admin.firestore().batch();

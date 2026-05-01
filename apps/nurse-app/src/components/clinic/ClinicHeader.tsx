@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
 import { RoleSwitcher } from '../layout/RoleSwitcher';
+import { getClinicNow } from '@kloqo/shared-core';
 
 type ClinicHeaderProps = {
     doctors: Doctor[];
@@ -52,7 +53,7 @@ export default function ClinicHeader({
     pageTitle,
     consultationStatus = 'Out',
     onStatusChange,
-    currentTime = new Date(),
+    currentTime = getClinicNow(),
     isBreakMode = false,
     showPhoneModeToggle = false,
     isPhoneMode = false,

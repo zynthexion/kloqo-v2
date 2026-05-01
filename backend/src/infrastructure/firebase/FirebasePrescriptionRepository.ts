@@ -18,10 +18,18 @@ export class FirebasePrescriptionRepository implements IPrescriptionRepository {
     });
   }
 
-  async findById(id: string): Promise<Prescription | null> {
+  async findById(id: string, clinicId: string): Promise<Prescription | null> {
     const doc = await this.collection.doc(id).get();
     if (!doc.exists) return null;
-    return { id: doc.id, ...doc.data() } as Prescription;
+    const data = doc.data() as Prescription;
+
+    // SECURITY: IDOR Prevention
+    if (data.clinicId !== clinicId) {
+      console.warn(`[SECURITY_ALERT] Potential IDOR attempt: Clinic ${clinicId} tried to access Prescription ${id}`);
+      return null;
+    }
+    
+    return { id: doc.id, ...data };
   }
 
   async findByClinicId(clinicId: string): Promise<Prescription[]> {
@@ -33,9 +41,10 @@ export class FirebasePrescriptionRepository implements IPrescriptionRepository {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Prescription));
   }
 
-  async findByPatientId(patientId: string): Promise<Prescription[]> {
+  async findByPatientId(patientId: string, clinicId: string): Promise<Prescription[]> {
     const snapshot = await this.collection
       .where('patientId', '==', patientId)
+      .where('clinicId', '==', clinicId)
       .orderBy('createdAt', 'desc')
       .get();
     

@@ -86,5 +86,4 @@ export class SSEService {
   }
 }
 
-/** Singleton — single instance shared across the entire process */
-export const sseService = new SSEService();
+// Removed singleton export. Instance managed by Container.ts.

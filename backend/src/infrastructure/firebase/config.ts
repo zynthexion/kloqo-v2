@@ -43,9 +43,10 @@ export const paginate = async <T>(
   params?: { page: number; limit: number; sortBy?: string; sortOrder?: 'asc' | 'desc' }
 ): Promise<{ data: T[]; total: number; page: number; limit: number; totalPages: number }> => {
   if (!params) {
-    const snapshot = await query.get();
+    // ✅ FINOPS: Enforce hard limit on unbounded queries
+    const snapshot = await query.limit(100).get();
     const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as T));
-    return { data, total: data.length, page: 1, limit: data.length, totalPages: 1 };
+    return { data, total: data.length, page: 1, limit: 100, totalPages: 1 };
   }
 
   const { page, limit, sortBy, sortOrder = 'desc' } = params;

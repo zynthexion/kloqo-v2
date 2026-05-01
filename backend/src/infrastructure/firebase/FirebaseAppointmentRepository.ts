@@ -56,22 +56,112 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
-  async findById(id: string): Promise<Appointment | null> {
-    const doc = await this.collection.doc(id).get();
-    if (!doc.exists || (doc.data() as any).isDeleted) return null;
-    return { id: doc.id, ...doc.data() } as Appointment;
+  async findAllGlobal(startDate: Date, endDate: Date): Promise<Appointment[]> {
+    // ✅ FINOPS: Strictly bounded global query.
+    // Superadmin dashboard uses this to calculate MAU/Retention.
+    // We enforce a hard limit of 500 documents to prevent infra-leaks.
+    const snapshot = await this.collection
+      .where('createdAt', '>=', startDate)
+      .where('createdAt', '<=', endDate)
+      .limit(500)
+      .get();
+    
+    if (snapshot.size === 500) {
+      console.warn('[FINOPS_WARNING] findAllGlobal reached 500-doc limit. Analytics might be sampled.');
+    }
+
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as Appointment))
+      .filter(a => !a.isDeleted);
   }
 
-  async findByDoctorAndDate(doctorId: string, dateStr: string): Promise<Appointment[]> {
+  async findById(id: string, clinicId: string, transaction?: ITransaction): Promise<Appointment | null> {
+    const docRef = this.collection.doc(id);
+    const doc = transaction ? await (transaction as admin.firestore.Transaction).get(docRef) : await docRef.get();
+    if (!doc.exists) return null;
+    const data = doc.data() as Appointment;
+    
+    if (data.isDeleted || data.clinicId !== clinicId) {
+      console.warn(`[SECURITY_ALERT] Potential IDOR attempt: Clinic ${clinicId} tried to access Appointment ${id}`);
+      return null;
+    }
+    
+    return { id: doc.id, ...data };
+  }
+
+  async findByDoctorAndDate(doctorId: string, clinicId: string, dateStr: string, transaction?: ITransaction): Promise<Appointment[]> {
     const date = parseClinicDate(dateStr);
     const variations = [getClinicISODateString(date), getClinicDateString(date)];
     
     console.log('[REPOSITORY_DEBUG] findByDoctorAndDate variations:', variations);
 
-    const snapshot = await this.collection
+    const query = this.collection
+      .where('clinicId', '==', clinicId)
       .where('doctorId', '==', doctorId)
-      .where('date', 'in', variations)
+      .where('date', 'in', variations);
+
+    const snapshot = transaction ? await (transaction as admin.firestore.Transaction).get(query.limit(500)) : await query.limit(500).get();
+
+    if (snapshot.size === 500) {
+      throw new (require('../../domain/errors').QueryBoundaryExceededError)();
+    }
+
+    const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
+    return docs.filter(doc => !doc.isDeleted);
+  }
+
+  async findByDoctorAndDates(doctorId: string, clinicId: string, dateStrings: string[]): Promise<Appointment[]> {
+    if (dateStrings.length === 0) return [];
+
+    // Flatten all variations for all dates
+    const allVariations = dateStrings.flatMap(dateStr => {
+      const date = parseClinicDate(dateStr);
+      return [getClinicISODateString(date), getClinicDateString(date)];
+    });
+
+    // Chunk variations into groups of 30 (Firestore 'in' limit)
+    const CHUNK_SIZE = 30;
+    const variationsChunks: string[][] = [];
+    for (let i = 0; i < allVariations.length; i += CHUNK_SIZE) {
+      variationsChunks.push(allVariations.slice(i, i + CHUNK_SIZE));
+    }
+
+    const snapshots = await Promise.all(
+      variationsChunks.map(chunk =>
+        this.collection
+          .where('clinicId', '==', clinicId)
+          .where('doctorId', '==', doctorId)
+          .where('date', 'in', chunk)
+          .limit(500)
+          .get()
+      )
+    );
+
+    const docs: Appointment[] = [];
+    for (const snapshot of snapshots) {
+      if (snapshot.size === 500) {
+        throw new (require('../../domain/errors').QueryBoundaryExceededError)();
+      }
+      snapshot.docs.forEach(doc => {
+        docs.push({ id: doc.id, ...doc.data() } as Appointment);
+      });
+    }
+
+    return docs.filter(doc => !doc.isDeleted);
+  }
+
+  async findByDoctorAndDateRange(doctorId: string, clinicId: string, startDate: string, endDate: string): Promise<Appointment[]> {
+    const snapshot = await this.collection
+      .where('clinicId', '==', clinicId)
+      .where('doctorId', '==', doctorId)
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .limit(500)
       .get();
+
+    if (snapshot.size === 500) {
+      throw new (require('../../domain/errors').QueryBoundaryExceededError)();
+    }
 
     const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
     return docs.filter(doc => !doc.isDeleted);
@@ -86,7 +176,12 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     const snapshot = await this.collection
       .where('clinicId', '==', clinicId)
       .where('date', 'in', variations)
+      .limit(500)
       .get();
+
+    if (snapshot.size === 500) {
+      throw new (require('../../domain/errors').QueryBoundaryExceededError)();
+    }
 
     const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
     return docs.filter(doc => !doc.isDeleted);
@@ -111,7 +206,12 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
       query = query.where('createdAt', '>=', startDate).where('createdAt', '<=', endDate);
     }
 
-    const snapshot = await query.get();
+    const snapshot = await query.limit(500).get();
+    
+    if (snapshot.size === 500) {
+      throw new (require('../../domain/errors').QueryBoundaryExceededError)();
+    }
+
     const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
     return docs.filter(doc => !doc.isDeleted);
   }
@@ -131,7 +231,10 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
-  async update(id: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void> {
+  async update(id: string, clinicId: string, data: Partial<Appointment>, transaction?: ITransaction): Promise<void> {
+    const existing = await this.findById(id, clinicId);
+    if (!existing) throw new Error('Appointment not found or unauthorized');
+
     const updateData: any = {
       ...data,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -173,6 +276,26 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
 
     // ✅ FINOPS: Use native aggregation query
     const snapshot = await query.count().get();
+    return snapshot.data().count;
+  }
+
+  async countByClinicAndDateRange(clinicId: string, startDate: Date, endDate: Date): Promise<number> {
+    const snapshot = await this.collection
+      .where('clinicId', '==', clinicId)
+      .where('createdAt', '>=', startDate)
+      .where('createdAt', '<=', endDate)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    return snapshot.data().count;
+  }
+
+  async countTotalByClinic(clinicId: string): Promise<number> {
+    const snapshot = await this.collection
+      .where('clinicId', '==', clinicId)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
     return snapshot.data().count;
   }
 
@@ -316,9 +439,10 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Appointment));
   }
 
-  async findByPatientId(patientId: string): Promise<Appointment[]> {
+  async findByPatientId(patientId: string, clinicId: string): Promise<Appointment[]> {
     const snapshot = await this.collection
       .where('patientId', '==', patientId)
+      .where('clinicId', '==', clinicId)
       // Note: Inequality filters on multiple properties require composite indexes,
       // so we fetch all and filter deleted in memory.
       .orderBy('date', 'desc')
@@ -331,7 +455,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(a => !a.isDeleted);
   }
 
-  async findByPatientIds(patientIds: string[]): Promise<Appointment[]> {
+  async findByPatientIds(patientIds: string[], clinicId: string): Promise<Appointment[]> {
     if (patientIds.length === 0) return [];
     
     // Firestore 'in' supports max 30 items
@@ -342,13 +466,13 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
 
     const snapshots = await Promise.all(
-      chunks.map(chunk =>
-        this.collection
-          .where('patientId', 'in', chunk)
-          .orderBy('date', 'desc')
-          .limit(100)
-          .get()
-      )
+      chunks.map(chunk => {
+        let query = this.collection.where('patientId', 'in', chunk);
+        if (clinicId !== 'GLOBAL') {
+          query = query.where('clinicId', '==', clinicId);
+        }
+        return query.orderBy('date', 'desc').limit(100).get();
+      })
     );
 
     const docs = snapshots.flatMap(snapshot => 
@@ -358,11 +482,46 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(a => !a.isDeleted);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.collection.doc(id).update({
+  async delete(id: string, clinicId: string, transaction?: ITransaction): Promise<void> {
+    const existing = await this.findById(id, clinicId);
+    if (!existing) throw new Error('Appointment not found or unauthorized');
+
+    const docRef = this.collection.doc(id);
+    const data = {
       isDeleted: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    };
+
+    if (transaction) {
+      (transaction as admin.firestore.Transaction).update(docRef, data);
+    } else {
+      await docRef.update(data);
+    }
+  }
+
+  async countAll(): Promise<number> {
+    const snapshot = await this.collection.where('isDeleted', '==', false).count().get();
+    return snapshot.data().count;
+  }
+
+  async countByClinicId(clinicId: string): Promise<number> {
+    const snapshot = await this.collection
+      .where('clinicId', '==', clinicId)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    return snapshot.data().count;
+  }
+
+  async countByDoctorAndDateRange(doctorId: string, start: Date, end: Date): Promise<number> {
+    const snapshot = await this.collection
+      .where('doctorId', '==', doctorId)
+      .where('createdAt', '>=', start)
+      .where('createdAt', '<=', end)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    return snapshot.data().count;
   }
 
   // ── Transaction & Locking Implementations ───────────────────────────────

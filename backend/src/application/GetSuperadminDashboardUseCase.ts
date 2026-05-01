@@ -1,6 +1,7 @@
 import { Clinic, User, Patient, Appointment, TrafficData, SuperadminDashboardData } from '../../../packages/shared/src/index';
 import { IClinicRepository, IUserRepository, IPatientRepository, IAppointmentRepository } from '../domain/repositories';
 import { SuperadminMetricsService } from '../domain/services/SuperadminMetricsService';
+import { subDays } from 'date-fns';
 
 export class GetSuperadminDashboardUseCase {
   constructor(
@@ -16,25 +17,22 @@ export class GetSuperadminDashboardUseCase {
       const endDate = params?.endDate ? new Date(params.endDate) : undefined;
 
       const [
-        clinicsResult,
+        totalClinics,
         activeClinics,
-        patientsResult,
+        totalPatients,
         totalAppointments,
-        appointmentsResult
+        recentAppointments
       ] = await Promise.all([
-        this.clinicRepo.findAll(),
+        this.clinicRepo.countAll().catch(() => 0),
         this.clinicRepo.countActive().catch(() => 0),
-        this.patientRepo.findAll(),
-        this.appointmentRepo.findAll({ page: 1, limit: 1 }).then(res => {
-          if (Array.isArray(res)) return res.length;
-          return res.total || 0;
-        }).catch(() => 0),
-        this.appointmentRepo.findAll().catch(() => [])
+        this.patientRepo.countAll().catch(() => 0),
+        this.appointmentRepo.countAll().catch(() => 0),
+        this.appointmentRepo.findAllGlobal(subDays(new Date(), 30), new Date()).catch(() => [])
       ]);
 
-      const clinics = Array.isArray(clinicsResult) ? clinicsResult : (clinicsResult?.data || []);
-      const patients = Array.isArray(patientsResult) ? patientsResult : (patientsResult?.data || []);
-      const appointments = Array.isArray(appointmentsResult) ? appointmentsResult : (appointmentsResult?.data || []);
+      const clinics: Clinic[] = [];
+      const patients: Patient[] = [];
+      const appointments = recentAppointments as Appointment[];
 
       // Calculate metrics with safety
       let retention = 0;
@@ -55,9 +53,9 @@ export class GetSuperadminDashboardUseCase {
 
       return { 
         metrics: {
-          totalClinics: clinics.length,
+          totalClinics: totalClinics || 0,
           activeClinics: activeClinics || 0,
-          totalPatients: patients.length,
+          totalPatients: totalPatients || 0,
           totalAppointments: totalAppointments || 0,
           mau,
           retention

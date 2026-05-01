@@ -11,6 +11,22 @@ export class PrescriptionController {
     private subscriptionRepo: FirebaseSubscriptionRepository,
   ) {}
 
+  private validateClinicAccess(req: any, clinicId: string) {
+    if (!req.user) return; // Allow public access (if route permits)
+    
+    // Superadmins have access across clinics
+    if (RBACUtils.hasAnyRole(req.user, [KLOQO_ROLES.SUPER_ADMIN])) return;
+
+    const hasAccess = req.user.clinicId === clinicId || 
+                     (req.user.clinicIds && req.user.clinicIds.includes(clinicId));
+    
+    if (!hasAccess) {
+      const error = new Error('Access Denied: You do not have permission for this clinic.');
+      (error as any).status = 403;
+      throw error;
+    }
+  }
+
   async upload(req: any, res: Response) {
     try {
       const { appointmentId, patientId } = req.body;
@@ -25,6 +41,8 @@ export class PrescriptionController {
           received: { hasApptId: !!appointmentId, hasPatientId: !!patientId, hasClinicId: !!clinicId, hasFullFile: !!fullFile, hasInkFile: !!inkFile }
         });
       }
+
+      this.validateClinicAccess(req, clinicId);
 
       const result = await this.completeAppointmentWithPrescriptionUseCase.execute({
         appointmentId,
@@ -49,8 +67,16 @@ export class PrescriptionController {
   /** GET /clinic/prescriptions?clinicId=&doctorId=&pharmacyStatus=&startDate=&endDate=&patientPhone= */
   async getByClinicFiltered(req: Request, res: Response) {
     try {
-      const { clinicId, doctorId, pharmacyStatus, startDate, endDate, patientPhone } = req.query;
+      const user = (req as any).user;
+      const isSuperAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.SUPER_ADMIN]);
+      const clinicId = (isSuperAdmin && req.query.clinicId) 
+        ? (req.query.clinicId as string) 
+        : user?.clinicId;
+
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
+      const { doctorId, pharmacyStatus, startDate, endDate, patientPhone } = req.query;
 
       // 🔒 SECURITY: Critical Privacy Boundary (Rule: Exact Phone Search)
       // Pharmacists searching for history (not pending queue) MUST provide a full 10-digit phone.
@@ -88,8 +114,14 @@ export class PrescriptionController {
   async getByPatient(req: Request, res: Response) {
     try {
       const { patientId } = req.params;
-      const { clinicId } = req.query;
+      const user = (req as any).user;
+      const isSuperAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.SUPER_ADMIN]);
+      const clinicId = (isSuperAdmin && req.query.clinicId) 
+        ? (req.query.clinicId as string) 
+        : user?.clinicId;
+
       if (!patientId || !clinicId) return res.status(400).json({ error: 'patientId and clinicId are required' });
+      this.validateClinicAccess(req, clinicId);
 
       const appointments = await this.appointmentRepo.findCompletedByPatientInClinic(patientId, clinicId as string);
       res.json(appointments);
@@ -101,8 +133,16 @@ export class PrescriptionController {
   /** GET /clinic/prescriptions/stats?clinicId=&period=month */
   async getClinicStats(req: Request, res: Response) {
     try {
-      const { clinicId, period } = req.query;
+      const user = (req as any).user;
+      const isSuperAdmin = RBACUtils.hasAnyRole(user, [KLOQO_ROLES.SUPER_ADMIN]);
+      const clinicId = (isSuperAdmin && req.query.clinicId) 
+        ? (req.query.clinicId as string) 
+        : user?.clinicId;
+
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
+      this.validateClinicAccess(req, clinicId);
+
+      const { period } = req.query;
 
       const now = new Date();
       let startDate: Date;
@@ -173,13 +213,14 @@ export class PrescriptionController {
       if (!appointmentId) return res.status(400).json({ error: 'appointmentId is required' });
 
       // Rule 15: Strict Tenant Isolation
-      const appointment = await this.appointmentRepo.findById(appointmentId);
+      const appointment = await this.appointmentRepo.findById(appointmentId, clinicId);
       if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
+      // Extra safety check (redundant but good)
       if (appointment.clinicId !== clinicId) {
         return res.status(403).json({ error: 'Unauthorized: Appointment belongs to another clinic' });
       }
 
-      await this.appointmentRepo.update(appointmentId, {
+      await this.appointmentRepo.update(appointmentId, clinicId, {
         pharmacyStatus: 'dispensed',
         dispensedBy,
         dispensedAt: new Date(),
@@ -203,13 +244,13 @@ export class PrescriptionController {
       if (!reason) return res.status(400).json({ error: 'reason is required to track leakage' });
 
       // Rule 15: Strict Tenant Isolation
-      const appointment = await this.appointmentRepo.findById(appointmentId);
+      const appointment = await this.appointmentRepo.findById(appointmentId, clinicId);
       if (!appointment) return res.status(404).json({ error: 'Appointment not found' });
       if (appointment.clinicId !== clinicId) {
         return res.status(403).json({ error: 'Unauthorized: Appointment belongs to another clinic' });
       }
 
-      await this.appointmentRepo.update(appointmentId, {
+      await this.appointmentRepo.update(appointmentId, clinicId, {
         pharmacyStatus: 'abandoned',
         abandonedReason: reason,
       });

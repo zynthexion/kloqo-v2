@@ -149,7 +149,7 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
     expect(walkIn.time).toBe('09:15');
     expect(walkIn.tokenNumber).toBe('W-101'); // First W-token in session
     
-    const dbAppts = await appointmentRepo.findByDoctorAndDate(doctorId, firestoreDate);
+    const dbAppts = await appointmentRepo.findByDoctorAndDate(doctorId, clinicId, firestoreDate);
     expect(dbAppts).toHaveLength(4);
   });
 

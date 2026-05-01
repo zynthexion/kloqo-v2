@@ -5,8 +5,9 @@ import { db } from './config';
 export class FirebasePunctualityRepository implements IPunctualityRepository {
   private collectionPath = 'doctor_punctuality_logs';
 
-  async findAll(): Promise<PunctualityLog[]> {
+  async findAll(clinicId: string): Promise<PunctualityLog[]> {
     const snapshot = await db.collection(this.collectionPath)
+      .where('clinicId', '==', clinicId)
       .orderBy('timestamp', 'desc')
       .limit(200)
       .get();
@@ -17,8 +18,9 @@ export class FirebasePunctualityRepository implements IPunctualityRepository {
     } as PunctualityLog));
   }
 
-  async findByDoctorId(doctorId: string): Promise<PunctualityLog[]> {
+  async findByDoctorId(doctorId: string, clinicId: string): Promise<PunctualityLog[]> {
     const snapshot = await db.collection(this.collectionPath)
+      .where('clinicId', '==', clinicId)
       .where('doctorId', '==', doctorId)
       .orderBy('timestamp', 'desc')
       .get();

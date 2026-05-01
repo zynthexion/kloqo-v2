@@ -48,6 +48,9 @@ import { TokenGeneratorService } from '../../../domain/services/token/TokenGener
 import { SSEService } from '../../../domain/services/SSEService';
 import { PrescriptionPDFService } from '../../pdf/PrescriptionPDFService';
 import { QueueBubblingService } from '../../../domain/services/QueueBubblingService';
+import { TokenStrategyFactory } from '../../../domain/services/token/TokenStrategyFactory';
+import { AdvancedTokenStrategy } from '../../../domain/services/token/AdvancedTokenStrategy';
+import { ClassicTokenStrategy } from '../../../domain/services/token/ClassicTokenStrategy';
 
 // ── Application: Use Cases ─────────────────────────────────────────────────
 import { ManagePatientUseCase } from '../../../application/ManagePatientUseCase';
@@ -202,6 +205,10 @@ const tokenGeneratorService = new TokenGeneratorService(appointmentRepo);
 const sseService = new SSEService();
 const queueBubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
 
+const classicTokenStrategy = new ClassicTokenStrategy(tokenGeneratorService);
+const advancedTokenStrategy = new AdvancedTokenStrategy(tokenGeneratorService);
+const tokenStrategyFactory = new TokenStrategyFactory(classicTokenStrategy, advancedTokenStrategy);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 3: Use Cases
 // ═══════════════════════════════════════════════════════════════════════════
@@ -254,7 +261,7 @@ const getAllDoctorsUseCase = new GetAllDoctorsUseCase(doctorRepo, userRepo);
 const getDoctorDetailsUseCase = new GetDoctorDetailsUseCase(doctorRepo, clinicRepo, departmentRepo, appointmentRepo, userRepo);
 const saveDoctorUseCase = new SaveDoctorUseCase(doctorRepo, userRepo, authService, emailService, clinicRepo);
 const deleteDoctorUseCase = new DeleteDoctorUseCase(doctorRepo, clinicRepo);
-const updateDoctorStatusUseCase = new UpdateDoctorStatusUseCase(doctorRepo, appointmentRepo, clinicRepo, notificationService);
+const updateDoctorStatusUseCase = new UpdateDoctorStatusUseCase(doctorRepo, appointmentRepo, clinicRepo, notificationService, sseService);
 const updateDoctorAvailabilityUseCase = new UpdateDoctorAvailabilityUseCase(doctorRepo, appointmentRepo, activityRepo, notificationService, sseService);
 const updateDoctorLeaveUseCase = new UpdateDoctorLeaveUseCase(appointmentRepo, doctorRepo, activityRepo);
 const markDoctorLeaveUseCase = new MarkDoctorLeaveUseCase(doctorRepo, appointmentRepo, notificationService, activityRepo);
@@ -272,9 +279,9 @@ const deleteDepartmentUseCase = new DeleteDepartmentUseCase(departmentRepo);
 // Appointments
 const getAllAppointmentsUseCase = new GetAllAppointmentsUseCase(appointmentRepo);
 const getNurseDashboardUseCase = new GetNurseDashboardUseCase(clinicRepo, doctorRepo, appointmentRepo, syncClinicStatusesUseCase, patientRepo);
-const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, queueBubblingService);
-const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
-const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService);
+const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, tokenStrategyFactory, queueBubblingService);
+const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService, tokenStrategyFactory);
+const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService, tokenStrategyFactory);
 const getAvailableSlotsUseCase = new GetAvailableSlotsUseCase(appointmentRepo, doctorRepo, clinicRepo, counterRepo);
 const deleteAppointmentUseCase = new DeleteAppointmentUseCase(appointmentRepo);
 const sendBookingLinkUseCase = new SendBookingLinkUseCase(notificationService, clinicRepo, patientRepo, userRepo);

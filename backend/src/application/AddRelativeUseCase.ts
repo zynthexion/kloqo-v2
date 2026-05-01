@@ -24,15 +24,17 @@ export class AddRelativeUseCase {
   async execute(request: AddRelativeRequest): Promise<Patient> {
     const { primaryPatientId, primaryPatientPhone, clinicId, relative } = request;
 
+    return await this.patientRepo.runTransaction(async (txn) => {
+
     let primaryPatient: Patient | undefined;
     let normalizedPrimaryPhone: string = '';
 
     if (primaryPatientId) {
-      const p = await this.patientRepo.findById(primaryPatientId);
+      const p = await this.patientRepo.findById(primaryPatientId, 'SYSTEM');
       primaryPatient = p || undefined;
     } else if (primaryPatientPhone) {
       normalizedPrimaryPhone = this.normalizePhone(primaryPatientPhone);
-      const primaryPatients = await this.patientRepo.findByPhone(normalizedPrimaryPhone);
+      const primaryPatients = await this.patientRepo.findByPhone(normalizedPrimaryPhone, 'SYSTEM');
       primaryPatient = primaryPatients.find(p => p.clinicIds?.includes(clinicId)) || primaryPatients[0];
     }
 
@@ -45,10 +47,10 @@ export class AddRelativeUseCase {
     // Ensure primary patient is linked to the current clinic
     if (!primaryPatient.clinicIds || !primaryPatient.clinicIds.includes(clinicId)) {
       const updatedClinicIds = [...(primaryPatient.clinicIds || []), clinicId];
-      await this.patientRepo.update(primaryPatient.id, { 
+      await this.patientRepo.update(primaryPatient.id, 'SYSTEM', { 
         clinicIds: updatedClinicIds,
         updatedAt: new Date()
-      });
+      }, txn);
       primaryPatient.clinicIds = updatedClinicIds;
     }
 
@@ -59,13 +61,13 @@ export class AddRelativeUseCase {
 
     if (relativePhone && !isDuplicatePhone) {
       // Case 1: Relative HAS a unique phone number
-      const existingPatients = await this.patientRepo.findByPhone(relativePhone);
+      const existingPatients = await this.patientRepo.findByPhone(relativePhone, 'SYSTEM');
       if (existingPatients.length > 0) {
         throw new Error('This phone number is already registered to another patient.');
       }
 
       // Check users
-      const existingUser = await this.userRepo.findByPhone(relativePhone);
+      const existingUser = await this.userRepo.findByPhone(relativePhone, 'SYSTEM');
       if (existingUser) {
         throw new Error('This phone number is already registered to another user.');
       }
@@ -85,7 +87,7 @@ export class AddRelativeUseCase {
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      await this.userRepo.save(newUser);
+      await this.userRepo.save(newUser, clinicId, txn);
 
       // Create Patient as Primary
       newRelativeData = {
@@ -119,19 +121,20 @@ export class AddRelativeUseCase {
       };
     }
 
-    await this.patientRepo.save(newRelativeData);
+    await this.patientRepo.save(newRelativeData, clinicId, txn);
 
     // 2. Link to primary patient
     const primaryRelatedIds = primaryPatient.relatedPatientIds || [];
     if (!primaryRelatedIds.includes(newRelativeData.id)) {
       primaryRelatedIds.push(newRelativeData.id);
-      await this.patientRepo.update(primaryPatient.id, {
+      await this.patientRepo.update(primaryPatient.id, 'SYSTEM', {
         relatedPatientIds: primaryRelatedIds,
         updatedAt: new Date()
-      });
+      }, txn);
     }
 
     return newRelativeData;
+    });
   }
 
   private normalizePhone(phone: string): string {
