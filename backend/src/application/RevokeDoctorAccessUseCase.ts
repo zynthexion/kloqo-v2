@@ -8,7 +8,7 @@ export class RevokeDoctorAccessUseCase {
   ) {}
 
   async execute(doctorId: string, clinicId: string): Promise<void> {
-    const doctor = await this.doctorRepo.findById(doctorId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!doctor) throw new Error('Doctor not found');
     if (doctor.clinicId !== clinicId) throw new Error('Unauthorized');
 
@@ -16,22 +16,22 @@ export class RevokeDoctorAccessUseCase {
       throw new Error('Doctor does not have an email associated with an account');
     }
 
-    const user = await this.userRepo.findByEmail(doctor.email);
+    const user = await this.userRepo.findByEmail(doctor.email, 'SYSTEM');
     if (!user) {
       throw new Error('No user account found for this doctor');
     }
 
-    const userId = user.id || user.uid;
+    const userId = user.id || (user as any).uid;
 
     try {
-      if (user.uid) {
-        await this.authService.deleteUser(user.uid);
+      if ((user as any).uid || user.id) {
+        await this.authService.deleteUser((user as any).uid || user.id);
       }
     } catch (error: any) {
       console.warn("Could not delete from Auth (might already be deleted):", error.message);
     }
 
-    await this.userRepo.delete(userId as string, false); // Hard delete from Firestore
+    await this.userRepo.delete(userId as string, 'SYSTEM', false); // Hard delete from Firestore
 
     // Also clear the accessibleMenus on the doctor to reflect "no access" if someone looks at it
     doctor.accessibleMenus = [];

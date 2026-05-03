@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Clinic, Doctor, Appointment, QueueState } from '@kloqo/shared';
-import { getClinicISODateString } from '@kloqo/shared-core';
+import { getClinicISODateString, getClinicNow } from '@kloqo/shared-core';
 import { useAuth } from './AuthContext';
 
 import { apiRequest } from '@/lib/api-client';
@@ -51,43 +51,42 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   const fetchData = useCallback(async (isAutoRefresh = false) => {
     if (!clinicId) return;
     try {
-      if (!isAutoRefresh) setLoading(true);
-
-      const date = getClinicISODateString(new Date());
+      const date = format(getClinicNow(), 'd MMMM yyyy');
+      console.log(`[NurseDashboard] Fetching for clinic: ${clinicId}, date: ${date}`);
       
       let dashData = await apiRequest<NurseDashboardData>(
         `/appointments/dashboard?clinicId=${clinicId}&date=${date}`
       );
 
-      // Filter doctors based on role and assignments
-      let filteredDoctors = dashData.doctors || [];
-      
-      // 1. If user is a doctor, they should ONLY see themselves in the nurse app (privacy/focus)
-      const activeRole = typeof window !== 'undefined' ? localStorage.getItem('activeRole') : null;
-      const isDoctor = activeRole === 'doctor' || user?.role === 'doctor';
+      console.log('[NurseDashboard] Raw API Doctors:', dashData.doctors?.map(d => ({ id: d.id, name: d.name })));
 
-      if (isDoctor) {
-        filteredDoctors = filteredDoctors.filter((doc: Doctor) => doc.userId === user?.id || doc.userId === user?.uid);
-        
-        if (filteredDoctors.length === 0 && dashData.doctors?.length > 0) {
-          const storedDocId = typeof window !== 'undefined' ? localStorage.getItem('selectedDoctorId') : null;
-          const found = dashData.doctors.find((d: Doctor) => d.id === storedDocId);
-          filteredDoctors = found ? [found] : [dashData.doctors[0]];
-        }
-      } 
-      // 2. Otherwise apply assigned-doctor filtering for nurse/receptionist users if configured
-      else if (user?.assignedDoctorIds && user.assignedDoctorIds.length > 0) {
+      // ─── DOCTOR/STAFF FILTERING (WORKING VERSION) ───────────────────────
+      const activeRole = typeof window !== 'undefined' ? localStorage.getItem('activeRole') : null;
+      const isDoctorRole = activeRole === 'doctor' || user?.role === 'doctor';
+
+      let filteredDoctors = dashData.doctors || [];
+
+      if (isDoctorRole) {
+        // Doctors see themselves
+        const myDoc = filteredDoctors.find((doc: Doctor) => doc.userId === user?.id || doc.userId === user?.uid);
+        filteredDoctors = myDoc ? [myDoc] : (filteredDoctors.length > 0 ? [filteredDoctors[0]] : []);
+        console.log('[NurseDashboard] Filtered for Doctor:', filteredDoctors.map(d => d.name));
+      } else if (user?.assignedDoctorIds && user.assignedDoctorIds.length > 0) {
+        // Staff see assigned doctors
         const assignedIds = new Set(user.assignedDoctorIds);
+        console.log('[NurseDashboard] Staff Assignments:', user.assignedDoctorIds);
         filteredDoctors = filteredDoctors.filter((doc: Doctor) => assignedIds.has(doc.id));
+        console.log('[NurseDashboard] Filtered for Staff:', filteredDoctors.map(d => d.name));
       }
 
       dashData = {
         ...dashData,
         doctors: filteredDoctors,
         appointments: (dashData.appointments || []).filter((appt: Appointment) =>
-          filteredDoctors.some(d => d.id === appt.doctorId)
+          appt && filteredDoctors.some(d => d.id === appt.doctorId)
         ).sort((a, b) => {
-          if (a.date !== b.date) return a.date.localeCompare(b.date);
+          if (!a || !b) return 0;
+          if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
           if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
           return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
         }),
@@ -101,7 +100,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
     } finally {
       if (!isAutoRefresh) setLoading(false);
     }
-  }, [clinicId, user?.assignedDoctorIds]);
+  }, [clinicId, user?.id, user?.uid, user?.role, user?.assignedDoctorIds]);
 
   // ── Initial fetch ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -130,6 +129,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   // Auto-select first doctor if none selected and data loaded
   useEffect(() => {
     if (data?.doctors.length && !selectedDoctorId) {
+      console.log('[NurseDashboard] Auto-selecting doctor:', data.doctors[0].id);
       setSelectedDoctorId(data.doctors[0].id);
     } else if (data?.doctors.length && selectedDoctorId) {
        // Ensure selected doctor still exists in the list (assigned doctors check)
@@ -140,11 +140,9 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   }, [data, selectedDoctorId]);
 
   // ── SSE: Real-time updates (replaces the old 30s setInterval poll) ───────
-  // On any relevant SSE event from this clinic, we do a targeted state merge
-  // rather than a full re-fetch, keeping the UX instant.
   useSSE({
     clinicId,
-    onEvent: (event: SSEPayload) => {
+    onEvent: useCallback((event: SSEPayload) => {
       switch (event.type) {
         case 'appointment_status_changed': {
           const p = event.payload as {
@@ -160,7 +158,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
             return {
               ...prev,
               appointments: prev.appointments.map((apt) =>
-                apt.id === p.appointmentId
+                (apt && apt.id === p.appointmentId)
                   ? {
                       ...apt,
                       status: p.newStatus as Appointment['status'],
@@ -180,14 +178,12 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
           const p = event.payload as { appointment: Appointment };
           setData((prev) => {
             if (!prev) return prev;
-            // 1. Check if we already have this appointment (avoid duplicates from racing events)
-            if (prev.appointments.some(a => a.id === p.appointment.id)) return prev;
+            if (prev.appointments.some(a => a && a.id === p.appointment?.id)) return prev;
             
-            // 2. Insert and Sort
             return {
               ...prev,
-              appointments: [...prev.appointments, p.appointment].sort((a, b) => {
-                if (a.date !== b.date) return a.date.localeCompare(b.date);
+              appointments: [...prev.appointments, p.appointment].filter(Boolean).sort((a, b) => {
+                if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
                 if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
                 return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
               })
@@ -203,7 +199,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
             return {
               ...prev,
               doctors: prev.doctors.map((doc) =>
-                doc.id === p.doctorId
+                (doc && doc.id === p.doctorId)
                   ? { ...doc, consultationStatus: p.status as Doctor['consultationStatus'] }
                   : doc
               ),
@@ -224,16 +220,14 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
           };
           setData((prev) => {
             if (!prev) return prev;
-            // 1. Filter out old appointments for ONLY this specific doctor & session
             const untouchedApts = prev.appointments.filter(a => 
-              !(a.doctorId === p.doctorId && a.sessionIndex === p.sessionIndex)
+              a && !(a.doctorId === p.doctorId && a.sessionIndex === p.sessionIndex)
             );
-            // 2. Splice in the fresh state from the Vacuum pass
             return {
               ...prev,
-              appointments: [...untouchedApts, ...p.updatedQueue].sort((a, b) => {
-                // Keep the global list sorted for the UI
-                if (a.date !== b.date) return a.date.localeCompare(b.date);
+              appointments: [...untouchedApts, ...(p.updatedQueue || [])].filter(Boolean).sort((a, b) => {
+                if (!a || !b) return 0;
+                if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
                 if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
                 return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
               })
@@ -245,11 +239,13 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         default:
           break;
       }
-    },
+    }, []),
   });
 
   // ── Action handlers ──────────────────────────────────────────────────────
-  const updateDoctorStatus = async (doctorId: string, status: 'In' | 'Out', sessionIndex?: number) => {
+  const refresh = useCallback(() => fetchData(false), [fetchData]);
+
+  const updateDoctorStatus = useCallback(async (doctorId: string, status: 'In' | 'Out', sessionIndex?: number) => {
     try {
       await apiRequest(`/doctors/${doctorId}/consultation-status`, {
         method: 'PATCH',
@@ -259,9 +255,9 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
       console.error('[NurseDashboard] updateDoctorStatus error:', err);
       throw err;
     }
-  };
+  }, []);
 
-  const updateAppointmentStatus = async (appointmentId: string, status: string) => {
+  const updateAppointmentStatus = useCallback(async (appointmentId: string, status: string) => {
     try {
       await apiRequest(`/appointments/${appointmentId}/status`, {
         method: 'PATCH',
@@ -271,10 +267,9 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
       console.error('[NurseDashboard] updateAppointmentStatus error:', err);
       throw err;
     }
-  };
+  }, []);
 
-  const completeWithPrescription = async (appointmentId: string, patientId: string, fullBlob: Blob, inkBlob: Blob) => {
-    // Safety Check: Ensure doctor session is active
+  const completeWithPrescription = useCallback(async (appointmentId: string, patientId: string, fullBlob: Blob, inkBlob: Blob) => {
     const appt = data?.appointments.find(a => a.id === appointmentId);
     const doctor = data?.doctors.find(d => d.id === (appt?.doctorId || selectedDoctorId));
     
@@ -307,7 +302,33 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
       console.error('[NurseDashboard] completeWithPrescription error:', err);
       throw err;
     }
-  };
+  }, [data?.appointments, data?.doctors, selectedDoctorId]);
+
+  const handleSetSelectedDoctorId = useCallback((id: string) => {
+    setSelectedDoctorId(id);
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    data,
+    loading,
+    error,
+    refresh,
+    updateDoctorStatus,
+    updateAppointmentStatus,
+    completeWithPrescription,
+    selectedDoctorId,
+    setSelectedDoctorId: handleSetSelectedDoctorId,
+  }), [
+    data, 
+    loading, 
+    error, 
+    refresh, 
+    updateDoctorStatus, 
+    updateAppointmentStatus, 
+    completeWithPrescription, 
+    selectedDoctorId, 
+    handleSetSelectedDoctorId
+  ]);
 
   if (error === 'Clinic is not approved by Superadmin' || error === 'Clinic onboarding is incomplete') {
     return (
@@ -326,19 +347,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <NurseDashboardContext.Provider
-      value={{
-        data,
-        loading,
-        error,
-        refresh: () => fetchData(false),
-        updateDoctorStatus,
-        updateAppointmentStatus,
-        completeWithPrescription,
-        selectedDoctorId,
-        setSelectedDoctorId,
-      }}
-    >
+    <NurseDashboardContext.Provider value={contextValue}>
       {children}
     </NurseDashboardContext.Provider>
   );

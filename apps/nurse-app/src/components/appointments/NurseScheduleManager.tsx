@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Coffee, Trash2, Clock, Calendar as CalendarIcon, Loader2, AlertTriangle, ChevronRight, CheckCircle2, PlusCircle } from "lucide-react";
 import { cn, formatTime12Hour } from "@/lib/utils";
-import { format, isSameDay, addDays } from "date-fns";
+import { format, isSameDay, addDays, subDays } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { apiRequest } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { Doctor, BreakPeriod } from '@kloqo/shared';
+import { getClinicNow } from '@kloqo/shared-core';
+import { AppointmentDatePicker } from './AppointmentDatePicker';
 
 interface NurseScheduleManagerProps {
   doctor: Doctor;
@@ -22,12 +24,24 @@ interface NurseScheduleManagerProps {
 export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(getClinicNow());
   const [breaks, setBreaks] = useState<BreakPeriod[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<any[]>([]);
   const [showAddBreak, setShowAddBreak] = useState(false);
+
+  const dates = useMemo(() => {
+    const today = getClinicNow();
+    const range = doctor?.advanceBookingDays ?? 7;
+    
+    const standardDates = Array.from({ length: range + 1 }, (_, i) => addDays(today, i));
+    const isSelectedInStandard = standardDates.some(d => isSameDay(d, selectedDate));
+    if (isSelectedInStandard) return standardDates;
+    
+    const customWindow = Array.from({ length: 7 }, (_, i) => addDays(subDays(selectedDate, 3), i));
+    return customWindow;
+  }, [selectedDate, doctor?.advanceBookingDays]);
 
   const fetchDayDetails = useCallback(async () => {
     if (!doctor || !clinicId) return;
@@ -58,7 +72,7 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
     fetchDayDetails();
   }, [fetchDayDetails]);
 
-  const handleDeleteBreak = async (breakId: string) => {
+  const handleDeleteBreak = useCallback(async (breakId: string) => {
     if (!confirm('Are you sure you want to cancel this break? Appointments might not be automatically shifted back.')) return;
     
     setIsSubmitting(true);
@@ -80,41 +94,22 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [doctor.id, clinicId, selectedDate, toast, fetchDayDetails]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-10">
       {/* 1. Date Context (The "What Day" Panel) */}
-      <div className="lg:col-span-4 space-y-4 md:space-y-6">
-        <Card className="border-none shadow-2xl shadow-black/5 rounded-[2rem] md:rounded-[3rem] bg-white p-6 md:p-8">
-           <div className="space-y-6">
-             <div className="px-2">
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none block mb-2">Target Date</p>
-               <h3 className="text-xl font-black text-slate-800 tracking-tight">{format(selectedDate, 'EEEE, d MMM yyyy')}</h3>
-             </div>
-             <Calendar
-               mode="single"
-               selected={selectedDate}
-               onSelect={d => d && setSelectedDate(d)}
-               className="w-full"
-             />
-             <div className="pt-4 flex flex-col gap-2">
-                <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clinic Status</p>
-                    <p className="text-sm font-bold text-slate-700">Open for Booking</p>
-                  </div>
-                </div>
-             </div>
-           </div>
-        </Card>
+      <div className="lg:col-span-5 space-y-4 md:space-y-6">
+        <AppointmentDatePicker 
+          dates={dates} 
+          selectedDate={selectedDate} 
+          onSelectDate={setSelectedDate} 
+          isTablet 
+        />
       </div>
 
       {/* 2. Break Management Panel */}
-      <div className="lg:col-span-8 space-y-6 md:space-y-8">
+      <div className="lg:col-span-7 space-y-6 md:space-y-8">
         <Card className="border-none shadow-2xl shadow-black/5 rounded-[2rem] md:rounded-[3rem] bg-white overflow-hidden">
           <CardHeader className="p-6 md:p-10 border-b border-slate-50 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0 space-y-0">
              <div className="flex items-center gap-4 md:gap-5">

@@ -151,9 +151,10 @@ router.get('/events/clinic/:clinicId', (req, res) => sseController.handleClinicS
 router.post('/users/me/fcm-token', auth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id || req.user?.uid;
+    const clinicId = req.user?.clinicId;
     const { fcmToken } = req.body;
-    if (!userId || !fcmToken) return res.status(400).json({ error: 'fcmToken is required' });
-    await fcmService.storeToken(userId, fcmToken);
+    if (!userId || !fcmToken || !clinicId) return res.status(400).json({ error: 'fcmToken and clinicId are required' });
+    await fcmService.storeToken(userId, clinicId, fcmToken);
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Internal Server Error' });
@@ -163,9 +164,10 @@ router.post('/users/me/fcm-token', auth, async (req: any, res: Response) => {
 router.delete('/users/me/fcm-token', auth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id || req.user?.uid;
+    const clinicId = req.user?.clinicId;
     const { fcmToken } = req.body;
-    if (!userId || !fcmToken) return res.status(400).json({ error: 'fcmToken is required' });
-    await fcmService.removeToken(userId, fcmToken);
+    if (!userId || !fcmToken || !clinicId) return res.status(400).json({ error: 'fcmToken and clinicId are required' });
+    await fcmService.removeToken(userId, clinicId, fcmToken);
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Internal Server Error' });

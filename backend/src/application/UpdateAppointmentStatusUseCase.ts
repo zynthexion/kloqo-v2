@@ -100,7 +100,13 @@ export class UpdateAppointmentStatusUseCase {
     } else if (status === 'No-show') {
       appointment.noShowAt = new Date();
     } else if (status === 'Cancelled') {
-      appointment.cancelledAt = new Date();
+      (appointment as any).cancelledAt = new Date();
+    }
+    
+    // Clear buffer flag if moving out of Confirmed
+    if (['Skipped', 'No-show', 'Cancelled', 'Pending', 'InConsultation'].includes(status)) {
+      appointment.isInBuffer = false;
+      appointment.bufferedAt = null;
     }
 
     // ── ATOMIC WRITE: Appointment update + counter maintenance ─────────────
@@ -222,14 +228,17 @@ export class UpdateAppointmentStatusUseCase {
         clinicName,
         date: appointment.date,
         time: appointment.time,
+        clinicId: appointment.clinicId,
         communicationPhone: appointment.communicationPhone,
         patientName: appointment.patientName,
         reason: 'clinic adjustment'
       }).catch(err => console.error('[UpdateStatus] Cancelled notification error:', err));
     }
 
-    if (status === 'Completed' || status === 'Cancelled' || status === 'Skipped' || status === 'No-show') {
-      await this.triggerBufferRefill(appointment.clinicId, appointment.doctorName);
+    const shouldBubble = ['Cancelled', 'Skipped', 'No-show'].includes(status);
+
+    if (['Completed', 'Cancelled', 'Skipped', 'No-show', 'Confirmed', 'InConsultation'].includes(status)) {
+      await this.triggerBufferRefill(appointment.clinicId, appointment.doctorId, appointment.doctorName);
     }
 
     if (shouldBubble && this.bubblingService) {
@@ -245,37 +254,47 @@ export class UpdateAppointmentStatusUseCase {
     return appointment;
   }
 
-  private async triggerBufferRefill(clinicId: string, doctorName: string) {
-    // Uses the ISO standard for today's query.
-    // The repository's dual-format bridge will automatically check for both 'YYYY-MM-DD' and 'd MMMM yyyy'.
+  private async triggerBufferRefill(clinicId: string, doctorId: string, doctorName: string) {
     const today = getClinicISODateString(new Date());
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
     const doctorAppointments = appointments.filter(
-      apt => apt.doctorName === doctorName && apt.status === 'Confirmed'
+      apt => apt.doctorId === doctorId && apt.status === 'Confirmed'
     );
 
     if (doctorAppointments.length === 0) return;
 
-    const firstAppt = doctorAppointments[0];
-    const doctor = await this.doctorRepo.findById(firstAppt.doctorId, clinicId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     const clinic = await this.clinicRepo.findById(clinicId);
     
-    // Per-doctor distribution takes precedence
     const tokenDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
 
-    const currentBuffered = doctorAppointments.filter(a => a.isInBuffer);
-    if (currentBuffered.length < 2) {
-      const sorted = doctorAppointments.sort(
-        tokenDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic
-      );
-      const nextCandidate = sorted.find(a => !a.isInBuffer);
-      if (nextCandidate) {
-        await this.appointmentRepo.update(nextCandidate.id, clinicId, {
+    let currentBuffered = doctorAppointments.filter(a => a.isInBuffer);
+    
+    const sorted = doctorAppointments.sort((a, b) => {
+      const sA = a.slotIndex ?? 999;
+      const sB = b.slotIndex ?? 999;
+      return sA - sB;
+    });
+
+    const correctBufferIds = sorted.slice(0, 2).map(a => a.id);
+
+    for (const appt of doctorAppointments) {
+      const shouldBeBuffered = correctBufferIds.includes(appt.id);
+      
+      if (shouldBeBuffered && !appt.isInBuffer) {
+        await this.appointmentRepo.update(appt.id, clinicId, {
           isInBuffer: true,
           bufferedAt: new Date(),
           updatedAt: new Date()
         });
-        console.log(`Buffer Refill: Promoted patient ${nextCandidate.id} to buffer for Doctor ${doctorName}`);
+        console.log(`Buffer Sync: ✅ Promoted ${appt.tokenNumber} to buffer`);
+      } else if (!shouldBeBuffered && appt.isInBuffer) {
+        await this.appointmentRepo.update(appt.id, clinicId, {
+          isInBuffer: false,
+          bufferedAt: null,
+          updatedAt: new Date()
+        });
+        console.log(`Buffer Sync: ⚠️ Removed ${appt.tokenNumber} from buffer (out of rank)`);
       }
     }
   }

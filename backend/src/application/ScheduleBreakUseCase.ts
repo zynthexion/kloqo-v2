@@ -209,7 +209,7 @@ export class ScheduleBreakUseCase {
                         arriveByTime: slotTime, sessionIndex, status: 'Completed', bookedVia: 'BreakBlock',
                         tokenNumber: 'Break', numericToken: 0, cancelledByBreak: true, isSystemBlocker: true,
                         createdAt: new Date(), updatedAt: new Date()
-                    } as any, txn);
+                    } as any, clinicId, txn);
                     ghostsCreated++;
                 }
 

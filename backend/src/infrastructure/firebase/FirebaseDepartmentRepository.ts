@@ -6,8 +6,10 @@ import { paginate } from './config';
 export class FirebaseDepartmentRepository implements IDepartmentRepository {
   private collection = admin.firestore().collection('master-departments');
 
-  async findAll(params?: PaginationParams): Promise<Department[] | PaginatedResponse<Department>> {
+  async findAll(clinicId: string, params?: PaginationParams): Promise<Department[] | PaginatedResponse<Department>> {
     const query = this.collection.where('isDeleted', '==', false);
+    // Note: clinicId is currently ignored as departments are global-lookup, 
+    // but the parameter is required for interface compliance.
     return paginate<Department>(query, params);
   }
 
@@ -17,7 +19,7 @@ export class FirebaseDepartmentRepository implements IDepartmentRepository {
     return { id: doc.id, ...doc.data() } as Department;
   }
 
-  async save(department: Department): Promise<void> {
+  async save(department: Department, _clinicId: string): Promise<void> {
     const { id, ...data } = department;
     if (id) {
       await this.collection.doc(id).set(data, { merge: true });
@@ -31,14 +33,14 @@ export class FirebaseDepartmentRepository implements IDepartmentRepository {
     }
   }
 
-  async update(id: string, clinicId: string, department: Partial<Department>): Promise<void> {
+  async update(id: string, _clinicId: string, department: Partial<Department>): Promise<void> {
     await this.collection.doc(id).update({
       ...department,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   }
 
-  async delete(id: string, clinicId: string, soft: boolean = true): Promise<void> {
+  async delete(id: string, _clinicId: string, soft: boolean = true): Promise<void> {
     if (soft) {
       await this.collection.doc(id).update({ 
         isDeleted: true,
@@ -49,13 +51,15 @@ export class FirebaseDepartmentRepository implements IDepartmentRepository {
     }
   }
 
-  async countAll(): Promise<number> {
-    const snap = await this.collection.where('isDeleted', '==', false).count().get();
-    return snap.data().count;
+  async countAll(clinicId: string): Promise<number> {
+    const snapshot = await this.collection
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
+    return snapshot.data().count;
   }
 
   async countByClinicId(clinicId: string): Promise<number> {
-    // Departments are global for now
-    return this.countAll();
+    return this.countAll(clinicId);
   }
 }

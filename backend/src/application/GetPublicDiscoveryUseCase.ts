@@ -49,7 +49,7 @@ export class GetPublicDiscoveryUseCase {
     const targetClinicIds = targetClinics.map(c => c.id);
 
     // 2. Fetch doctors
-    const allDoctors = await this.doctorRepository.findAll() as Doctor[];
+    const allDoctors = await this.doctorRepository.findAll('SYSTEM') as Doctor[];
     
     // Base candidates based on clinics or geofencing
     let candidateDoctors = allDoctors.filter(d => {
@@ -74,7 +74,7 @@ export class GetPublicDiscoveryUseCase {
 
     // ⚡ HISTORY DISCOVERY: Explicitly fetch doctors by ID if requested (Past appointments)
     if (doctorIds && doctorIds.length > 0) {
-      const historyDoctors = await this.doctorRepository.findByIds(doctorIds);
+      const historyDoctors = await this.doctorRepository.findByIds(doctorIds, 'SYSTEM');
       // Merge unique doctors not already in candidates
       const candidateIds = new Set(candidateDoctors.map(d => d.id));
       historyDoctors.forEach(hd => {

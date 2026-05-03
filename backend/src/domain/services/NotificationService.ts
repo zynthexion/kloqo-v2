@@ -393,10 +393,10 @@ export class NotificationService {
     const { clinicId, doctorId, date, sessionIndex } = params;
 
     const clinic = await this.clinicRepo.findById(clinicId);
-    const doctor = await this.doctorRepo.findById(doctorId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!clinic || !doctor) return;
 
-    const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
+    const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date);
     const sessionAppointments = appointments.filter(a =>
       a.sessionIndex === sessionIndex &&
       ['Pending', 'Confirmed', 'Skipped', 'No-show'].includes(a.status)
@@ -431,7 +431,7 @@ export class NotificationService {
   }): Promise<boolean> {
     const { appointment, clinicName, doctorName, peopleAhead, clinicId } = params;
 
-    const configs = await this.notificationRepo.findAllConfigs();
+    const configs = await this.notificationRepo.findAllConfigs(clinicId);
     const config = configs.find(c => c.id === NOTIFICATION_TYPES.DOCTOR_CONSULTATION_STARTED);
     if (!config || (!config.pwaEnabled && !config.whatsappEnabled)) {
       console.log(`[Notification] Consultation started disabled for clinic ${clinicId}`);

@@ -64,7 +64,10 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
       save: jest.fn()
     } as any;
 
-    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+    const sseService = { emit: jest.fn() } as any;
+    const tokenStrategyFactory = { getStrategy: jest.fn() } as any;
+
+    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo, sseService);
     tokenGenerator = new TokenGeneratorService(appointmentRepo);
 
     const mockManagePatientUseCase = {
@@ -76,7 +79,8 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
       doctorRepo,
       clinicRepo,
       mockManagePatientUseCase as any,
-      tokenGenerator
+      tokenGenerator,
+      sseService
     );
 
     bookAdvancedUseCase = new BookAdvancedAppointmentUseCase(
@@ -85,7 +89,9 @@ describe('Advanced Mode Scheduling (The Buffer) Integration Suite', () => {
       mockPatientRepo,
       clinicRepo,
       mockManagePatientUseCase as any,
-      tokenGenerator
+      tokenGenerator,
+      tokenStrategyFactory,
+      sseService
     );
   });
 

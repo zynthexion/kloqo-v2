@@ -9,6 +9,8 @@ export interface FilterAppointmentsParams {
   reviewed?: string;
   includeDoctorData?: string;
   date?: string;
+  doctor?: string;
+  doctorId?: string;
   scope?: 'upcoming' | 'past';
   user: any;
 }
@@ -21,7 +23,7 @@ export class FilterAppointmentsByTenantUseCase {
   ) {}
 
   async execute(params: FilterAppointmentsParams): Promise<Appointment[]> {
-    const { patientId, status, clinicId, reviewed, includeDoctorData, date, user } = params;
+    const { patientId, status, clinicId, reviewed, includeDoctorData, date, doctor, doctorId, user, scope } = params;
 
     // 1. SECURITY: Enforce Tenant/Identity Boundaries
     let effectiveClinicId = clinicId;
@@ -70,8 +72,13 @@ export class FilterAppointmentsByTenantUseCase {
 
     if (effectivePatientIds.length > 0) {
       appointments = await this.appointmentRepo.findByPatientIds(effectivePatientIds, repoClinicId);
+    } else if (effectiveClinicId && (doctor || doctorId) && date) {
+      appointments = await this.appointmentRepo.findByDoctorAndDate((doctorId || doctor)!, effectiveClinicId, date);
     } else if (effectiveClinicId && date) {
       appointments = await this.appointmentRepo.findByClinicAndDate(effectiveClinicId, date);
+    } else if (effectiveClinicId && (doctor || doctorId)) {
+      // Find all by doctor in this clinic
+      appointments = await this.appointmentRepo.findAll({ clinicId: effectiveClinicId, doctorId: doctorId || doctor }) as Appointment[];
     } else if (effectiveClinicId) {
       appointments = await this.appointmentRepo.findByClinicId(effectiveClinicId);
     }

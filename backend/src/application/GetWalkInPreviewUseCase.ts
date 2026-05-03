@@ -7,6 +7,7 @@ import {
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { computeWalkInSchedule, SchedulerAdvance, SchedulerWalkInCandidate } from '../domain/services/SlotScheduler';
+import { getClinicTimeString } from '../domain/services/DateUtils';
 
 export interface WalkInPreviewDTO {
   clinicId: string;
@@ -50,7 +51,6 @@ export class GetWalkInPreviewUseCase {
       throw new Error('No active session found for walk-in preview.');
     }
 
-    // 1. PEEK: Get the next available token without burning it (burn happens in CreateWalkInUseCase)
     const { tokenNumber, numericToken } = await this.tokenGenerator.peekToken(
       dto.clinicId,
       doctor.name,
@@ -130,12 +130,14 @@ export class GetWalkInPreviewUseCase {
       .map(a => ({
         appointmentId: a.id.replace('__shiftable_', ''),
         newSlotIndex: a.slotIndex,
-        newTime: a.slotTime
+        newTime: getClinicTimeString(a.slotTime)
       }));
 
     return {
       placeholderAssignment: {
         ...newAssignment,
+        slotTime: getClinicTimeString(newAssignment.slotTime),
+        tokenNumber,
         numericToken
       },
       advanceShifts

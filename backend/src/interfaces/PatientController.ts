@@ -61,10 +61,9 @@ export class PatientController {
       const params: PaginationParams = {
         page: page ? parseInt(page as string) : 1,
         limit: limit ? parseInt(limit as string) : 10,
-        clinicId: clinicId as string
       };
       
-      const patients = await this.getAllPatientsUseCase.execute(params);
+      const patients = await this.getAllPatientsUseCase.execute(clinicId, params);
       res.json(patients);
     } catch (error: any) {
       if (error.status === 403) return res.status(403).json({ error: error.message });
@@ -218,7 +217,8 @@ export class PatientController {
         return res.status(401).json({ error: 'Unauthorized: Patient ID not found in session' });
       }
       
-      const appointments = await this.getPatientAppointmentsUseCase.execute(patientId);
+      const clinicId = (req.query.clinicId as string) || 'SYSTEM';
+      const appointments = await this.getPatientAppointmentsUseCase.execute(patientId, clinicId);
       res.json(appointments);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

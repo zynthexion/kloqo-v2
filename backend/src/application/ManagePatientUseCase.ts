@@ -1,5 +1,6 @@
 import { IPatientRepository, ITransaction } from '../domain/repositories';
 import { Patient } from '../../../packages/shared/src/index';
+import { getClinicNow } from '../domain/services/DateUtils';
 
 export interface ManagePatientRequest {
   id?: string;
@@ -25,9 +26,26 @@ export class ManagePatientUseCase {
   constructor(private patientRepo: IPatientRepository) {}
 
   async execute(request: ManagePatientRequest, transaction?: ITransaction): Promise<string> {
-    const { id, name, phone, communicationPhone, age, sex, place, clinicId, isLinkPending } = request;
+    const { clinicId } = request;
 
-    // Normalize phone once, used throughout.
+    // 1. IDENTIFY (READ PHASE)
+    const identification = await this.identifyPatient(request, transaction);
+
+    // 2. PERSIST (WRITE PHASE)
+    await this.persistPatient(request, identification, clinicId, transaction);
+
+    return identification.targetId;
+  }
+
+  /**
+   * identifyPatient
+   * 
+   * Performs ONLY READS to find an existing patient or generate a new ID.
+   * Useful for Firestore transactions where all reads must come first.
+   */
+  async identifyPatient(request: ManagePatientRequest, transaction?: ITransaction) {
+    const { id, name, phone, communicationPhone } = request;
+
     const fullPhone = phone
       ? `+91${phone.replace(/\D/g, '').slice(-10)}`
       : '';
@@ -36,16 +54,13 @@ export class ManagePatientUseCase {
       ? `+91${communicationPhone.replace(/\D/g, '').slice(-10)}`
       : fullPhone;
 
-    // 1. TIERED MATCHING STRATEGY (Infrastructure-agnostic)
     let existingPatient: Patient | null = null;
     let isPhoneConflict = false;
 
-    // A. Match by ID
     if (id) {
         existingPatient = await this.patientRepo.findById(id, 'SYSTEM', transaction);
     }
 
-    // B. Match by Unique Phone
     if (!existingPatient && fullPhone) {
         const phoneMatches = await this.patientRepo.findByPhone(fullPhone, 'SYSTEM', transaction);
         if (phoneMatches.length > 0) {
@@ -53,24 +68,48 @@ export class ManagePatientUseCase {
             if (nameMatch) {
                 existingPatient = nameMatch;
             } else {
-                isPhoneConflict = true; // Phone belongs to someone else (Primary)
+                isPhoneConflict = true;
             }
         }
     }
 
-    // C. Match by Name + communicationPhone (Relative match)
     if (!existingPatient) {
         existingPatient = await this.patientRepo.findByNameAndCommunicationPhone(name, fullCommPhone, 'SYSTEM', transaction);
     }
 
-    // 2. DATA PREPARATION
     const isRelative = isPhoneConflict || (fullPhone === '' && fullCommPhone !== '');
     const finalPhone = isRelative ? '' : (fullPhone || '');
     const finalCommPhone = fullCommPhone || fullPhone;
 
     const targetId = existingPatient ? existingPatient.id : `p-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    // 3. UPDATE OR CREATE
+    // ── FAMILY LINK IDENTIFICATION (READ PHASE) ──
+    let primaryPatient: Patient | null = null;
+    if (isRelative) {
+        const primaries = await this.patientRepo.findByPhone(finalCommPhone, 'SYSTEM', transaction);
+        if (primaries.length > 0) primaryPatient = primaries[0];
+    }
+
+    return {
+        existingPatient,
+        targetId,
+        isRelative,
+        finalPhone,
+        finalCommPhone,
+        primaryPatient
+    };
+  }
+
+  /**
+   * persistPatient
+   * 
+   * Performs ONLY WRITES to update or create a patient record.
+   * MUST be called after all READS in a transaction.
+   */
+  async persistPatient(request: ManagePatientRequest, identification: any, clinicId: string, transaction?: ITransaction) {
+    const { name, age, sex, place, isLinkPending } = request;
+    const { existingPatient, targetId, isRelative, finalPhone, finalCommPhone } = identification;
+
     const updateData: Partial<Patient> = {
         name: name || existingPatient?.name,
         phone: finalPhone !== '' ? finalPhone : existingPatient?.phone,
@@ -79,6 +118,7 @@ export class ManagePatientUseCase {
         sex: (sex as any) || existingPatient?.sex,
         place: place || existingPatient?.place,
         isLinkPending: isLinkPending ?? existingPatient?.isLinkPending ?? false,
+        updatedAt: getClinicNow()
     };
 
     if (existingPatient) {
@@ -88,36 +128,29 @@ export class ManagePatientUseCase {
         await this.patientRepo.update(targetId, clinicId, updateData, transaction);
     } else {
         const newPatient: Patient = {
-            id: targetId,
             ...updateData as Patient,
+            id: targetId,
             clinicIds: [clinicId],
+            createdAt: getClinicNow()
         };
         await this.patientRepo.save(newPatient, clinicId, transaction);
     }
 
-    // 4. BI-DIRECTIONAL FAMILY LINKING
-    // Note: unlinking/linking logic could be further moved to domain services if it gets complex.
-    if (isRelative) {
-        const primaries = await this.patientRepo.findByPhone(finalCommPhone, 'SYSTEM', transaction);
-        if (primaries.length > 0) {
-            const primary = primaries[0];
-            // Update primary's related list
-            const primaryRelated = primary.relatedPatientIds || [];
-            if (!primaryRelated.includes(targetId)) {
-                await this.patientRepo.update(primary.id, 'SYSTEM', { 
-                    relatedPatientIds: [...primaryRelated, targetId] 
-                }, transaction);
-            }
-            // Update relative's related list
-            const relativeRelated = existingPatient?.relatedPatientIds || [];
-            if (!relativeRelated.includes(primary.id)) {
-                await this.patientRepo.update(targetId, 'SYSTEM', { 
-                    relatedPatientIds: [...relativeRelated, primary.id] 
-                }, transaction);
-            }
+    // Bi-directional linking (Writes)
+    if (isRelative && identification.primaryPatient) {
+        const primary = identification.primaryPatient;
+        const primaryRelated = primary.relatedPatientIds || [];
+        if (!primaryRelated.includes(targetId)) {
+            await this.patientRepo.update(primary.id, 'SYSTEM', { 
+                relatedPatientIds: [...primaryRelated, targetId] 
+            }, transaction);
+        }
+        const relativeRelated = existingPatient?.relatedPatientIds || [];
+        if (!relativeRelated.includes(primary.id)) {
+            await this.patientRepo.update(targetId, 'SYSTEM', { 
+                relatedPatientIds: [...relativeRelated, primary.id] 
+            }, transaction);
         }
     }
-
-    return targetId;
   }
 }

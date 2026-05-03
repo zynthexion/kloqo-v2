@@ -9,10 +9,12 @@
  */
 
 import { Request, Response } from 'express';
-import { sseService, SSEEvent } from '../domain/services/SSEService';
+import { SSEService, SSEEvent } from '../domain/services/SSEService';
 import { randomUUID } from 'crypto';
 
 export class SSEController {
+  constructor(private sseService: SSEService) {}
+
   /**
    * Establishes a Server-Sent Events stream for a given clinic.
    * The client (any frontend app) connects once and receives real-time events.
@@ -57,7 +59,7 @@ export class SSEController {
     });
 
     // Register client with the SSEService
-    sseService.addClient(clientId, clinicId, write);
+    this.sseService.addClient(clientId, clinicId, write);
 
     // ── Heartbeat every 30s to prevent proxy timeouts ─────────────────────────
     const heartbeatInterval = setInterval(() => {
@@ -68,7 +70,7 @@ export class SSEController {
     // ── Cleanup on disconnect ─────────────────────────────────────────────────
     req.on('close', () => {
       clearInterval(heartbeatInterval);
-      sseService.removeClient(clientId);
+      this.sseService.removeClient(clientId);
     });
   }
 }

@@ -13,11 +13,16 @@ type AppFrameLayoutProps = {
 
 import { Sidebar } from './Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 
 export default function AppFrameLayout({ children, className, showBottomNav = false, isFullScreen = false }: AppFrameLayoutProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { activeRole } = useActiveIdentity();
   const isModern = theme === 'modern' && !isFullScreen;
+
+  // Pharmacists don't have a sidebar, so we remove the left padding on desktop
+  const hideSidebar = isFullScreen || activeRole === 'pharmacist';
 
   return (
     <div className="flex min-h-screen bg-white group/sidebar overflow-x-hidden max-w-full">
@@ -26,7 +31,7 @@ export default function AppFrameLayout({ children, className, showBottomNav = fa
 
       <main className={cn(
         "flex-1 flex flex-col items-center justify-start min-h-screen transition-all duration-500 overflow-x-hidden max-w-full",
-        !isFullScreen && "md:pl-24 group-hover/sidebar:md:pl-28",
+        !hideSidebar && "md:pl-24 group-hover/sidebar:md:pl-28",
         isModern && "bg-transparent backdrop-blur-sm",
         isFullScreen && "bg-[#020617]"
       )}>

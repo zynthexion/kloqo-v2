@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { displayTime12h } from '@kloqo/shared-core';
 import { format, subMinutes, isSameDay } from 'date-fns';
 import { 
   User, 
@@ -171,7 +172,7 @@ export function BookingFlow({
                                     <div className="pt-4 border-t border-white/20 flex items-center gap-6">
                                        <div className="flex items-center gap-2">
                                           <Clock className="h-4 w-4 opacity-60" />
-                                          <span className="text-xs font-bold">{walkIn.walkInPreview?.placeholderAssignment?.slotTime ? format(new Date(walkIn.walkInPreview.placeholderAssignment.slotTime), 'h:mm a') : '...'}</span>
+                                          <span className="text-xs font-bold">{walkIn.walkInPreview?.placeholderAssignment?.slotTime ? displayTime12h(walkIn.walkInPreview.placeholderAssignment.slotTime) : '...'}</span>
                                        </div>
                                        <div className="flex items-center gap-2">
                                           <Hash className="h-4 w-4 opacity-60" />

@@ -25,8 +25,11 @@ export class ForcePasswordResetUseCase {
       // 2. Update Password in Firebase Auth
       await this.authService.updatePassword(uid, newPassword);
 
+      const userDoc = await this.userRepo.findById(uid, 'SYSTEM');
+      const clinicId = userDoc?.clinicId || 'SYSTEM';
+
       // 3. Clear the mustChangePassword flag in Firestore
-      await this.userRepo.update(uid, { 
+      await this.userRepo.update(uid, clinicId, { 
         mustChangePassword: false,
         updatedAt: new Date()
       });

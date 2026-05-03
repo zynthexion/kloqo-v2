@@ -51,7 +51,8 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
       save: jest.fn()
     } as any;
 
-    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+    const sseService = { emit: jest.fn() } as any;
+    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo, sseService);
     useCase = new ProcessGracePeriodsUseCase(appointmentRepo, clinicRepo, doctorRepo, bubblingService);
 
     jest.useFakeTimers();
@@ -79,7 +80,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
       status: 'Confirmed',
       sessionIndex: 0,
       tokenNumber: 'A-001'
-    } as Appointment);
+    } as Appointment, CLINIC_ID);
 
     // Fast forward to 10:15 AM
     jest.setSystemTime(new Date('2026-04-21T10:15:00'));
@@ -113,7 +114,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
       status: 'InConsultation',
       updatedAt: new Date('2026-04-21T10:00:00'),
       sessionIndex: 0
-    } as Appointment);
+    } as Appointment, CLINIC_ID);
 
     // 3. 10:15 AM Patient is waiting
     await appointmentRepo.save({
@@ -125,7 +126,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
       status: 'Confirmed',
       sessionIndex: 0,
       tokenNumber: 'A-002'
-    } as Appointment);
+    } as Appointment, CLINIC_ID);
 
     // Fast forward to 10:25 AM
     jest.setSystemTime(new Date('2026-04-21T10:25:00'));
@@ -162,7 +163,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
       status: 'Confirmed',
       tokenNumber: 'PW-001',
       sessionIndex: 0
-    } as Appointment);
+    } as Appointment, CLINIC_ID);
 
     // Fast forward 5 hours (Doctor is long gone)
     jest.setSystemTime(new Date('2026-04-21T15:00:00'));
@@ -190,7 +191,7 @@ describe('Doctor-Aware Grace Periods (Safety Valve & Pulse Calculation)', () => 
       status: 'Confirmed',
       sessionIndex: 0,
       tokenNumber: 'A-001'
-    } as Appointment);
+    } as Appointment, CLINIC_ID);
 
     // It is 10:25 AM. Doctor just clocked IN.
     await doctorRepo.update(DOCTOR_ID, CLINIC_ID, { consultationStatus: 'In' });

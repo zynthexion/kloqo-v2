@@ -105,7 +105,7 @@ export class FirebaseAuthService implements IAuthService {
               if (patients.length > 0) {
                   const primary = patients.find((p: any) => p.isPrimary) || patients[0];
                   user.patientId = primary.id;
-                  await this.userRepo.save(user);
+                  await this.userRepo.save(user, user.clinicId || 'SYSTEM');
                   console.log(`[verifyToken] Auto-linked patient profile ${primary.id} to user ${user.id}`);
               }
           } catch (e) {
@@ -154,7 +154,7 @@ export class FirebaseAuthService implements IAuthService {
         }
       }
 
-      await this.userRepo.save(userData);
+      await this.userRepo.save(userData, clinicId);
 
       // CRITICAL: Mint Custom Claims immediately so the user's first JWT
       // contains the correct role. Without this, the user hits a 403 on
@@ -264,7 +264,7 @@ export class FirebaseAuthService implements IAuthService {
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-        await this.userRepo.save(newUser);
+        await this.userRepo.save(newUser, 'SYSTEM');
         // Mint Custom Claims for new phone-auth patients immediately
         try {
           await admin.auth().setCustomUserClaims(userRecord.uid, {
@@ -279,7 +279,7 @@ export class FirebaseAuthService implements IAuthService {
       } else if (!user.patientId && existingPatientId) {
         // Link existing patientId to existing user if not already linked
         user.patientId = existingPatientId;
-        await this.userRepo.save(user);
+        await this.userRepo.save(user, user.clinicId || 'SYSTEM');
       }
  
        return {

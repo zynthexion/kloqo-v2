@@ -376,6 +376,10 @@ export function useAppointmentsPage() {
     setAppointmentToComplete(null); 
   }, [mutations]);
 
+  const handleStart = useCallback((apt: Appointment) => { 
+    mutations.handleStart(apt); 
+  }, [mutations]);
+
   const handleAddToQueue = useCallback((apt: Appointment) => { 
     mutations.handleAddToQueue(apt); 
     setAppointmentToAddToQueue(null); 
@@ -482,6 +486,7 @@ export function useAppointmentsPage() {
     handleRejoinQueue,
     onDoctorChange,
     handleSkip: mutations.handleSkip,
+    handleStart,
     handlePrioritize,
     handleNewRelativeAdded
   }), [

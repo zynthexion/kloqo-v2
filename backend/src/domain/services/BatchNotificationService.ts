@@ -216,7 +216,7 @@ export class BatchNotificationService {
           // Atomic billing increment
           await incrementUsage(clinicId);
           // Mark sent flag
-          await this.appointmentRepo.update(apt.id, { [sentFlag]: true } as any);
+          await this.appointmentRepo.update(apt.id, clinicId, { [sentFlag]: true } as any);
           succeeded++;
         } else {
           skipped++;
@@ -263,7 +263,7 @@ export class BatchNotificationService {
 
       if (success) {
         await incrementUsage(clinicId);
-        await this.appointmentRepo.update(apt.id, { [sentFlag]: true } as any);
+        await this.appointmentRepo.update(apt.id, clinicId, { [sentFlag]: true } as any);
       }
     }
   }

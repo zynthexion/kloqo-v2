@@ -22,7 +22,7 @@ export interface IDepartmentRepository {
 }
 
 export interface IAppointmentRepository {
-  findAll(params?: PaginationParams & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]>;
+  findAll(params?: Partial<PaginationParams> & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]>;
   findAllGlobal(startDate: Date, endDate: Date): Promise<Appointment[]>;
   findById(id: string, clinicId: string, transaction?: ITransaction): Promise<Appointment | null>;
   findByDoctorAndDate(doctorId: string, clinicId: string, date: string, transaction?: ITransaction): Promise<Appointment[]>;
@@ -63,6 +63,7 @@ export interface IAppointmentRepository {
    * @param delta  +1 for new bookings (including Force Book), -1 for Cancel/Skip/No-show.
    */
   updateBookedCount(clinicId: string, doctorId: string, date: string, sessionIndex: number, delta: 1 | -1, transaction: ITransaction): Promise<void>;
+  findByIdGlobal(id: string, transaction?: ITransaction): Promise<Appointment | null>;
 }
 
 export interface IDoctorRepository {

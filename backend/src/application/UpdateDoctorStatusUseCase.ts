@@ -4,6 +4,7 @@ import { NotificationService } from '../domain/services/NotificationService';
 import { format } from 'date-fns';
 import { PrescriptionPDFService } from '../infrastructure/pdf/PrescriptionPDFService';
 import { getClinicNow } from '../domain/services/DateUtils';
+import { SSEService } from '../domain/services/SSEService';
 
 export class UpdateDoctorStatusUseCase {
   constructor(

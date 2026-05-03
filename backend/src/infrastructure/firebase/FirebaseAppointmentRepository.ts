@@ -7,7 +7,7 @@ import { getClinicDateString, getClinicISODateString, parseClinicDate } from '..
 export class FirebaseAppointmentRepository implements IAppointmentRepository {
   private collection = db.collection('appointments');
 
-  async findAll(params?: PaginationParams & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]> {
+  async findAll(params?: Partial<PaginationParams> & { clinicId?: string; doctorId?: string }): Promise<PaginatedResponse<Appointment> | Appointment[]> {
     // ─── SECURITY: Multi-tenancy enforcement ─────────────────────────────────
     // An un-scoped findAll would return EVERY appointment across ALL clinics.
     // This is a catastrophic data-leak for a multi-tenant SaaS. Callers MUST
@@ -86,7 +86,16 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
       return null;
     }
     
-    return { id: doc.id, ...data };
+    return { ...data, id: doc.id };
+  }
+
+  async findByIdGlobal(id: string, transaction?: ITransaction): Promise<Appointment | null> {
+    const docRef = this.collection.doc(id);
+    const doc = transaction ? await (transaction as admin.firestore.Transaction).get(docRef) : await docRef.get();
+    if (!doc.exists) return null;
+    const data = doc.data() as Appointment;
+    if (data.isDeleted) return null;
+    return { ...data, id: doc.id };
   }
 
   async findByDoctorAndDate(doctorId: string, clinicId: string, dateStr: string, transaction?: ITransaction): Promise<Appointment[]> {
@@ -216,7 +225,7 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(doc => !doc.isDeleted);
   }
 
-  async save(appointment: Appointment, transaction?: ITransaction): Promise<void> {
+  async save(appointment: Appointment, _clinicId: string, transaction?: ITransaction): Promise<void> {
     const data: any = {
       ...appointment,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -334,7 +343,8 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     return docs.filter(doc => !doc.isDeleted && !!doc.prescriptionUrl);
   }
 
-  async incrementTokenCounter(counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async incrementTokenCounter(_clinicId: string, counterId: string, isClassic: boolean, transaction?: ITransaction): Promise<number> {
     const safeCounterId = counterId.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
     const counterRef = db.collection('token-counters').doc(safeCounterId);
 
@@ -362,7 +372,8 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
-  async peekTokenCounter(counterId: string): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async peekTokenCounter(_clinicId: string, counterId: string): Promise<number> {
     const safeCounterId = counterId.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
     const doc = await db.collection('token-counters').doc(safeCounterId).get();
     return doc.exists ? (doc.data()?.count || 0) : 0;
@@ -440,11 +451,13 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
   }
 
   async findByPatientId(patientId: string, clinicId: string): Promise<Appointment[]> {
-    const snapshot = await this.collection
-      .where('patientId', '==', patientId)
-      .where('clinicId', '==', clinicId)
-      // Note: Inequality filters on multiple properties require composite indexes,
-      // so we fetch all and filter deleted in memory.
+    let query = this.collection.where('patientId', '==', patientId);
+    
+    if (clinicId !== 'SYSTEM') {
+      query = query.where('clinicId', '==', clinicId);
+    }
+
+    const snapshot = await query
       .orderBy('date', 'desc')
       .orderBy('time', 'desc')
       .limit(50)
@@ -499,22 +512,17 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
-  async countAll(): Promise<number> {
-    const snapshot = await this.collection.where('isDeleted', '==', false).count().get();
-    return snapshot.data().count;
+  async countAll(clinicId: string): Promise<number> {
+    return this.countTotalByClinic(clinicId);
   }
 
   async countByClinicId(clinicId: string): Promise<number> {
-    const snapshot = await this.collection
-      .where('clinicId', '==', clinicId)
-      .where('isDeleted', '==', false)
-      .count()
-      .get();
-    return snapshot.data().count;
+    return this.countTotalByClinic(clinicId);
   }
 
-  async countByDoctorAndDateRange(doctorId: string, start: Date, end: Date): Promise<number> {
+  async countByDoctorAndDateRange(clinicId: string, doctorId: string, start: Date, end: Date): Promise<number> {
     const snapshot = await this.collection
+      .where('clinicId', '==', clinicId)
       .where('doctorId', '==', doctorId)
       .where('createdAt', '>=', start)
       .where('createdAt', '<=', end)

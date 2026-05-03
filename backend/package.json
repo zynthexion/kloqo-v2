@@ -11,7 +11,8 @@
     "backup:v2": "ts-node src/scripts/backup-v2.ts",
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "snapshot": "ts-node src/scripts/snapshot-test-state.ts"
   },
   "dependencies": {
     "@kloqo/shared": "*",

@@ -33,7 +33,20 @@ export default function DashboardPage() {
 
   const arrivedQueue = React.useMemo(() => {
     if (!data?.appointments) return [];
-    return data.appointments.filter(a => ['Confirmed', 'Skipped'].includes(a.status));
+    
+    const filtered = data.appointments.filter(a => 
+      ['Confirmed', 'Skipped', 'InConsultation'].includes(a.status)
+    );
+
+    return [...filtered].sort((a, b) => {
+      if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+      if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
+      if (a.isPriority && !b.isPriority) return -1;
+      if (!a.isPriority && b.isPriority) return 1;
+      if (a.status === 'Confirmed' && b.status === 'Skipped') return -1;
+      if (a.status === 'Skipped' && b.status === 'Confirmed') return 1;
+      return (a.time || '').localeCompare(b.time || '');
+    });
   }, [data]);
 
   // Hook 7: Auth Redirect

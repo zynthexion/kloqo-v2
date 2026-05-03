@@ -95,12 +95,15 @@ export class AppointmentController {
 
   async getAllAppointments(req: Request, res: Response) {
     try {
+      const user = (req as any).user;
+      const clinicId = user?.clinicId;
       const { page, limit } = req.query;
       const params = page && limit ? { 
         page: parseInt(page as string), 
-        limit: parseInt(limit as string) 
-      } : undefined;
-      const appointments = await this.getAllAppointmentsUseCase.execute(params);
+        limit: parseInt(limit as string),
+        clinicId
+      } : { clinicId };
+      const appointments = await this.getAllAppointmentsUseCase.execute(clinicId, params as any);
       res.json(appointments);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -119,6 +122,9 @@ export class AppointmentController {
       const pagination = page && limit ? { page: parseInt(page as string), limit: parseInt(limit as string) } : undefined;
       
       console.log('[DASHBOARD_DEBUG] Executing for:', { clinicId, date, assignedDoctorIds, pagination, search });
+      const doctors = await this.doctorRepo.findByClinicId(clinicId as string);
+      console.log(`[DASHBOARD_CONTROLLER] Doctors found in DB for clinic ${JSON.stringify(clinicId)}:`, Array.isArray(doctors) ? doctors.length : (doctors as any).data?.length);
+
       const data = await this.getNurseDashboardUseCase.execute(clinicId as string, date as string, assignedDoctorIds, pagination, search as string);
 
       res.json(data);

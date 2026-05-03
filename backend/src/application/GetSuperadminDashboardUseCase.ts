@@ -25,8 +25,8 @@ export class GetSuperadminDashboardUseCase {
       ] = await Promise.all([
         this.clinicRepo.countAll().catch(() => 0),
         this.clinicRepo.countActive().catch(() => 0),
-        this.patientRepo.countAll().catch(() => 0),
-        this.appointmentRepo.countAll().catch(() => 0),
+        this.patientRepo.countAll('SYSTEM').catch(() => 0),
+        this.appointmentRepo.countAll('SYSTEM').catch(() => 0),
         this.appointmentRepo.findAllGlobal(subDays(new Date(), 30), new Date()).catch(() => [])
       ]);
 

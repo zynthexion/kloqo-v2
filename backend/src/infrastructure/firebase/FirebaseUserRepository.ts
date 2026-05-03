@@ -1,5 +1,5 @@
 import { User, PaginationParams, PaginatedResponse, KLOQO_ROLES } from '../../../../packages/shared/src/index';
-import { IUserRepository } from '../../domain/repositories';
+import { IUserRepository, ITransaction } from '../../domain/repositories';
 import { db, paginate } from './config';
 
 export class FirebaseUserRepository implements IUserRepository {
@@ -30,7 +30,7 @@ export class FirebaseUserRepository implements IUserRepository {
       return null;
     }
     
-    return { id: doc.id, ...data };
+    return { ...data, id: doc.id };
   }
 
   async findByPhone(phone: string, clinicId: string): Promise<User | null> {

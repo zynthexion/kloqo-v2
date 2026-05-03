@@ -9,7 +9,7 @@ import { ITokenStrategy } from '../domain/services/token/ITokenStrategy';
 import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
 import { Appointment, Patient, User } from '../../../packages/shared/src/index';
 import { format, subMinutes, parse } from 'date-fns';
-import { parseClinicTime, parseClinicDate, getClinicISODateString, getClinicTimeString } from '../domain/services/DateUtils';
+import { parseClinicTime, parseClinicDate, getClinicISODateString, getClinicTimeString, getClinicNow } from '../domain/services/DateUtils';
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { SlotAlreadyBookedError, DuplicateBookingError } from '../domain/errors';
@@ -90,19 +90,15 @@ export class BookAdvancedAppointmentUseCase {
     try {
       const appointment = await this.appointmentRepo.runTransaction(async (transaction) => {
         // --- STEP 1: READ PHASE ---
-        const finalPatientId = await this.managePatientUseCase.execute({
+        const patientIdentification = await this.managePatientUseCase.identifyPatient({
           id: patientId,
           name: request.patientName || '',
           phone: request.phone || '',
-          age: request.age,
-          sex: request.sex,
-          place: request.place,
           communicationPhone: request.communicationPhone,
           clinicId: clinicId
         }, transaction);
 
-        const patient = await this.patientRepo.findById(finalPatientId, clinicId, transaction);
-        if (!patient) throw new Error('Patient not found after management');
+        const finalPatientId = patientIdentification.targetId;
 
         // 0. Duplicate Check
         const existingAppts = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, firestoreDateStr, transaction);
@@ -145,6 +141,17 @@ export class BookAdvancedAppointmentUseCase {
         }, transaction);
 
         // --- STEP 2: WRITE PHASE ---
+        await this.managePatientUseCase.persistPatient({
+          id: patientId,
+          name: request.patientName || '',
+          phone: request.phone || '',
+          age: request.age,
+          sex: request.sex,
+          place: request.place,
+          communicationPhone: request.communicationPhone,
+          clinicId: clinicId
+        }, patientIdentification, clinicId, transaction);
+
         await this.appointmentRepo.createSlotLock(lockId, {
           appointmentId,
           doctorId,
@@ -167,7 +174,7 @@ export class BookAdvancedAppointmentUseCase {
         const appt: Appointment = {
           id: appointmentId,
           patientId: finalPatientId,
-          patientName: patient.name!,
+          patientName: patientIdentification.existingPatient?.name || request.patientName || '',
           doctorId,
           doctorName: doctor.name,
           clinicId,

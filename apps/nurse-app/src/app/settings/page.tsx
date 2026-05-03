@@ -44,7 +44,8 @@ export default function SettingsPage() {
     localStorage.setItem('selectedDoctorId', id);
   };
 
-  const currentDoctor = dashData?.doctors.find(d => d.id === selectedDoctorId);
+  const isDoctor = activeRole === 'doctor';
+  const currentDoctor = dashData?.doctors.find(d => d.id === selectedDoctorId) || dashData?.doctors[0];
 
   const handleLogout = async () => {
     try {
@@ -55,8 +56,6 @@ export default function SettingsPage() {
       console.error('Logout error:', error);
     }
   };
-
-  const isDoctor = activeRole === 'doctor';
 
   if (identityLoading) {
     return (

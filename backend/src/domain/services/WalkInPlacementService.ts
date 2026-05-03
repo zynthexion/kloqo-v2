@@ -44,23 +44,53 @@ export class WalkInPlacementService {
         .map(a => a.slotIndex!)
     );
 
+    // 🔒 CONSULTATION BOUNDARY LOCK
+    // When a session is live, no walk-in — including priority (PW-Token) — may be
+    // placed at or below the slot index of:
+    //   (A) the patient currently InConsultation (in the room), or
+    //   (B) the next Confirmed patient waiting at the door.
+    // Priority means "next available after the physical boundary", NOT "displace
+    // whoever is already there". Violating this would make the UI irrecoverable.
+    const inConsultationAppts = appointments.filter(a => a.status === 'InConsultation');
+    const consultationFloor = inConsultationAppts.length > 0
+      ? Math.min(...inConsultationAppts.map(a => a.slotIndex ?? Infinity))
+      : -1;
+
+    const nextUpConfirmed = appointments
+      .filter(a => a.status === 'Confirmed' && (a.slotIndex ?? -1) > consultationFloor)
+      .sort((a, b) => (a.slotIndex ?? 0) - (b.slotIndex ?? 0))[0];
+    const doorFloor = nextUpConfirmed?.slotIndex ?? -1;
+
+    // The hard floor is the MINIMUM of the two live boundaries.
+    // No slot at or below this index is eligible for any new walk-in placement.
+    const hardFloor = consultationFloor >= 0
+      ? Math.min(consultationFloor, doorFloor >= 0 ? doorFloor : consultationFloor)
+      : -1;
+
+    if (hardFloor >= 0) {
+      console.log(`[WalkInPlacement] 🔒 hardFloor=${hardFloor} (consultationFloor=${consultationFloor}, doorFloor=${doorFloor})`);
+    }
+
     // 🚑 PRIORITY TRIAGE (PW-Token Logic)
-    // If priority, we bypass ALL rhythmic/buffer constraints and take the first physical gap.
+    // Priority bypasses rhythmic/spacing constraints but MUST respect the physical
+    // consultation boundary. The earliest eligible slot is immediately after the
+    // "at-door" patient, not before the patient in the room.
     if (isPriority) {
       const bubbleGap = sessionSlots.find(slot =>
         !occupiedSlotIndices.has(slot.index) &&
+        slot.index > hardFloor &&
         isAfter(slot.time, now)
       );
       if (bubbleGap) {
-        console.log(`[WalkInPlacement] PRIORITY: Injecting PW-Token into first physical gap at slot ${bubbleGap.index}`);
+        console.log(`[WalkInPlacement] PRIORITY: Injecting PW-Token into first gap at slot ${bubbleGap.index} (above hardFloor=${hardFloor})`);
         return bubbleGap;
       }
     }
 
     if (mode === 'advanced') {
-      return this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now);
+      return this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now, hardFloor);
     } else {
-      return this._findClassicSlot(sessionSlots, occupiedSlotIndices, now, walkInSpacing);
+      return this._findClassicSlot(sessionSlots, occupiedSlotIndices, now, walkInSpacing, hardFloor);
     }
   }
 
@@ -69,12 +99,14 @@ export class WalkInPlacementService {
   private static _findAdvancedSlot(
     sessionSlots: DailySlot[],
     occupiedSlotIndices: Set<number>,
-    now: Date
+    now: Date,
+    hardFloor: number
   ): DailySlot | null {
     // PHASE A: Smart Bubble (60-minute window)
     const oneHourFromNow = addMinutes(now, 60);
     const bubbleGap = sessionSlots.find(slot =>
       !occupiedSlotIndices.has(slot.index) &&
+      slot.index > hardFloor &&
       !isAfter(slot.time, oneHourFromNow) &&
       isAfter(slot.time, now)
     );
@@ -89,6 +121,7 @@ export class WalkInPlacementService {
     const bufferSlot = sessionSlots.find(slot =>
       reservedSlotIndices.has(slot.index) &&
       !occupiedSlotIndices.has(slot.index) &&
+      slot.index > hardFloor &&
       isAfter(slot.time, now)
     );
 
@@ -106,16 +139,17 @@ export class WalkInPlacementService {
     sessionSlots: DailySlot[],
     occupiedSlotIndices: Set<number>,
     now: Date,
-    walkInSpacing: number
+    walkInSpacing: number,
+    hardFloor: number
   ): DailySlot | null {
     /**
      * PURE GREED STRATEGY:
-     * Scan every slot chronologically after 'now'.
+     * Scan every slot chronologically after 'now' and above hardFloor.
      * Return the FIRST slot that is EITHER:
      *  1. Completely vacant (unbooked gap).
      *  2. OR a designated Zipper position (rhythmic fallback).
      * 
-     * FIFO integrity is preserved emergentlly by QueueBubblingService (The Vacuum).
+     * FIFO integrity is preserved emergently by QueueBubblingService (The Vacuum).
      */
     const zipperPositions = new Set<number>();
     if (walkInSpacing > 0) {
@@ -130,6 +164,9 @@ export class WalkInPlacementService {
       // Must be in the future
       if (!isAfter(slot.time, now)) return false;
 
+      // 🔒 Must be above the consultation/door boundary
+      if (slot.index <= hardFloor) return false;
+
       // Must not be occupied by an active appointment
       if (occupiedSlotIndices.has(slot.index)) return false;
 
@@ -137,16 +174,15 @@ export class WalkInPlacementService {
       if (zipperPositions.has(slot.index)) return true;
 
       // Rule B: It's an unbooked empty gap (Greedy Front-Fill)
-      // Since it's not occupied (checked above), it's a valid target.
       return true;
     });
 
     if (targetSlot) {
-      console.log(`[WalkInPlacement] CLASSIC: Greedy placement at slot ${targetSlot.index} (Zipper N=${walkInSpacing})`);
+      console.log(`[WalkInPlacement] CLASSIC: Greedy placement at slot ${targetSlot.index} (Zipper N=${walkInSpacing}, hardFloor=${hardFloor})`);
       return targetSlot;
     }
 
-    console.warn('[WalkInPlacement] No classic slots available (Session full).');
+    console.warn('[WalkInPlacement] No classic slots available (Session full or all above floor).');
     return null;
   }
 }

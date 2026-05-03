@@ -78,7 +78,7 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     return this.appointments.find(a => a.id === id && a.clinicId === clinicId) || null;
   }
 
-  async save(appointment: Appointment, _transaction?: ITransaction): Promise<void> {
+  async save(appointment: Appointment, _clinicId: string, _transaction?: ITransaction): Promise<void> {
     this.appointments.push({ ...appointment });
   }
 
@@ -89,15 +89,17 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     }
   }
 
-  async incrementTokenCounter(counterId: string, _isClassic: boolean, _transaction?: ITransaction): Promise<number> {
-    const current = this.tokenCounters.get(counterId) || 0;
+  async incrementTokenCounter(clinicId: string, counterId: string, _isClassic: boolean, _transaction?: ITransaction): Promise<number> {
+    const key = `${clinicId}_${counterId}`;
+    const current = this.tokenCounters.get(key) || 0;
     const next = current + 1;
-    this.tokenCounters.set(counterId, next);
+    this.tokenCounters.set(key, next);
     return next;
   }
 
-  async peekTokenCounter(counterId: string): Promise<number> {
-    return this.tokenCounters.get(counterId) || 0;
+  async peekTokenCounter(clinicId: string, counterId: string): Promise<number> {
+    const key = `${clinicId}_${counterId}`;
+    return this.tokenCounters.get(key) || 0;
   }
 
   async createSlotLock(lockId: string, _data: any, _transaction: ITransaction): Promise<void> {
@@ -147,15 +149,57 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     return this.appointments.filter(a => patientIds.includes(a.patientId) && a.clinicId === clinicId);
   }
   
-  async countAll(): Promise<number> { return 0; }
-  async countByClinicId(_clinicId: string): Promise<number> { return 0; }
-  async countByDoctorAndDateRange(_doctorId: string, _start: Date, _end: Date): Promise<number> { return 0; }
+  async countAll(clinicId: string): Promise<number> {
+    return this.appointments.filter(a => a.clinicId === clinicId && !a.isDeleted).length;
+  }
+  async countByClinicId(clinicId: string): Promise<number> {
+    return this.countAll(clinicId);
+  }
+  async countByDoctorAndDateRange(clinicId: string, doctorId: string, _start: Date, _end: Date): Promise<number> {
+    return this.appointments.filter(a => a.clinicId === clinicId && a.doctorId === doctorId && !a.isDeleted).length;
+  }
   async countByStatus(_clinicId: string, _status: string, _start?: Date, _end?: Date): Promise<number> { return 0; }
   async countByPharmacyStatus(_clinicId: string, _status: string, _start?: Date, _end?: Date): Promise<number> { return 0; }
   async findCompletedByClinic(_clinicId: string, _filters: any): Promise<Appointment[]> { return []; }
   async findCompletedByPatientInClinic(_pId: string, _cId: string): Promise<Appointment[]> { return []; }
 
-  async delete(id: string, clinicId: string, _transaction?: ITransaction): Promise<void> {
+  async delete(id: string, clinicId: string, _soft: boolean = true, _transaction?: ITransaction): Promise<void> {
     this.appointments = this.appointments.filter(a => !(a.id === id && a.clinicId === clinicId));
+  }
+
+  async findByIdGlobal(id: string, _transaction?: ITransaction): Promise<Appointment | null> {
+    return this.appointments.find(a => a.id === id) || null;
+  }
+
+  async findByClinicId(clinicId: string, _startDate?: Date, _endDate?: Date): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.clinicId === clinicId);
+  }
+
+  async findLatestByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment | null> {
+    const sorted = this.appointments
+      .filter(a => a.patientId === patientId && a.clinicId === clinicId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+    return sorted[0] || null;
+  }
+
+  async findAllByPatientAndClinic(patientId: string, clinicId: string): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.patientId === patientId && a.clinicId === clinicId);
+  }
+
+  async findLatestByPatientIds(patientIds: string[], clinicId: string): Promise<Map<string, Appointment>> {
+    const map = new Map<string, Appointment>();
+    for (const pid of patientIds) {
+      const latest = await this.findLatestByPatientAndClinic(pid, clinicId);
+      if (latest) map.set(pid, latest);
+    }
+    return map;
+  }
+
+  async countTotalByClinic(clinicId: string): Promise<number> {
+    return this.appointments.filter(a => a.clinicId === clinicId && !a.isDeleted).length;
+  }
+
+  async countByClinicAndDateRange(clinicId: string, _startDate: Date, _endDate: Date): Promise<number> {
+    return this.appointments.filter(a => a.clinicId === clinicId).length;
   }
 }

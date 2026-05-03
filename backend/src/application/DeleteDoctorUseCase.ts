@@ -6,15 +6,15 @@ export class DeleteDoctorUseCase {
     private clinicRepo: IClinicRepository
   ) {}
 
-  async execute(id: string, soft: boolean = true): Promise<void> {
+  async execute(id: string, clinicId: string, soft: boolean = true): Promise<void> {
     // 1. Find the doctor first to get the clinicId for the counter decrement.
-    const doctor = await this.doctorRepo.findById(id);
+    const doctor = await this.doctorRepo.findById(id, clinicId);
     if (!doctor) {
       throw new Error(`Doctor with ID ${id} not found.`);
     }
 
     // 2. Delete (or soft-delete) the doctor document.
-    await this.doctorRepo.delete(id, soft);
+    await this.doctorRepo.delete(id, clinicId, soft);
 
     // 3. Atomically decrement the clinic's doctor count.
     // This runs after a confirmed delete to keep the counter in sync.

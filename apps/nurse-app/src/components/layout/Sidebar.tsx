@@ -9,6 +9,9 @@ import { useNurseDashboard } from '@/hooks/useNurseDashboard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { RoleSwitcher } from './RoleSwitcher';
+import { useAuth } from '@/contexts/AuthContext';
+import { useActiveIdentity } from "@/hooks/useActiveIdentity";
+import { useSidebarBehavior } from "@/hooks/useSidebarBehavior";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,25 +22,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from 'lucide-react';
 
 export function Sidebar() {
-  const pathname = usePathname();
-  const { data, selectedDoctorId, updateDoctorStatus } = useNurseDashboard();
+  const { user } = useAuth();
+  const { activeRole, displayName, displayAvatar, clinicalProfile } = useActiveIdentity();
+  const { data, loading, selectedDoctorId, setSelectedDoctorId, updateDoctorStatus } = useNurseDashboard();
   const [showConfirmIn, setShowConfirmIn] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
+  
+  const pathname = usePathname();
+  const { isSidebarOpen, setIsSidebarOpen, hideSidebar, isDashboard } = useSidebarBehavior(activeRole);
 
-  // Custom interactive collapse state
-  const isDashboard = pathname.startsWith('/dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(!isDashboard);
-
-  // Sync state if pathname changes to/from dashboard
-  useEffect(() => {
-    if (isDashboard) {
-      setIsSidebarOpen(false);
-    } else {
-      setIsSidebarOpen(true);
-    }
-  }, [isDashboard]);
+  if (hideSidebar) return null;
 
   const navItems = [
     { href: '/', icon: Home, label: 'Overview' },
@@ -47,8 +50,22 @@ export function Sidebar() {
     { href: '/settings', icon: Settings, label: 'Settings' },
   ];
 
-  const selectedDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
-  const consultationStatus = selectedDoctor?.consultationStatus || 'Out';
+  // ─── IDENTITY RESOLUTION ────────────────────────────────────────────────
+  // For the sidebar bottom "Doctor Context", we need to show the person 
+  // whose status is being controlled (In/Out).
+  const isDoctorRole = activeRole === 'doctor';
+  const dashboardDoctor = data?.doctors.find(d => d.id === selectedDoctorId);
+  console.log('[Sidebar] Debug:', { 
+    selectedDoctorId, 
+    found: !!dashboardDoctor, 
+    doctorName: dashboardDoctor?.name,
+    totalDoctors: data?.doctors?.length,
+    activeRole,
+    userRole: user?.role
+  });
+  const consultationStatus = dashboardDoctor?.consultationStatus || clinicalProfile?.consultationStatus || 'Out';
+
+  const showDropdown = !isDoctorRole && (data?.doctors?.length ?? 0) > 1;
 
   const handleStatusChange = async (checked: boolean) => {
     if (!selectedDoctorId) return;
@@ -124,29 +141,72 @@ export function Sidebar() {
         <div className="mt-auto flex flex-col gap-8 items-center w-full">
           <RoleSwitcher />
           
-          <div className="w-full px-4 pb-4 flex flex-col items-center gap-4 group">
-            <Avatar className="h-16 w-16 rounded-2xl shadow-sm border-2 border-white group-hover:scale-105 transition-transform duration-500">
-              <AvatarImage src={selectedDoctor?.avatar} />
-              <AvatarFallback className="bg-primary/5 p-0 overflow-hidden">
-                <User className="w-8 h-8 text-slate-300" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="text-center overflow-hidden w-full">
-              <p className="text-sm font-black text-slate-900 leading-tight truncate px-1">
-                {selectedDoctor?.name || 'Dr.'}
-              </p>
-              <div className="flex items-center justify-center gap-2 mt-2 bg-slate-50 py-1.5 px-3 rounded-full border border-slate-100">
-                <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'Out' ? "text-slate-900" : "text-slate-400")}>Out</span>
-                <Switch 
-                  className="scale-75 data-[state=checked]:bg-emerald-500" 
-                  checked={consultationStatus === 'In'}
-                  onCheckedChange={handleStatusChange}
-                  disabled={isToggling}
-                />
-                <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'In' ? "text-emerald-600" : "text-slate-400")}>In</span>
-              </div>
-            </div>
-          </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild disabled={!showDropdown}>
+                <div className={cn(
+                  "flex flex-col items-center gap-4 w-full cursor-pointer",
+                  !showDropdown && "cursor-default"
+                )}>
+                  <Avatar className="h-16 w-16 rounded-2xl shadow-sm border-2 border-white group-hover:scale-105 transition-transform duration-500">
+                    <AvatarImage src={dashboardDoctor?.avatar || displayAvatar} />
+                    <AvatarFallback className="bg-primary/5 p-0 overflow-hidden">
+                      <User className="w-8 h-8 text-slate-300" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="text-center overflow-hidden w-full flex flex-col items-center">
+                    <div className="flex items-center gap-1.5 px-1 max-w-full">
+                      <p className="text-sm font-black text-slate-900 leading-tight truncate">
+                        {dashboardDoctor?.name || displayName}
+                      </p>
+                      {showDropdown && <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />}
+                    </div>
+                    <div className="flex items-center justify-center gap-2 mt-2 bg-slate-50 py-1.5 px-3 rounded-full border border-slate-100">
+                      <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'Out' ? "text-slate-900" : "text-slate-400")}>Out</span>
+                      <Switch 
+                        className="scale-75 data-[state=checked]:bg-emerald-500" 
+                        checked={consultationStatus === 'In'}
+                        onCheckedChange={handleStatusChange}
+                        disabled={isToggling}
+                      />
+                      <span className={cn("text-[10px] font-black uppercase tracking-widest", consultationStatus === 'In' ? "text-emerald-600" : "text-slate-400")}>In</span>
+                    </div>
+                  </div>
+                </div>
+              </DropdownMenuTrigger>
+              {showDropdown && (
+                <DropdownMenuContent 
+                  side="right" 
+                  align="end" 
+                  sideOffset={20}
+                  className="w-56 rounded-[1.5rem] p-2 bg-white/95 backdrop-blur-md border-slate-100 shadow-2xl animate-in slide-in-from-left-2 duration-300"
+                >
+                  <div className="px-3 py-2 border-b border-slate-50 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Assigned Doctors</p>
+                  </div>
+                  {data?.doctors.map((doc) => (
+                    <DropdownMenuItem 
+                      key={doc.id}
+                      onClick={() => setSelectedDoctorId(doc.id)}
+                      className={cn(
+                        "flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-colors",
+                        doc.id === selectedDoctorId ? "bg-primary/5 text-primary" : "hover:bg-slate-50"
+                      )}
+                    >
+                      <Avatar className="h-8 w-8 border-2 border-white shadow-sm">
+                        <AvatarImage src={doc.avatar} />
+                        <AvatarFallback className="text-[8px] font-black">{doc.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black truncate">{doc.name}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                          {doc.consultationStatus === 'In' ? '🟢 Active' : '⚪ Out'}
+                        </p>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              )}
+            </DropdownMenu>
         </div>
       </aside>
 

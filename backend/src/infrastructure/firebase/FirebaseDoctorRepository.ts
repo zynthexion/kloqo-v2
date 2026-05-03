@@ -1,5 +1,5 @@
-import { Doctor, PaginationParams, PaginatedResponse } from '../../../../packages/shared/src/index';
-import { IDoctorRepository, ITransaction, DoctorOverride } from '../../domain/repositories';
+import { Doctor, PaginationParams, PaginatedResponse, DoctorOverride } from '../../../../packages/shared/src/index';
+import { IDoctorRepository, ITransaction } from '../../domain/repositories';
 import { db, paginate } from './config';
 import * as admin from 'firebase-admin';
 import { cacheService, CACHE_TTL, CACHE_KEY } from '../services/CacheService';
@@ -8,17 +8,19 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
   private collection = db.collection('doctors');
 
   async findAll(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Doctor> | Doctor[]> {
+    console.log(`[DOCTOR_REPO] findAll called for clinicId: ${JSON.stringify(clinicId)}`);
     let query = this.collection
-      .where('clinicId', '==', clinicId)
-      .where('isDeleted', '==', false);
+      .where('clinicId', '==', clinicId);
 
     if (params) {
       return paginate<Doctor>(query, params);
     }
 
-    // ✅ FINOPS: Added default limit to prevent unbounded fetch
     const snapshot = await query.limit(100).get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Doctor));
+    const doctors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Doctor));
+    
+    // In-memory filter for deletion to be resilient to missing field
+    return doctors.filter(d => d.isDeleted !== true);
   }
 
   async findById(id: string, clinicId: string): Promise<Doctor | null> {
@@ -45,7 +47,7 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
       return null;
     }
 
-    const doctor = { id: doc.id, ...data };
+    const doctor = { ...data, id: doc.id };
     cacheService.set(key, doctor, CACHE_TTL.DOCTOR);
     return doctor;
   }
@@ -76,7 +78,7 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
         const data = doc.data() as Doctor;
         const isClinicMember = clinicId === 'SYSTEM' || data.clinicId === clinicId;
         if (data && data.isDeleted !== true && !seenIds.has(doc.id) && isClinicMember) {
-          doctors.push({ id: doc.id, ...data } as Doctor);
+          doctors.push({ ...data, id: doc.id } as Doctor);
           seenIds.add(doc.id);
         }
       });
@@ -113,7 +115,7 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
     const doc = snapshot.docs[0];
     const data = doc.data() as any;
     if (data && data.isDeleted === true) return null;
-    return { id: doc.id, ...data } as Doctor;
+    return { ...data, id: doc.id } as Doctor;
   }
 
   async findByUserId(userId: string, clinicId: string): Promise<Doctor | null> {
@@ -261,12 +263,7 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
     cacheService.del(CACHE_KEY.doctorsByClinic(clinicId));
   }
 
-  async countAll(): Promise<number> {
-    const snapshot = await this.collection.where('isDeleted', '==', false).count().get();
-    return snapshot.data().count;
-  }
-
-  async countByClinicId(clinicId: string): Promise<number> {
+  async countAll(clinicId: string): Promise<number> {
     const snapshot = await this.collection
       .where('clinicId', '==', clinicId)
       .where('isDeleted', '==', false)
@@ -275,7 +272,12 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
     return snapshot.data().count;
   }
 
-  async prunePastOverrides(id: string, keys: string[]): Promise<void> {
+  async countByClinicId(clinicId: string): Promise<number> {
+    return this.countAll(clinicId);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async prunePastOverrides(id: string, _clinicId: string, keys: string[]): Promise<void> {
     if (!keys || keys.length === 0) return;
 
     const updatePayload: Record<string, any> = {};

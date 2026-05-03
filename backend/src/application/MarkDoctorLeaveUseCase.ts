@@ -82,9 +82,15 @@ export class MarkDoctorLeaveUseCase {
         await Promise.allSettled(
           actionableAppointments.map(appt => 
             this.notificationService.sendAppointmentCancelledNotification({
-              patientId: appt.patientId, appointmentId: appt.id, doctorName: doctor.name,
-              clinicName: appt.clinicName || 'Clinic', date: appt.date, time: appt.time,
-              communicationPhone: appt.communicationPhone, patientName: appt.patientName,
+              patientId: appt.patientId, 
+              appointmentId: appt.id, 
+              doctorName: doctor.name,
+              clinicName: (appt as any).clinicName || 'Clinic', 
+              date: appt.date, 
+              time: appt.time,
+              clinicId,
+              communicationPhone: appt.communicationPhone, 
+              patientName: appt.patientName,
               reason: 'Doctor on leave'
             })
           )

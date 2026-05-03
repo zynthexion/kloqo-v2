@@ -54,7 +54,7 @@ export class GetAvailableSlotsUseCase {
     let { clinicId, doctorId, date: dateStr, source = 'staff', userLat, userLon } = request;
 
     // ── 1. Fetch doctor and enforce tenant isolation (Rule 15) ──────────────
-    const doctor = await this.doctorRepo.findById(doctorId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     if (!doctor) throw new Error('Doctor not found');
     if (doctor.clinicId !== clinicId) {
       console.error(

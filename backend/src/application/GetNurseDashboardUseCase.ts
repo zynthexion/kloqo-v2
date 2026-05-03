@@ -77,7 +77,7 @@ export class GetNurseDashboardUseCase {
 
     if (this.patientRepo && appointments && appointments.length > 0) {
       const patientIds = [...new Set(appointments.map(a => a.patientId))];
-      const patients = await this.patientRepo!.findByPatientIds(patientIds);
+      const patients = await this.patientRepo!.findByPatientIds(patientIds, clinicId);
       const patientMap = new Map(patients.map(p => [p.id, p]));
 
       for (const apt of appointments) {
@@ -106,10 +106,16 @@ export class GetNurseDashboardUseCase {
     let doctorsList = Array.isArray(doctors) ? doctors : (doctors as any).data;
 
     // 🛡️ SECURITY: Nurse/Staff Blinding (assignedDoctorIds)
+    // We only filter if assignments exist. If empty or undefined, staff sees all doctors in their clinic.
     if (assignedDoctorIds && assignedDoctorIds.length > 0) {
-      const assignedSet = new Set(assignedDoctorIds);
-      doctorsList = doctorsList.filter((d: Doctor) => assignedSet.has(d.id));
-      filteredAppointments = filteredAppointments.filter((a: Appointment) => assignedSet.has(a.doctorId));
+      const assignedSet = new Set(assignedDoctorIds.map(id => String(id).trim()));
+      
+      const beforeCount = doctorsList.length;
+      doctorsList = doctorsList.filter((d: Doctor) => d && d.id && assignedSet.has(String(d.id).trim()));
+      
+      console.log(`[DASHBOARD_FILTER] Role-based filtering: ${beforeCount} -> ${doctorsList.length} doctors (Assignments: ${assignedDoctorIds.join(', ')})`);
+      
+      filteredAppointments = filteredAppointments.filter((a: Appointment) => a && a.doctorId && assignedSet.has(String(a.doctorId).trim()));
     }
 
 

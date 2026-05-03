@@ -36,7 +36,7 @@ export class FirebasePatientRepository implements IPatientRepository {
       return null;
     }
     
-    return { id: doc.id, ...data };
+    return { ...data, id: doc.id };
   }
 
   async findByPhone(phone: string, clinicId: string, transaction?: ITransaction): Promise<Patient[]> {
@@ -89,7 +89,7 @@ export class FirebasePatientRepository implements IPatientRepository {
     if (snapshot.empty) return null;
     const doc = snapshot.docs[0];
     const data = doc.data() as Patient;
-    return data.isDeleted ? null : { id: doc.id, ...data };
+    return data.isDeleted ? null : { ...data, id: doc.id };
   }
 
   async findByNameAndCommunicationPhone(name: string, phone: string, clinicId: string, transaction?: ITransaction): Promise<Patient | null> {
@@ -106,12 +106,20 @@ export class FirebasePatientRepository implements IPatientRepository {
     if (snapshot.empty) return null;
     const doc = snapshot.docs[0];
     const data = doc.data() as Patient;
-    return data.isDeleted ? null : { id: doc.id, ...data };
+    return data.isDeleted ? null : { ...data, id: doc.id };
   }
 
-  async countAll(): Promise<number> {
-    const snapshot = await this.collection.where('isDeleted', '==', false).count().get();
+  async countAll(clinicId: string): Promise<number> {
+    const snapshot = await this.collection
+      .where('clinicIds', 'array-contains', clinicId)
+      .where('isDeleted', '==', false)
+      .count()
+      .get();
     return snapshot.data().count;
+  }
+
+  async countByClinicId(clinicId: string): Promise<number> {
+    return this.countAll(clinicId);
   }
 
   async delete(id: string, clinicId: string, soft: boolean = true, transaction?: ITransaction): Promise<void> {
@@ -132,15 +140,6 @@ export class FirebasePatientRepository implements IPatientRepository {
       if (soft) await docRef.update(data!);
       else await docRef.delete();
     }
-  }
-
-  async countByClinicId(clinicId: string): Promise<number> {
-    const snapshot = await this.collection
-      .where('clinicIds', 'array-contains', clinicId)
-      .where('isDeleted', '==', false)
-      .count()
-      .get();
-    return snapshot.data().count;
   }
 
   async findByPatientIds(ids: string[], clinicId: string): Promise<Patient[]> {
@@ -166,7 +165,7 @@ export class FirebasePatientRepository implements IPatientRepository {
         // SECURITY: Filter by clinicId unless 'SYSTEM'
         const isClinicMember = clinicId === 'SYSTEM' || data.clinicIds?.includes(clinicId);
         if (data && !data.isDeleted && !seenIds.has(doc.id) && isClinicMember) {
-          patients.push({ id: doc.id, ...data });
+          patients.push({ ...data, id: doc.id });
           seenIds.add(doc.id);
         }
       });

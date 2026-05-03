@@ -9,7 +9,7 @@ export class RegisterInitialSuperAdminUseCase {
 
   async execute(email: string, password: string, name: string): Promise<User> {
     // 1. Fail Fast: Check if any superAdmin already exists
-    const adminCount = await this.userRepo.countByRole(KLOQO_ROLES.SUPER_ADMIN);
+    const adminCount = await this.userRepo.countByRole(KLOQO_ROLES.SUPER_ADMIN, 'SYSTEM');
     if (adminCount > 0) {
       throw new Error('Unauthorized: A primary Super Admin is already registered.');
     }
@@ -25,7 +25,7 @@ export class RegisterInitialSuperAdminUseCase {
     );
 
     // Initial super admin doesn't need to change password (they just set it)
-    await this.userRepo.update(user.id!, { mustChangePassword: false });
+    await this.userRepo.update(user.id!, 'SYSTEM', { mustChangePassword: false });
 
     return user;
   }

@@ -1,7 +1,7 @@
 import { addMinutes, format } from 'date-fns';
 import { Appointment, Doctor } from '../../../../packages/shared/src/index';
 import { IAppointmentRepository, IDoctorRepository, ITransaction } from '../../domain/repositories';
-import { sseService } from './SSEService';
+import { SSEService } from './SSEService';
 import { DelayCalculatorService } from './DelayCalculatorService';
 import { SlotCalculator } from './SlotCalculator';
 
@@ -24,7 +24,8 @@ import { SlotCalculator } from './SlotCalculator';
 export class QueueBubblingService {
   constructor(
     private appointmentRepo: IAppointmentRepository,
-    private doctorRepo: IDoctorRepository
+    private doctorRepo: IDoctorRepository,
+    private sseService: SSEService
   ) {}
 
   /**
@@ -50,23 +51,59 @@ export class QueueBubblingService {
       const doctor = await this.doctorRepo.findById(doctorId, clinicId);
       if (!doctor) return;
 
-      const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, date);
+      const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date);
       const sessionAppointments = allAppointments.filter(
         a => a.sessionIndex === sessionIndex && !a.isDeleted
       );
 
-      // 1. Identify "Protected Zone"
-      // Patients currently InConsultation or already in the buffer cannot be moved.
-      const bufferedAppts = sessionAppointments.filter(a => 
-        a.status === 'InConsultation' || (a as any).isInBuffer === true
-      );
-      const protectedThreshold = bufferedAppts.length > 0 
-        ? Math.max(...bufferedAppts.map(a => a.slotIndex!)) 
+      // 1. Identify "Protected Zone" — Dual-Phase Consultation Boundary Lock
+      //
+      // Phase A: LIVE SESSION — Freeze based on physical reality.
+      //   • consultationBoundary: the MINIMUM slot of any InConsultation patient
+      //     (the patient literally in the room — cannot be displaced).
+      //   • doorBoundary: the MINIMUM slot of the next Confirmed patient whose
+      //     slot is above the consultation boundary (the patient at the door —
+      //     their position is also irrevocable).
+      //   • liveFreezeThreshold: the lower of the two — no gap at or below this
+      //     index may ever be filled by the vacuum.
+      //
+      // Phase B: PRE-SESSION — Freeze based on the isInBuffer flag.
+      //   • bufferThreshold: the MAX slot of any isInBuffer appointment.
+      //     Used before the doctor starts consulting to protect pre-loaded patients.
+      //
+      // Final: protectedThreshold = Math.max(live, buffer) — the stricter of the two.
+
+      const inConsultationAppts = sessionAppointments.filter(a => a.status === 'InConsultation');
+      const consultationBoundary = inConsultationAppts.length > 0
+        ? Math.min(...inConsultationAppts.map(a => a.slotIndex!))
         : -1;
 
+      const doorConfirmedAppts = sessionAppointments
+        .filter(a => a.status === 'Confirmed' && (a.slotIndex ?? -1) > consultationBoundary)
+        .sort((a, b) => a.slotIndex! - b.slotIndex!);
+      const doorBoundary = doorConfirmedAppts.length > 0 ? doorConfirmedAppts[0].slotIndex! : -1;
+
+      const liveFreezeThreshold = consultationBoundary >= 0
+        ? Math.min(
+            consultationBoundary,
+            doorBoundary >= 0 ? doorBoundary : consultationBoundary
+          )
+        : -1;
+
+      const bufferedAppts = sessionAppointments.filter(a => (a as any).isInBuffer === true);
+      const bufferThreshold = bufferedAppts.length > 0
+        ? Math.max(...bufferedAppts.map(a => a.slotIndex!))
+        : -1;
+
+      const protectedThreshold = Math.max(liveFreezeThreshold, bufferThreshold);
+
+      if (protectedThreshold >= 0) {
+        console.log(`[QueueBubbling] 🔒 Freeze active: consultationBoundary=${consultationBoundary}, doorBoundary=${doorBoundary}, protectedThreshold=${protectedThreshold}`);
+      }
+
       // 2. Identify Gaps and Candidates
-      // Gaps: Empty slots below the maximum occupied index
-      // Candidates: Confirmed Walk-ins above the gaps and protected threshold
+      // Gaps: Empty slots ABOVE the protected threshold and below the max occupied index.
+      // Candidates: Confirmed Walk-ins above both the gaps and the protected threshold.
       const activeAppts = sessionAppointments.filter(a => 
         ['Confirmed', 'InConsultation', 'Completed'].includes(a.status)
       );
@@ -77,6 +114,8 @@ export class QueueBubblingService {
 
       const gaps: number[] = [];
       for (let i = 0; i <= maxOccupiedIndex; i++) {
+        // 🔒 FREEZE: Never allow a gap at or below the consultation/buffer boundary
+        if (i <= protectedThreshold) continue;
         if (!occupiedIndices.has(i)) {
           gaps.push(i);
         }
@@ -175,7 +214,7 @@ export class QueueBubblingService {
         // Fetch fresh state of session for the broadcast to ensure zero lag
         const updatedAppointments = sessionAppointments.map(a => ({...a})); 
 
-        sseService.emit('queue_reoptimized', clinicId, {
+        this.sseService.emit('queue_reoptimized', clinicId, {
           doctorId,
           sessionIndex,
           reslottedCount: reslottedEvents.length,

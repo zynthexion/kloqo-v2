@@ -8,7 +8,7 @@ export class DeleteAppointmentUseCase {
   async execute(params: { appointmentId: string; clinicId: string }): Promise<void> {
     const { appointmentId, clinicId } = params;
 
-    const appointment = await this.appointmentRepo.findById(appointmentId);
+    const appointment = await this.appointmentRepo.findById(appointmentId, clinicId);
     if (!appointment) {
       throw new Error('Appointment not found');
     }
@@ -17,7 +17,7 @@ export class DeleteAppointmentUseCase {
       throw new Error('Unauthorized: Appointment does not belong to this clinic');
     }
 
-    await this.appointmentRepo.delete(appointmentId);
+    await this.appointmentRepo.delete(appointmentId, clinicId);
 
     // Release the atomic lock if the appointment had one (advanced bookings)
     if (appointment.slotIndex !== undefined && appointment.sessionIndex !== undefined) {

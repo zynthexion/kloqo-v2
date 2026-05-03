@@ -153,7 +153,8 @@ export class DoctorController {
       const { doctor } = await this.getDoctorDetailsUseCase.execute(id);
       if (doctor) this.validateClinicAccess(req, doctor.clinicId);
 
-      await this.deleteDoctorUseCase.execute(id, soft === 'true');
+      const clinicId = (req as any).user.clinicId;
+      await this.deleteDoctorUseCase.execute(id, clinicId, soft === 'true');
       res.status(204).send();
     } catch (error: any) {
       if (error.status === 403) return res.status(403).json({ error: error.message });

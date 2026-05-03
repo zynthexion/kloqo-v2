@@ -22,16 +22,16 @@ export class SendBookingLinkUseCase {
     if (!clinic) throw new Error('Clinic not found');
 
     // 1. Check if user exists
-    let user = await this.userRepo.findByPhone(phone);
+    let user = await this.userRepo.findByPhone(phone, 'SYSTEM');
     let patientId = user?.patientId;
 
     if (user && patientId) {
       // 2. User exists, check patient and add clinicId
-      const patient = await this.patientRepo.findById(patientId);
+      const patient = await this.patientRepo.findById(patientId, 'SYSTEM');
       if (patient) {
         const clinicIds = patient.clinicIds || [];
         if (!clinicIds.includes(clinicId)) {
-          await this.patientRepo.update(patientId, {
+          await this.patientRepo.update(patientId, 'SYSTEM', {
             clinicIds: [...clinicIds, clinicId],
             updatedAt: new Date()
           });
@@ -74,8 +74,8 @@ export class SendBookingLinkUseCase {
         updatedAt: new Date(),
       };
 
-      await this.patientRepo.save(newPatient);
-      await this.userRepo.save(newUser);
+      await this.patientRepo.save(newPatient, 'SYSTEM');
+      await this.userRepo.save(newUser, 'SYSTEM');
     }
 
     // 4. Send notification

@@ -29,7 +29,7 @@ export class FirebasePrescriptionRepository implements IPrescriptionRepository {
       return null;
     }
     
-    return { id: doc.id, ...data };
+    return { ...data, id: doc.id };
   }
 
   async findByClinicId(clinicId: string): Promise<Prescription[]> {

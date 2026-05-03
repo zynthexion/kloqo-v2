@@ -37,7 +37,7 @@ export class TokenGeneratorService {
       counterDocId = `${clinicId}_${doctorName}_${date}${isPriority ? '_PW' : (type === 'W' ? '_W' : '')}`;
     }
 
-    const result = await this.appointmentRepo.incrementTokenCounter(counterDocId, isClassic, transaction);
+    const result = await this.appointmentRepo.incrementTokenCounter(clinicId, counterDocId, isClassic, transaction);
 
     // 🚑 PRIORITY TRIAGE: PW-Tokens MUST use an independent sequence (PW-001, PW-002)
     // They never inherit session offsets to signal urgency to the waiting room.
@@ -89,7 +89,7 @@ export class TokenGeneratorService {
       counterDocId = `${clinicId}_${doctorName}_${date}${isPriority ? '_PW' : (type === 'W' ? '_W' : '')}`;
     }
 
-    const currentCount = await this.appointmentRepo.peekTokenCounter(counterDocId);
+    const currentCount = await this.appointmentRepo.peekTokenCounter(clinicId, counterDocId);
     const nextCount = currentCount + 1;
 
     let numericToken: number;

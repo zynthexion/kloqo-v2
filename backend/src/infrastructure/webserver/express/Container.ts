@@ -203,7 +203,7 @@ const batchNotificationService = new BatchNotificationService(
 );
 const tokenGeneratorService = new TokenGeneratorService(appointmentRepo);
 const sseService = new SSEService();
-const queueBubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+const queueBubblingService = new QueueBubblingService(appointmentRepo, doctorRepo, sseService);
 
 const classicTokenStrategy = new ClassicTokenStrategy(tokenGeneratorService);
 const advancedTokenStrategy = new AdvancedTokenStrategy(tokenGeneratorService);
@@ -279,9 +279,9 @@ const deleteDepartmentUseCase = new DeleteDepartmentUseCase(departmentRepo);
 // Appointments
 const getAllAppointmentsUseCase = new GetAllAppointmentsUseCase(appointmentRepo);
 const getNurseDashboardUseCase = new GetNurseDashboardUseCase(clinicRepo, doctorRepo, appointmentRepo, syncClinicStatusesUseCase, patientRepo);
-const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, tokenStrategyFactory, queueBubblingService);
-const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService, tokenStrategyFactory);
-const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService, tokenStrategyFactory);
+const updateAppointmentStatusUseCase = new UpdateAppointmentStatusUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, counterRepo, tokenGeneratorService, tokenStrategyFactory, sseService, queueBubblingService);
+const createWalkInAppointmentUseCase = new CreateWalkInAppointmentUseCase(appointmentRepo, doctorRepo, clinicRepo, managePatientUseCase, tokenGeneratorService, sseService);
+const bookAdvancedAppointmentUseCase = new BookAdvancedAppointmentUseCase(appointmentRepo, doctorRepo, patientRepo, clinicRepo, managePatientUseCase, tokenGeneratorService, tokenStrategyFactory, sseService);
 const getAvailableSlotsUseCase = new GetAvailableSlotsUseCase(appointmentRepo, doctorRepo, clinicRepo, counterRepo);
 const deleteAppointmentUseCase = new DeleteAppointmentUseCase(appointmentRepo);
 const sendBookingLinkUseCase = new SendBookingLinkUseCase(notificationService, clinicRepo, patientRepo, userRepo);
@@ -450,7 +450,7 @@ const webhookController = new WebhookController(subscriptionRepo, clinicRepo);
 const whatsappWebhookController = new WhatsAppWebhookController(appointmentRepo, updateAppointmentStatusUseCase, notificationService);
 const paymentController = new PaymentController(confirmAppointmentPaymentUseCase, verifySubscriptionUpgradeUseCase);
 const storageController = new StorageController();
-const sseController = new SSEController();
+const sseController = new SSEController(sseService);
 const superAdminController = new SuperAdminController(impersonateClinicUseCase);
 const publicBookingController = new PublicBookingController(
   getAllDoctorsUseCase,

@@ -108,7 +108,7 @@ export class CreateUserUseCase {
       newUser.assignedDoctorIds = assignedDoctorIds;
     }
 
-    await this.userRepo.save(newUser);
+    await this.userRepo.save(newUser, clinicId || 'SYSTEM');
 
     // 2. Send Credentials Email if new user and email service is available
     if (isNewAuthUser && this.emailService && password) {

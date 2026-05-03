@@ -177,7 +177,7 @@ export interface Appointment {
   time: string; // HH:mm
   slotIndex?: number;
   sessionIndex?: number;
-  status: 'Pending' | 'Confirmed' | 'Skipped' | 'Completed' | 'Cancelled' | 'No-show' | string;
+  status: 'Pending' | 'Confirmed' | 'Skipped' | 'Completed' | 'Cancelled' | 'No-show' | 'InConsultation' | string;
   paymentStatus?: 'Unpaid' | 'Paid' | 'Processing';
   bookedVia: 'Advanced Booking' | 'Walk-in' | 'Online' | string;
   tokenNumber: string;

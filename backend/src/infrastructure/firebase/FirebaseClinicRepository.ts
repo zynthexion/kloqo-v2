@@ -57,7 +57,7 @@ export class FirebaseClinicRepository implements IClinicRepository {
       snapshot.docs.forEach(doc => {
         const data = doc.data() as any;
         if (data && data.isDeleted !== true && !seenIds.has(doc.id)) {
-          clinics.push({ id: doc.id, ...data } as Clinic);
+          clinics.push({ ...data, id: doc.id } as Clinic);
           seenIds.add(doc.id);
         }
       });

@@ -97,7 +97,7 @@ export class WhatsAppWebhookController {
       }
 
       // 3. Tenant Security Flow (Rule 15 Enforcement)
-      const appointment = await this.appointmentRepo.findById(appointmentId);
+      const appointment = await this.appointmentRepo.findByIdGlobal(appointmentId);
       if (!appointment) {
         console.warn(`Webhook triggered for missing appointment: ${appointmentId}`);
         return res.sendStatus(200); // Meta stops retrying
@@ -106,7 +106,7 @@ export class WhatsAppWebhookController {
       // 4. Handle Digital Triage (Omnichannel)
       if (isTriageDigital) {
         // Set to abandoned so it leaves the pharmacist queue instantly
-        await this.appointmentRepo.update(appointment.id, {
+        await this.appointmentRepo.update(appointment.id, appointment.clinicId, {
           pharmacyStatus: 'abandoned',
           abandonedReason: 'Requested Digital via WhatsApp',
           updatedAt: new Date()

@@ -82,7 +82,7 @@ export class SyncClinicStatusesUseCase {
                 .filter(key => key < isoDate);
             
             if (expiredKeys.length > 0) {
-                await this.doctorRepo.prunePastOverrides(doctor.id, expiredKeys);
+                await this.doctorRepo.prunePastOverrides(doctor.id, clinicId, expiredKeys);
             }
 
             // 4. Do not force 'Out' if the doctor is currently 'In' manually.
@@ -152,7 +152,7 @@ export class SyncClinicStatusesUseCase {
             .filter(key => key < isoDate);
         
         if (expiredKeys.length > 0) {
-            await this.doctorRepo.prunePastOverrides(doctor.id, expiredKeys);
+            await this.doctorRepo.prunePastOverrides(doctor.id, clinicId, expiredKeys);
         }
 
         // 4. Do not force 'Out' if the doctor is currently 'In' manually.

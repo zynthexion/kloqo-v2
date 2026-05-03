@@ -79,7 +79,9 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
       upgradeSubscriptionWithTransaction: jest.fn()
     } as any;
 
-    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+    const sseService = { emit: jest.fn() } as any;
+
+    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo, sseService);
     tokenGenerator = new TokenGeneratorService(appointmentRepo);
 
     createWalkInUseCase = new CreateWalkInAppointmentUseCase(
@@ -87,7 +89,8 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
       doctorRepo,
       clinicRepo,
       mockManagePatientUseCase as any,
-      tokenGenerator
+      tokenGenerator,
+      sseService
     );
 
     gracePeriodUseCase = new ProcessGracePeriodsUseCase(
@@ -187,10 +190,10 @@ describe('Classic Mode Scheduling (The Zipper) Integration Suite', () => {
     await gracePeriodUseCase.execute(clinicId);
 
     // 3. Assertions
-    const skippedA2 = await appointmentRepo.findById(a2.id);
+    const skippedA2 = await appointmentRepo.findById(a2.id, clinicId);
     expect(skippedA2?.status).toBe('Skipped');
 
-    const bubbledW1 = await appointmentRepo.findById(w1.id);
+    const bubbledW1 = await appointmentRepo.findById(w1.id, clinicId);
     expect(bubbledW1?.slotIndex).toBe(1); // Moved to 9:05 slot
     expect(bubbledW1?.tokenNumber).toBe('W-101'); // Token stays same
   });

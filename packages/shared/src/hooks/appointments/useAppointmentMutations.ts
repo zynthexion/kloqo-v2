@@ -100,6 +100,18 @@ export function useAppointmentMutations(operations: AppointmentOperations) {
     handleComplete,
     handleAddToQueue,
     handleSkip,
+    handleStart: (appointment: Appointment) => {
+      startTransition(() => {
+        (async () => {
+          try {
+            await updateStatus(appointment.id, 'InConsultation');
+            toast({ title: 'Consultation Started' });
+          } catch (err) {
+            toast({ title: 'Error', description: 'Could not start consultation.', variant: 'destructive' });
+          }
+        })();
+      });
+    },
     onMutationSubmit,
-  }), [isPending, handleCancel, handleComplete, handleAddToQueue, handleSkip, onMutationSubmit]);
+  }), [isPending, handleCancel, handleComplete, handleAddToQueue, handleSkip, onMutationSubmit, updateStatus, toast]);
 }

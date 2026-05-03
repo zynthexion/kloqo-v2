@@ -17,7 +17,7 @@ export class SyncPatientAuthUseCase {
     const decodedToken = await admin.auth().verifyIdToken(token);
     const { uid, phone_number, name } = decodedToken;
 
-    let user = await this.userRepo.findById(uid);
+    let user = await this.userRepo.findById(uid, 'SYSTEM');
     let isNew = false;
 
     if (!user) {
@@ -26,7 +26,7 @@ export class SyncPatientAuthUseCase {
       let existingPatientId: string | null = null;
       let existingPatientName: string | null = null;
       if (phone_number) {
-        const existingPatients = await this.patientRepo.findByPhone(phone_number);
+        const existingPatients = await this.patientRepo.findByPhone(phone_number, 'SYSTEM');
         if (existingPatients.length > 0) {
           // Identify primary or first
           const primary = existingPatients.find(p => p.isPrimary) || existingPatients[0];
@@ -47,7 +47,7 @@ export class SyncPatientAuthUseCase {
         updatedAt: new Date(),
       };
 
-      await this.userRepo.save(newUser as any);
+      await this.userRepo.save(newUser as any, 'SYSTEM');
       user = newUser as any;
     }
 

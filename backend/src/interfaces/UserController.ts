@@ -73,9 +73,8 @@ export class UserController {
       const params = { 
         page: page ? parseInt(page as string) : 1, 
         limit: limit ? parseInt(limit as string) : 10,
-        clinicId
       };
-      const users = await this.getAllUsersUseCase.execute(params);
+      const users = await this.getAllUsersUseCase.execute(clinicId, params);
       res.json(users);
     } catch (error: any) {
       if (error.status === 403) return res.status(403).json({ error: error.message });

@@ -138,16 +138,15 @@ export class CreateWalkInAppointmentUseCase {
         finalAppointment = await this.appointmentRepo.runTransaction(async (txn) => {
           // ── PATIENT MANAGEMENT (Now inside transaction) ──────────────
           const normalizedPhone = dto.phone ? dto.phone.replace(/\D/g, '').slice(-10) : '';
-          const patientId = await this.managePatientUseCase.execute({
+          const patientIdentification = await this.managePatientUseCase.identifyPatient({
             id: dto.patientId,
             name: dto.patientName,
             phone: normalizedPhone,
             communicationPhone: dto.communicationPhone,
-            age: dto.age,
-            sex: dto.sex,
-            place: dto.place,
             clinicId: dto.clinicId,
           }, txn as unknown as ITransaction);
+
+          const patientId = patientIdentification.targetId;
 
           // ── RESCHEDULING & DUPLICATE CHECKS (Inside transaction for atomic patientId safety) ──
           let oldAppt: Appointment | null = null;
@@ -173,7 +172,7 @@ export class CreateWalkInAppointmentUseCase {
             currentTargetSlot as any,
             sessionSlots.length,
             txn as unknown as ITransaction,
-            dto, doctor, clinic, patientId,
+            dto, doctor, clinic, patientId, patientIdentification,
             activeSessionIndex, firestoreDateStr, now,
             tokenDistribution, oldAppt
           );
@@ -211,6 +210,7 @@ export class CreateWalkInAppointmentUseCase {
     doctor: any,
     clinic: any,
     patientId: string,
+    patientIdentification: any,
     activeSessionIndex: number,
     firestoreDateStr: string,
     now: Date,
@@ -230,6 +230,19 @@ export class CreateWalkInAppointmentUseCase {
       dto.isPriority,
       targetSlot.index
     );
+
+    // ── PATIENT PERSISTENCE (WRITE PHASE) ──
+    const normalizedPhone = dto.phone ? dto.phone.replace(/\D/g, '').slice(-10) : '';
+    await this.managePatientUseCase.persistPatient({
+      id: dto.patientId,
+      name: dto.patientName,
+      phone: normalizedPhone,
+      communicationPhone: dto.communicationPhone,
+      age: dto.age,
+      sex: dto.sex,
+      place: dto.place,
+      clinicId: dto.clinicId,
+    }, patientIdentification, dto.clinicId, txn as unknown as ITransaction);
 
     // ✅ Build the real appointment ID first so the lock references it correctly
     const appointmentId = `apt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -282,7 +295,7 @@ export class CreateWalkInAppointmentUseCase {
       updatedAt: now
     };
 
-    await this.appointmentRepo.save(appointment, txn);
+    await this.appointmentRepo.save(appointment, dto.clinicId, txn);
     await this.appointmentRepo.updateBookedCount(dto.clinicId, dto.doctorId, firestoreDateStr, activeSessionIndex, 1, txn);
 
     return appointment;

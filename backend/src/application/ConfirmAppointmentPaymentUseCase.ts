@@ -20,7 +20,7 @@ export class ConfirmAppointmentPaymentUseCase {
   async execute(params: ConfirmAppointmentPaymentParams): Promise<Appointment> {
     const { appointmentId, paymentDetails } = params;
 
-    const appointment = await this.appointmentRepo.findById(appointmentId);
+    const appointment = await this.appointmentRepo.findByIdGlobal(appointmentId);
     if (!appointment) {
       throw new Error('Appointment not found');
     }
@@ -34,7 +34,7 @@ export class ConfirmAppointmentPaymentUseCase {
       updatedAt: new Date() as any,
     };
 
-    await this.appointmentRepo.update(appointmentId, updatedAppointment);
+    await this.appointmentRepo.update(appointmentId, appointment.clinicId, updatedAppointment);
 
     // 🚀 SSE HANDOFF: Using emit() for cleaner broadcasting
     this.sseService.emit('appointment_status_changed', appointment.clinicId, {

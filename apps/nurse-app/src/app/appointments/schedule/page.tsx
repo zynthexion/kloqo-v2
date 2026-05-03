@@ -30,25 +30,25 @@ import { useNurseDashboard } from '@/hooks/useNurseDashboard';
 function ScheduleContent() {
   const { user, loading: authLoading } = useAuth();
   const { activeRole, clinicalProfile } = useActiveIdentity();
-  const { data: dashboardContextData, loading: dashboardLoading } = useNurseDashboardContext();
-  const { data: nurseDashData, updateDoctorStatus } = useNurseDashboard(user?.clinicId);
+  const { data, loading: dashboardLoading, selectedDoctorId: contextDoctorId, setSelectedDoctorId } = useNurseDashboard();
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(
-    searchParams.get('doctor') || (typeof window !== 'undefined' ? localStorage.getItem('selectedDoctorId') : null)
-  );
+  const selectedDoctorId = searchParams.get('doctor') || contextDoctorId || (typeof window !== 'undefined' ? localStorage.getItem('selectedDoctorId') : null);
   const [activeTab, setActiveTab] = useState('daily');
 
   const filteredDoctors = useMemo(() => {
-    const docs = dashboardContextData?.doctors || nurseDashData?.doctors || [];
+    // Priority: If doctor role, use their clinical profile directly (Rule 16: Dumb Frontend)
     if (activeRole === 'doctor' && clinicalProfile) {
-      return docs.filter(d => d.id === clinicalProfile.id);
+      return [clinicalProfile as Doctor];
     }
-    return docs;
-  }, [dashboardContextData, nurseDashData, activeRole, clinicalProfile]);
+    
+    // Otherwise use context doctors (which are already filtered by backend/role)
+    return data?.doctors || [];
+  }, [data, activeRole, clinicalProfile]);
 
   const selectedDoctor = useMemo(() => {
+    if (!filteredDoctors.length) return null;
     return filteredDoctors.find(d => d.id === selectedDoctorId) || filteredDoctors[0];
   }, [filteredDoctors, selectedDoctorId]);
 

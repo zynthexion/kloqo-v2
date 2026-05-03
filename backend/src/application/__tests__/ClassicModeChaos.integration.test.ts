@@ -5,7 +5,7 @@ import { TokenGeneratorService } from '../../domain/services/token/TokenGenerato
 import { CreateWalkInAppointmentUseCase } from '../CreateWalkInAppointmentUseCase';
 import { UpdateAppointmentStatusUseCase } from '../UpdateAppointmentStatusUseCase';
 import { ProcessGracePeriodsUseCase } from '../ProcessGracePeriodsUseCase';
-import { sseService } from '../../domain/services/SSEService';
+import { SSEService } from '../../domain/services/SSEService';
 import { SlotsFullError } from '../../domain/errors';
 
 describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
@@ -17,12 +17,13 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
   let createWalkInUseCase: CreateWalkInAppointmentUseCase;
   let updateStatusUseCase: UpdateAppointmentStatusUseCase;
   let gracePeriodUseCase: ProcessGracePeriodsUseCase;
+  let sseService: SSEService;
 
   const clinicId = 'clinic-chaos';
   const doctorId = 'doc-chaos';
   const doctorName = 'Dr. Chaos';
   const dateStr = '21 April 2026';
-  const firestoreDate = '21 April 2026';
+  const firestoreDate = '2026-04-21';
 
   const mockDoctor = {
     id: doctorId,
@@ -58,6 +59,7 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
 
   beforeEach(() => {
     appointmentRepo = new InMemoryAppointmentRepository();
+    sseService = { emit: jest.fn() } as any;
     
     doctorRepo = {
       findById: jest.fn().mockResolvedValue(mockDoctor),
@@ -67,7 +69,9 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
       findById: jest.fn().mockResolvedValue(mockClinic),
     } as any;
 
-    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo);
+    const tokenStrategyFactory = { getStrategy: jest.fn() } as any;
+
+    bubblingService = new QueueBubblingService(appointmentRepo, doctorRepo, sseService);
     tokenGenerator = new TokenGeneratorService(appointmentRepo);
 
     createWalkInUseCase = new CreateWalkInAppointmentUseCase(
@@ -75,7 +79,8 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
       doctorRepo,
       clinicRepo,
       mockManagePatientUseCase as any,
-      tokenGenerator
+      tokenGenerator,
+      sseService
     );
 
     updateStatusUseCase = new UpdateAppointmentStatusUseCase(
@@ -85,6 +90,8 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
       mockNotificationService as any,
       mockCounterRepo as any,
       tokenGenerator,
+      tokenStrategyFactory,
+      sseService,
       bubblingService
     );
 
@@ -94,8 +101,6 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
       doctorRepo,
       bubblingService
     );
-
-    jest.spyOn(sseService, 'emit').mockImplementation(() => true);
   });
 
   const createAToken = (slotIndex: number, time: string) => ({
@@ -172,7 +177,7 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
     // Action: Bubble W-101 into slot 1
     await bubblingService.reoptimize({ sessionIndex: 0, doctorId, clinicId, date: firestoreDate });
 
-    const bubbledW1 = await appointmentRepo.findById(w1.id);
+    const bubbledW1 = await appointmentRepo.findById(w1.id, clinicId);
     expect(bubbledW1?.slotIndex).toBe(1);
 
     // 2. Action: A-002 returns from bathroom and receptionist tries to Confirm him
@@ -189,7 +194,7 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
     expect(updatedA2.tokenNumber).toMatch(/^W-/); // Got a new token
     
     // Check that W-101 is still in slot 1
-    const recheckedW1 = await appointmentRepo.findById(w1.id);
+    const recheckedW1 = await appointmentRepo.findById(w1.id, clinicId);
     expect(recheckedW1?.slotIndex).toBe(1);
   });
 
@@ -215,15 +220,15 @@ describe('Classic Mode Chaos Suite (Resilience Testing)', () => {
 
     // Execute sweep (it will skip 3 and trigger reoptimize 3 times)
     // Safety Valve: Doctor must be 'In' for auto-skipping to trigger.
-    const doctor = await doctorRepo.findById(doctorId);
+    const doctor = await doctorRepo.findById(doctorId, clinicId);
     doctor.consultationStatus = 'In';
 
     await gracePeriodUseCase.execute(clinicId);
 
     // 3. Assertions
-    const resW1 = await appointmentRepo.findById('w1');
-    const resW2 = await appointmentRepo.findById('w2');
-    const resW3 = await appointmentRepo.findById('w3');
+    const resW1 = await appointmentRepo.findById('w1', clinicId);
+    const resW2 = await appointmentRepo.findById('w2', clinicId);
+    const resW3 = await appointmentRepo.findById('w3', clinicId);
 
     // All should have moved forward to fill the vacuum
     expect(resW1?.slotIndex).toBe(1);

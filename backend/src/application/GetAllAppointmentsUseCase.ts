@@ -5,6 +5,6 @@ export class GetAllAppointmentsUseCase {
   constructor(private appointmentRepo: IAppointmentRepository) {}
 
   async execute(clinicId: string, params?: PaginationParams): Promise<PaginatedResponse<Appointment> | Appointment[]> {
-    return this.appointmentRepo.findAll(clinicId, params);
+    return this.appointmentRepo.findAll({ ...params, clinicId });
   }
 }

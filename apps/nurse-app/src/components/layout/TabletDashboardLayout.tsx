@@ -172,7 +172,7 @@ function PatientContextPanel({ user, clinicalProfile, displayName, displayAvatar
 
     const appointments = data?.appointments || [];
     const doctorAppointments = selectedDoctorId 
-        ? appointments.filter(a => a.doctorId === selectedDoctorId)
+        ? appointments.filter(a => a && a.doctorId === selectedDoctorId)
         : appointments;
 
     const arrivedCount = doctorAppointments.filter(a => a.status === 'Confirmed').length;

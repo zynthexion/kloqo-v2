@@ -57,7 +57,7 @@ export class UpdateDoctorAvailabilityUseCase {
         if (dateOverrides) {
             const affectedDates = Object.keys(dateOverrides);
             // ✅ FIX: Resolve N+1 query trap. Fetch all appointments for all dates in one go.
-            const allAppointments = await this.appointmentRepo.findByDoctorAndDates(doctorId, affectedDates);
+            const allAppointments = await this.appointmentRepo.findByDoctorAndDates(doctorId, clinicId, affectedDates);
 
             for (const dateStr of affectedDates) {
                 const override = dateOverrides[dateStr];
@@ -110,7 +110,7 @@ export class UpdateDoctorAvailabilityUseCase {
             // C. Cancel Conflicts
             if (forceCancelConflicts && conflicts.length > 0) {
                 for (const appt of conflicts) {
-                    await this.appointmentRepo.update(appt.id, {
+                    await this.appointmentRepo.update(appt.id, clinicId, {
                         status: 'Cancelled',
                         cancellationReason: 'Doctor Schedule Override'
                     }, txn);
@@ -135,6 +135,7 @@ export class UpdateDoctorAvailabilityUseCase {
                         clinicName: appt.clinicName || 'Clinic',
                         date: appt.date,
                         time: appt.time,
+                        clinicId,
                         communicationPhone: appt.communicationPhone,
                         patientName: appt.patientName,
                         reason: 'Doctor Schedule Override'

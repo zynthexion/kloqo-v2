@@ -26,7 +26,7 @@ export class InviteSuperAdminStaffUseCase {
     );
 
     // 3. Force password reset on first login
-    await this.userRepo.update(user.id!, { mustChangePassword: true });
+    await this.userRepo.update(user.id!, 'SYSTEM', { mustChangePassword: true });
 
     // 4. Send Invitation Email
     await this.emailService.sendCredentials(

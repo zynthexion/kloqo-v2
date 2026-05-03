@@ -14,12 +14,15 @@ export class DepartmentController {
 
   async getAllDepartments(req: Request, res: Response) {
     try {
+      const user = (req as any).user;
+      const clinicId = user?.clinicId;
+      if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
       const { page, limit } = req.query;
       const params = page && limit ? { 
         page: parseInt(page as string), 
         limit: parseInt(limit as string) 
       } : undefined;
-      const departments = await this.getAllDepartmentsUseCase.execute(params);
+      const departments = await this.getAllDepartmentsUseCase.execute(clinicId, params);
       res.json(departments);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -28,7 +31,8 @@ export class DepartmentController {
 
   async saveDepartment(req: Request, res: Response) {
     try {
-      await this.saveDepartmentUseCase.execute(req.body);
+      const clinicId = (req as any).user.clinicId;
+      await this.saveDepartmentUseCase.execute(clinicId, req.body);
       res.json({ message: 'Department saved successfully' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -37,7 +41,8 @@ export class DepartmentController {
 
   async updateDepartment(req: Request, res: Response) {
     try {
-      await this.updateDepartmentUseCase.execute(req.params.id, req.body);
+      const clinicId = (req as any).user.clinicId;
+      await this.updateDepartmentUseCase.execute(clinicId, req.params.id, req.body);
       res.json({ message: 'Department updated successfully' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -46,8 +51,9 @@ export class DepartmentController {
 
   async deleteDepartment(req: Request, res: Response) {
     try {
-      const { soft = true } = req.query;
-      await this.deleteDepartmentUseCase.execute(req.params.id, soft === 'true');
+      const soft = req.query.soft as string;
+      const clinicId = (req as any).user.clinicId;
+      await this.deleteDepartmentUseCase.execute(req.params.id, clinicId, soft === 'true');
       res.json({ message: 'Department deleted successfully' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

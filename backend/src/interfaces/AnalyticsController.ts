@@ -103,12 +103,14 @@ export class AnalyticsController {
 
   async getErrorLogs(req: Request, res: Response) {
     try {
+      const user = (req as any).user;
+      const clinicId = user?.clinicId || 'SYSTEM';
       const { page, limit } = req.query;
       const params = page && limit ? { 
         page: parseInt(page as string), 
         limit: parseInt(limit as string) 
       } : undefined;
-      const data = await this.getErrorLogsUseCase.execute(params);
+      const data = await this.getErrorLogsUseCase.execute(clinicId, params);
       res.json(data);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
