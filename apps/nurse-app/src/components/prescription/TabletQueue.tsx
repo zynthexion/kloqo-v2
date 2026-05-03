@@ -16,8 +16,25 @@ export function TabletQueue({ onSelect, selectedId }: TabletQueueProps) {
 
   const arrivedQueue = React.useMemo(() => {
     if (!data?.appointments) return [];
+    
     // Only show patients who have actually arrived and are waiting to be seen
-    return data.appointments.filter(a => a.status === 'Confirmed');
+    const filtered = data.appointments.filter(a => 
+      ['Confirmed', 'InConsultation'].includes(a.status)
+    );
+
+    // Sort: InConsultation on top, then Priority Confirmed, then Confirmed by time, then Skipped
+    return [...filtered].sort((a, b) => {
+      // 1. InConsultation always first
+      if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+      if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
+
+      // 2. Priority always before non-priority
+      if (a.isPriority && !b.isPriority) return -1;
+      if (!a.isPriority && b.isPriority) return 1;
+
+      // 3. Then sort by time (or token number)
+      return (a.time || '').localeCompare(b.time || '');
+    });
   }, [data]);
 
   if (arrivedQueue.length === 0) {
@@ -79,16 +96,17 @@ export function TabletQueue({ onSelect, selectedId }: TabletQueueProps) {
                     {appt.time}
                   </div>
                   
-                  {appt.status === 'Skipped' && (
+                  {appt.status === 'InConsultation' && (
                     <div className={cn(
                       "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest animate-pulse",
-                      isSelected ? "bg-red-500/20 text-red-200" : "bg-red-50 text-red-600"
+                      isSelected ? "bg-blue-500/20 text-blue-200" : "bg-blue-50 text-blue-600"
                     )}>
-                      LATE / SKIPPED
+                      IN ROOM
                     </div>
                   )}
                   
-                  {!isSelected && appt.status !== 'Skipped' && (
+                  
+                  {!isSelected && (
                     <div className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-green-50 text-green-600">
                       WAITING
                     </div>
