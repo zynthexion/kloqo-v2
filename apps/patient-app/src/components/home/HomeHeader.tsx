@@ -64,7 +64,7 @@ export function HomeHeader({
                             <MapPin className={`relative w-4 h-4 z-10 ${isRefreshingLocation ? 'animate-bounce' : ''}`} />
                         </div>
                         <span className="truncate max-w-[200px]">{location}</span>
-                    </div>
+                    </motion.div>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button 
