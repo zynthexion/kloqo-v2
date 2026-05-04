@@ -28,11 +28,15 @@ export function TabletQueue({ onSelect, selectedId }: TabletQueueProps) {
       if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
       if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
 
-      // 2. Priority always before non-priority
+      // 2. The Lock (At Door)
+      if (a.isNextLocked && !b.isNextLocked) return -1;
+      if (!a.isNextLocked && b.isNextLocked) return 1;
+
+      // 3. Priority always before non-priority
       if (a.isPriority && !b.isPriority) return -1;
       if (!a.isPriority && b.isPriority) return 1;
 
-      // 3. Then sort by time (or token number)
+      // 4. Then sort by time (or token number)
       return (a.time || '').localeCompare(b.time || '');
     });
   }, [data]);

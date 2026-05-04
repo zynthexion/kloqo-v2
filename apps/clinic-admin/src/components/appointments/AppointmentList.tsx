@@ -13,6 +13,7 @@ import { PrescriptionViewerModal } from "../prescriptions/PrescriptionViewerModa
 import type { useAppointmentsPage } from "@/hooks/use-appointments-page";
 import { AppointmentTable } from "./AppointmentTable";
 import { AppointmentQueueView } from "./AppointmentQueueView";
+import { compareAppointments } from "@kloqo/shared";
 
 interface AppointmentListProps {
   state: ReturnType<typeof useAppointmentsPage>['state'];
@@ -45,8 +46,14 @@ export function AppointmentList({ state, actions }: AppointmentListProps) {
 
   const todaysAppointments = useMemo(() => {
     const today = format(new Date(), "d MMMM yyyy");
-    return appointments.filter(apt => apt.date === today);
+    return appointments
+      .filter(apt => apt.date === today)
+      .sort(compareAppointments);
   }, [appointments]);
+
+  const sortedFilteredAppointments = useMemo(() => {
+    return [...filteredAppointments].sort(compareAppointments);
+  }, [filteredAppointments]);
 
   const arrivedCount = todaysAppointments.filter(apt => ['Confirmed', 'InConsultation'].includes(apt.status)).length;
   const pendingCount = todaysAppointments.filter(apt => apt.status === 'Pending').length;
@@ -127,7 +134,7 @@ export function AppointmentList({ state, actions }: AppointmentListProps) {
             </div>
           ) : isAuditMode ? (
             <AppointmentTable 
-              appointments={filteredAppointments}
+              appointments={sortedFilteredAppointments}
               getDisplayTimeForAppointment={getDisplayTimeForAppointment}
               openViewer={openViewer}
               setEditingAppointment={setEditingAppointment}

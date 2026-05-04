@@ -116,7 +116,8 @@ export class UpdateAppointmentStatusUseCase {
 
     await this.appointmentRepo.runTransaction(async (txn) => {
       // 🧼 WALK-IN DOWNGRADE PROTOCOL
-      if (oldStatus === 'Skipped' && status === 'Confirmed' && appointment.slotIndex !== undefined) {
+      const isLateRejoin = (oldStatus === 'Skipped' || oldStatus === 'No-show') && status === 'Confirmed';
+      if (isLateRejoin && appointment.slotIndex !== undefined) {
         const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
           appointment.doctorId,
           appointment.clinicId,
@@ -124,53 +125,59 @@ export class UpdateAppointmentStatusUseCase {
           txn
         );
         
-        const isSlotAvailable = !allAppointments.some(a => 
-          a.id !== appointment.id && 
-          a.slotIndex === appointment.slotIndex && 
-          a.sessionIndex === appointment.sessionIndex &&
-          (a.status === 'Confirmed' || a.status === 'InConsultation' || a.status === 'Completed')
-        );
-
-        if (!isSlotAvailable) {
-          appointment.bookedVia = 'Walk-in';
-          const doctor = await this.doctorRepo.findById(appointment.doctorId, appointment.clinicId, txn);
-          const effectiveDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
+        // 🧼 MANDATORY DOWNGRADE FOR LATE REJOIN
+        // Any patient rejoining from Skipped/No-show loses their original slot 
+        // and is treated as a Walk-in at the end of the queue.
+        appointment.bookedVia = 'Walk-in';
+        const doctor = await this.doctorRepo.findById(appointment.doctorId, appointment.clinicId, txn);
+        const effectiveDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
+        
+        if (doctor) {
+          const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, parseClinicDate(appointment.date));
+          const sessionSlots = allSlots.filter((s: any) => s.sessionIndex === appointment.sessionIndex);
+          const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
           
-          if (doctor) {
-            const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, parseClinicDate(appointment.date));
-            const sessionSlots = allSlots.filter((s: any) => s.sessionIndex === appointment.sessionIndex);
-            const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
-            
-            const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
-              sessionSlots,
-              sessionAppts,
-              getClinicNow(),
-              effectiveDistribution as any,
-              doctor.walkInTokenAllotment || clinic?.walkInTokenAllotment || 0,
-              appointment.isPriority
-            );
-            
-            if (newSlot) {
-              appointment.slotIndex = newSlot.index;
-              appointment.time = format(newSlot.time, 'HH:mm');
+          const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
+            sessionSlots,
+            sessionAppts,
+            getClinicNow(),
+            effectiveDistribution as any,
+            doctor.walkInTokenAllotment || clinic?.walkInTokenAllotment || 0,
+            appointment.isPriority,
+            doctor.averageConsultingTime,
+            true // allowOverflow: Always allow rejoining patients to find a spot
+          );
+          
+          if (newSlot) {
+            const lastDefinedSlot = sessionSlots[sessionSlots.length - 1];
+            if (newSlot.index > (lastDefinedSlot?.index || 0)) {
+              appointment.isForceBooked = true;
+              console.log(`[UpdateStatus] 🚨 Overflow detected for ${appointment.tokenNumber}. Flagging as isForceBooked.`);
             }
+            appointment.slotIndex = newSlot.index;
+            appointment.time = format(newSlot.time, 'HH:mm');
+          }
 
-            const totalSlots = (appointment as any).totalSlots || Math.max(100, sessionSlots.length);
-            const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
-              appointment.clinicId,
-              appointment.doctorId,
-              appointment.doctorName,
-              appointment.date,
-              'W',
-              appointment.sessionIndex || 0,
-              effectiveDistribution as any,
-              txn,
-              totalSlots,
-              appointment.isPriority,
-              appointment.slotIndex
-            );
-            appointment.tokenNumber = tokenNumber;
-            appointment.numericToken = numericToken;
+          const totalSlots = (appointment as any).totalSlots || Math.max(100, sessionSlots.length);
+          const { tokenNumber, numericToken } = await this.tokenGenerator.generateToken(
+            appointment.clinicId,
+            appointment.doctorId,
+            appointment.doctorName,
+            appointment.date,
+            'W',
+            appointment.sessionIndex || 0,
+            effectiveDistribution as any,
+            txn,
+            totalSlots,
+            appointment.isPriority,
+            appointment.slotIndex
+          );
+          appointment.tokenNumber = tokenNumber;
+          appointment.numericToken = numericToken;
+          
+          // Ensure classic token is also updated if in classic mode
+          if (effectiveDistribution === 'classic') {
+            appointment.classicTokenNumber = tokenNumber;
           }
         }
       }

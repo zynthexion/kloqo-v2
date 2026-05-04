@@ -33,9 +33,11 @@ export class WalkInPlacementService {
     now: Date,
     mode: 'classic' | 'advanced',
     walkInSpacing: number,
-    isPriority: boolean = false
+    isPriority: boolean = false,
+    avgConsultingTime: number = 15,
+    allowOverflow: boolean = false
   ): DailySlot | null {
-    const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Completed']);
+    const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Completed', 'InConsultation']);
 
     // Build set of occupied slot indices from active appointments
     const occupiedSlotIndices = new Set<number>(
@@ -87,11 +89,45 @@ export class WalkInPlacementService {
       }
     }
 
+    let targetSlot: DailySlot | null = null;
     if (mode === 'advanced') {
-      return this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now, hardFloor);
+      targetSlot = this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now, hardFloor);
     } else {
-      return this._findClassicSlot(sessionSlots, occupiedSlotIndices, now, walkInSpacing, hardFloor);
+      targetSlot = this._findClassicSlot(sessionSlots, occupiedSlotIndices, now, walkInSpacing, hardFloor);
     }
+
+    if (targetSlot) return targetSlot;
+
+    if (!allowOverflow) {
+      console.warn('[WalkInPlacement] No slots available and allowOverflow is false.');
+      return null;
+    }
+
+    // 🚨 OVERFLOW LOGIC: Force Book into a virtual slot at the end
+    console.warn(`[WalkInPlacement] 🚨 Session full. Triggering Overflow Force-Booking.`);
+    
+    // Find the absolute last occupied slot index in this session
+    const lastSessionSlot = sessionSlots[sessionSlots.length - 1];
+    const maxOccupiedIndex = appointments.reduce((max, a) => 
+      (a.slotIndex !== undefined && a.slotIndex > max) ? a.slotIndex : max, 
+      lastSessionSlot?.index || 0
+    );
+
+    const newIndex = maxOccupiedIndex + 1;
+    const offsetFromLastDefined = newIndex - (lastSessionSlot?.index || 0);
+    
+    // Ensure the force-booked time is at least 'now' plus one consulting interval
+    const baseTime = lastSessionSlot?.time && isAfter(lastSessionSlot.time, now) 
+      ? lastSessionSlot.time 
+      : now;
+
+    const newTime = addMinutes(baseTime, offsetFromLastDefined * avgConsultingTime);
+
+    return {
+      index: newIndex,
+      time: newTime,
+      sessionIndex: lastSessionSlot?.sessionIndex ?? 0
+    };
   }
 
   // ── Advanced Mode: Smart Bubble → Buffer Slot ─────────────────────────────

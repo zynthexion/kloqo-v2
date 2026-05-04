@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Clinic, Doctor, Appointment, QueueState } from '@kloqo/shared';
+import { Clinic, Doctor, Appointment, QueueState, compareAppointments } from '@kloqo/shared';
 import { getClinicISODateString, getClinicNow } from '@kloqo/shared-core';
 import { useAuth } from './AuthContext';
 
@@ -87,8 +87,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
         ).sort((a, b) => {
           if (!a || !b) return 0;
           if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
-          if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
-          return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+          return compareAppointments(a, b);
         }),
       };
 
@@ -184,8 +183,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
               ...prev,
               appointments: [...prev.appointments, p.appointment].filter(Boolean).sort((a, b) => {
                 if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
-                if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
-                return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+                return compareAppointments(a, b);
               })
             };
           });
@@ -228,8 +226,7 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
               appointments: [...untouchedApts, ...(p.updatedQueue || [])].filter(Boolean).sort((a, b) => {
                 if (!a || !b) return 0;
                 if (a.date !== b.date) return (a.date || "").localeCompare(b.date || "");
-                if (a.sessionIndex !== b.sessionIndex) return (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0);
-                return (a.slotIndex ?? 0) - (b.slotIndex ?? 0);
+                return compareAppointments(a, b);
               })
             };
           });

@@ -98,32 +98,19 @@ export class CreateWalkInAppointmentUseCase {
       now,
       tokenDistribution,
       walkInSpacing,
-      dto.isPriority
+      dto.isPriority,
+      doctor.averageConsultingTime,
+      dto.isForceBooked
     );
 
-    // 🚑 OVERTIME FALLBACK
-    if (!targetSlot) {
-      if (dto.isForceBooked) {
-        const maxOccupiedIndex = sessionAppointments.length > 0 
-          ? Math.max(...sessionAppointments.filter(a => typeof a.slotIndex === 'number').map(a => a.slotIndex!))
-          : -1;
-        const lastSessionSlot = sessionSlots[sessionSlots.length - 1];
-        const overtimeIndex = Math.max(lastSessionSlot.index, maxOccupiedIndex) + 1;
-        const avgConsultTime = (doctor as any).averageConsultingTime || 15;
-
-        // ✅ FIX: Base virtual time on `now`, NOT the historical last slot time.
-        // The last slot may have been 9:30 AM; we are booking at 3 PM.
-        // We add one consulting-time unit to now to place them after the current patient.
-        const virtualTime = addMinutes(now, avgConsultTime);
-
-        targetSlot = {
-          index: overtimeIndex,
-          time: virtualTime,
-          sessionIndex: activeSessionIndex
-        };
-      } else {
-        throw new Error('No walk-in slots available.');
+    // 🚑 OVERFLOW FLAG (isForceBooked)
+    if (targetSlot) {
+      const lastDefinedSlot = sessionSlots[sessionSlots.length - 1];
+      if (targetSlot.index > (lastDefinedSlot?.index || 0)) {
+        dto.isForceBooked = true; // Mark as force-booked if placed in overflow
       }
+    } else {
+      throw new Error('No walk-in slots available.');
     }
 
     // 🔄 RETRY LOOP: Fresh transactions per slot hunt

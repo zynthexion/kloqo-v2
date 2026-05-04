@@ -78,7 +78,7 @@ export default function LiveDashboard({ clinicId }: LiveDashboardProps) {
   }, [data, selectedDoctorId, searchTerm]);
 
   const arrivedAppointments = useMemo(() => 
-    filteredAppointments.filter(a => a.status === 'Confirmed'),
+    filteredAppointments.filter(a => ['Confirmed', 'InConsultation'].includes(a.status)),
     [filteredAppointments]
   );
 

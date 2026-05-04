@@ -31,21 +31,44 @@ export class FilterAppointmentsByTenantUseCase {
 
     if (RBACUtils.hasRole(user, KLOQO_ROLES.PATIENT)) {
       const tokenPatientId = user.patientId || user.id;
-      // Patients can see themselves and their relatives
+      // patients can see themselves and their relatives
       effectivePatientIds = [tokenPatientId];
+      
+      // ✅ FIX: Also include any other profiles with the same phone number (Rule: Phone-ownership = Data-ownership)
+      if (user.phone) {
+        try {
+          const profilesByPhone = await this.patientRepo.findByPhone(user.phone, 'SYSTEM');
+          profilesByPhone.forEach(p => {
+            if (!effectivePatientIds.includes(p.id)) {
+              effectivePatientIds.push(p.id);
+            }
+          });
+          console.log(`[FilterAppointments] Added ${profilesByPhone.length} profiles by phone ${user.phone}`);
+        } catch (e) {
+          console.warn(`[FilterAppointments] Failed to fetch profiles by phone:`, e);
+        }
+      }
       
       try {
         // Patients can see their own relatives. We use the patient's ID as the 'clinicId' 
         // context for this specific findById call to satisfy the repository signature, 
         // or we pass a placeholder if the repo allows it. 
         // For now, we pass 'SYSTEM' to indicate an internal lookup for auth/relatives.
-        const patientDoc = await this.patientRepo.findById(tokenPatientId, 'SYSTEM');
-        if (patientDoc?.relatedPatientIds && patientDoc.relatedPatientIds.length > 0) {
-            effectivePatientIds.push(...patientDoc.relatedPatientIds);
-            console.log(`[FilterAppointments] Found ${patientDoc.relatedPatientIds.length} relatives for ${tokenPatientId}`);
+        // We do this for ALL effective patient IDs to be exhaustive.
+        const originalIds = [...effectivePatientIds];
+        for (const pid of originalIds) {
+          const patientDoc = await this.patientRepo.findById(pid, 'SYSTEM');
+          if (patientDoc?.relatedPatientIds && patientDoc.relatedPatientIds.length > 0) {
+              patientDoc.relatedPatientIds.forEach(rid => {
+                if (!effectivePatientIds.includes(rid)) {
+                  effectivePatientIds.push(rid);
+                }
+              });
+          }
         }
+        console.log(`[FilterAppointments] Final effectivePatientIds count: ${effectivePatientIds.length}`);
       } catch (e) {
-        console.warn(`[FilterAppointments] Failed to fetch relatives for ${tokenPatientId}:`, e);
+        console.warn(`[FilterAppointments] Failed to fetch relatives:`, e);
       }
 
       // Clinic scope is optional for patients but prioritized if provided
@@ -104,6 +127,7 @@ export class FilterAppointmentsByTenantUseCase {
         } catch {
           return true; // Keep if unparseable
         }
+        
         return apptDate >= istNow;
       });
 

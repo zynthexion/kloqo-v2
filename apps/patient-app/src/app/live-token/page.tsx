@@ -26,17 +26,6 @@ function LiveTokenEntryPage() {
     const firstUpcoming = appointments[0];
 
     useEffect(() => {
-        console.log('[LiveTokenPage] State:', {
-            patientId: user?.patientId,
-            appointmentsTotal: appointments.length,
-            upcomingCount: upcomingAppointments.length,
-            firstUpcomingId: firstUpcoming?.id,
-            userLoading,
-            appointmentsLoading
-        });
-    }, [user, appointments, upcomingAppointments, firstUpcoming, userLoading, appointmentsLoading]);
-
-    useEffect(() => {
         if (userLoading || appointmentsLoading) return;
         if (firstUpcoming) {
             router.replace(`/live-token/${firstUpcoming.id}`);

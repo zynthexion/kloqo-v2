@@ -6,7 +6,9 @@ import { format, parse, addMinutes, subMinutes } from 'date-fns';
  * Useful for consistent scheduling logic on server-side (Next.js API routes).
  */
 export function getClinicNow(): Date {
-    return new Date();
+    const now = new Date();
+    // Convert to IST (UTC +5:30)
+    return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
 }
 
 /**
