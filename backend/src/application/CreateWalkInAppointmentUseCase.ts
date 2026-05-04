@@ -260,6 +260,16 @@ export class CreateWalkInAppointmentUseCase {
           ...updates,
           updatedAt: now
         });
+
+        // 📢 REAL-TIME UI SYNC: Notify all apps of buffer/lock changes
+        this.sseService.emit('appointment_status_changed', clinicId, {
+          appointmentId: appt.id,
+          newStatus: appt.status,
+          isInBuffer: updates.isInBuffer ?? appt.isInBuffer,
+          isNextLocked: updates.isNextLocked ?? appt.isNextLocked,
+          doctorStatus: 'IN'
+        });
+
         console.log(`[QueueSync] Updated ${appt.tokenNumber}: Buffer=${shouldBeBuffered}, Locked=${shouldBeLocked}`);
       }
     }

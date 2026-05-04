@@ -228,6 +228,13 @@ export class UpdateAppointmentStatusUseCase {
 
       await this.appointmentRepo.update(appointmentId, appointment.clinicId, appointment, txn);
 
+      // 📢 REAL-TIME UI SYNC: Notify Nurse/Doctor apps of the status change (e.g. InConsultation)
+      this.sseService.emit('appointment_status_changed', appointment.clinicId, {
+        appointmentId: appointmentId,
+        newStatus: appointment.status,
+        doctorStatus: 'IN' // Standardized state for active dashboard
+      });
+
       if (status === 'Completed' && appointment.sessionIndex !== undefined) {
         await this.counterRepo.increment(
           appointment.clinicId,
@@ -356,6 +363,16 @@ export class UpdateAppointmentStatusUseCase {
           ...updates,
           updatedAt: now
         });
+        
+        // 📢 REAL-TIME UI SYNC: Notify all apps of buffer/lock changes
+        this.sseService.emit('appointment_status_changed', clinicId, {
+          appointmentId: appt.id,
+          newStatus: appt.status,
+          isInBuffer: updates.isInBuffer ?? appt.isInBuffer,
+          isNextLocked: updates.isNextLocked ?? appt.isNextLocked,
+          doctorStatus: 'IN'
+        });
+
         console.log(`[QueueSync] Updated ${appt.tokenNumber}: Buffer=${shouldBeBuffered}, Locked=${shouldBeLocked}`);
       }
     }

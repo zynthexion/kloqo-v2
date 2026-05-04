@@ -5,6 +5,7 @@ import { Appointment } from '../../../packages/shared/src/index';
 import { format } from 'date-fns';
 import { PrescriptionPDFService } from '../infrastructure/pdf/PrescriptionPDFService';
 import { getClinicNow } from '../domain/services/DateUtils';
+import { SSEService } from '../domain/services/SSEService';
 
 export class CompleteAppointmentWithPrescriptionUseCase {
   constructor(
@@ -13,7 +14,8 @@ export class CompleteAppointmentWithPrescriptionUseCase {
     private doctorRepo: IDoctorRepository,
     private counterRepo: IConsultationCounterRepository,
     private notificationService: NotificationService,
-    private pdfService: PrescriptionPDFService
+    private pdfService: PrescriptionPDFService,
+    private sseService: SSEService
   ) {}
 
   async execute(params: {
@@ -125,6 +127,13 @@ export class CompleteAppointmentWithPrescriptionUseCase {
       completedAppointment: { ...appointment, ...updatedData },
       clinicName: clinic.name
     }).catch(err => console.error('[CompletePrescription] Error notifying next patients:', err));
+
+    // 10. REAL-TIME UI SYNC: Notify Nurse/Doctor apps that consultation is over
+    this.sseService.emit('appointment_status_changed', clinicId, {
+      appointmentId: appointmentId,
+      newStatus: 'Completed',
+      doctorStatus: 'IN' // Keep doctor status as IN so they stay on the dashboard
+    });
 
     return { ...appointment, ...updatedData };
   }

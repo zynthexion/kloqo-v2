@@ -300,7 +300,8 @@ const completeAppointmentWithPrescriptionUseCase = new CompleteAppointmentWithPr
   doctorRepo,
   counterRepo, 
   notificationService,
-  pdfService
+  pdfService,
+  sseService
 );
 
 // Analytics & Notifications
