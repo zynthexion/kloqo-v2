@@ -8,9 +8,10 @@ import {
   IWhatsappSessionRepository,
   IUserRepository,
 } from '../repositories';
-import { format, addDays, differenceInHours } from 'date-fns';
+import { format, addDays, differenceInHours, parse } from 'date-fns';
 import { IFCMService } from '../../infrastructure/services/FirebaseFCMService';
 import { IWhatsAppNotificationService } from '../../infrastructure/services/WhatsAppNotificationService';
+import { getClinicNow } from './DateUtils';
 
 const WINDOW_HOURS = 24;
 
@@ -299,9 +300,25 @@ export class NotificationService {
     patientName: string;
     tokenNumber: string;
     clinicId: string;
+    patientId?: string;
+    appointmentId?: string;
   }): Promise<boolean> {
-    const { phone, patientName, tokenNumber, clinicId } = params;
+    const { phone, patientName, tokenNumber, clinicId, patientId, appointmentId } = params;
 
+    // 1. PWA Push
+    if (patientId && this.fcmService) {
+      this.fcmService.sendToUser(patientId, clinicId, {
+        title: 'നിങ്ങളെ വിളിക്കുന്നു (Token Called)',
+        body: `ടോക്കൺ ${tokenNumber} വിളിച്ചിരിക്കുന്നു. ഡോക്ടറുടെ അടുത്തേക്ക് ദയവായി വരൂ. 🩺`,
+        data: {
+          appointmentId: appointmentId || '',
+          type: 'token_called',
+          clinicId,
+        }
+      }).catch(err => console.error('[FCM] Token called push failed:', err));
+    }
+
+    // 2. WhatsApp
     const msgType = await this.determineMessageType(phone, clinicId);
     console.log(`[TokenCalled] Window=${msgType} for ${phone}.`);
 
@@ -479,6 +496,197 @@ export class NotificationService {
     return true;
   }
 
+  async sendAppointmentRescheduledNotification(params: {
+    patientId: string;
+    appointmentId: string;
+    doctorName: string;
+    clinicName: string;
+    oldDate: string;
+    oldTime: string;
+    newDate: string;
+    newTime: string;
+    clinicId: string;
+    communicationPhone?: string;
+    patientName?: string;
+  }): Promise<void> {
+    const { 
+      patientId, appointmentId, communicationPhone, patientName, 
+      doctorName, clinicName, newDate, newTime, clinicId 
+    } = params;
+
+    const malayalamDateTime = getMalayalamFriendlyDateTime(newDate, newTime);
+
+    // 1. WhatsApp
+    if (communicationPhone) {
+      const message = `നമസ്കാരം ${patientName || ''}, Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് സമയം മാറ്റിയിരിക്കുന്നു. ✅\n\nപുതിയ സമയം: ${malayalamDateTime}\n\nസ്ഥലം: ${clinicName}`;
+      await this.sendWhatsAppMessage({ to: communicationPhone, message });
+    }
+
+    // 2. PWA Push
+    if (patientId && this.fcmService) {
+      this.fcmService.sendToUser(patientId, clinicId, {
+        title: 'അപ്പോയ്ൻ്റ്മെന്റ് സമയം മാറ്റി (Rescheduled)',
+        body: `Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് സമയം ${malayalamDateTime}-ലേക്ക് മാറ്റിയിരിക്കുന്നു.`,
+        data: { appointmentId, type: 'appointment_rescheduled', clinicId }
+      }).catch(err => console.error('[FCM] Reschedule push failed:', err));
+    }
+  }
+
+  async notifyAllPatientsOfBreak(params: {
+    clinicId: string;
+    doctorId: string;
+    date: string;
+    durationMinutes: number;
+    reason?: string;
+  }): Promise<void> {
+    const { clinicId, doctorId, date, durationMinutes, reason } = params;
+
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
+    if (!doctor) return;
+
+    const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date);
+    const activeAppointments = appointments.filter(a => 
+      ['Pending', 'Confirmed'].includes(a.status) && a.patientId
+    );
+
+    if (activeAppointments.length === 0) return;
+
+    await Promise.allSettled(activeAppointments.map(async a => {
+      if (this.fcmService && a.patientId) {
+        this.fcmService.sendToUser(a.patientId, clinicId, {
+          title: 'ഡോക്ടർ ചെറിയ ബ്രേക്കിലാണ് (Short Break)',
+          body: `ഡോക്ടർ ${doctor.name} ${durationMinutes} മിനിറ്റ് ബ്രേക്കിലാണ്. നിങ്ങളുടെ ഊഴം അല്പം വൈകാൻ സാധ്യതയുണ്ട്. ⏳`,
+          data: { appointmentId: a.id, type: 'doctor_break', clinicId }
+        });
+      }
+    }));
+  }
+
+  /**
+   * Universal Reminder Engine
+   * Finds appointments in specific time windows and sends PWA/WhatsApp reminders.
+   */
+  async sendScheduledReminders(clinicId: string): Promise<{ sent: number }> {
+    const now = getClinicNow();
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const inTwoDaysStr = format(addDays(now, 2), 'yyyy-MM-dd');
+
+    let sentCount = 0;
+
+    // 1. Reminders for 2 days ahead
+    const twoDaysApps = await this.appointmentRepo.findByClinicAndDate(clinicId, inTwoDaysStr);
+    for (const app of twoDaysApps) {
+      if (app.status === 'Confirmed' || app.status === 'Pending') {
+        await this.sendAppointmentReminders(app, '2_days');
+        sentCount++;
+      }
+    }
+
+    // 2. Today's Appointments (Morning and 3-hour window)
+    const todayApps = await this.appointmentRepo.findByClinicAndDate(clinicId, todayStr);
+    for (const app of todayApps) {
+      if (app.status !== 'Confirmed' && app.status !== 'Pending') continue;
+
+      // A. Today Morning Reminder (Send if it's currently 6 AM - 10 AM)
+      const currentHour = now.getHours();
+      if (currentHour >= 6 && currentHour <= 10) {
+        await this.sendAppointmentReminders(app, 'today_morning');
+        sentCount++;
+      }
+
+      // B. 3-Hour Proximity Reminder
+      try {
+        const appTime = parse(app.time, 'h:mm a', now);
+        const diffMs = appTime.getTime() - now.getTime();
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+        // If app is within 160-180 minutes (approx 3 hours)
+        if (diffMinutes >= 160 && diffMinutes <= 190) {
+          await this.sendAppointmentReminders(app, '3_hours');
+          sentCount++;
+        }
+      } catch (err) {
+        // console.error('[Reminder] Date parse failed:', app.time);
+      }
+    }
+
+    return { sent: sentCount };
+  }
+
+  private async sendAppointmentReminders(appointment: Appointment, window: '2_days' | 'today_morning' | '3_hours'): Promise<void> {
+    const clinicId = appointment.clinicId;
+    const patientId = appointment.patientId;
+    
+    let title = 'അപ്പോയ്ൻ്റ്മെന്റ് ഓർമ്മപ്പെടുത്തൽ (Reminder)';
+    let body = '';
+
+    if (window === '2_days') {
+      body = `Dr. ${appointment.doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് 2 ദിവസത്തിന് ശേഷമാണ്. (${appointment.date})`;
+    } else if (window === 'today_morning') {
+      body = `Dr. ${appointment.doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് ഇന്നാണ്. കൃത്യസമയത്ത് എത്താൻ ശ്രദ്ധിക്കുമല്ലോ.`;
+    } else if (window === '3_hours') {
+      body = `Dr. ${appointment.doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് അടുത്ത 3 മണിക്കൂറിനുള്ളിലാണ്. 🏥`;
+    }
+
+    if (patientId && this.fcmService) {
+      this.fcmService.sendToUser(patientId, clinicId, {
+        title,
+        body,
+        data: { appointmentId: appointment.id, type: 'appointment_reminder', window }
+      }).catch(err => console.error('[FCM] Reminder push failed:', err));
+    }
+  }
+
+  async sendQueuePositionUpdateNotification(params: {
+    patientId: string;
+    appointmentId: string;
+    clinicName: string;
+    peopleAhead: number;
+    clinicId: string;
+    communicationPhone?: string;
+    patientName?: string;
+  }): Promise<void> {
+    const { patientId, appointmentId, communicationPhone, patientName, peopleAhead, clinicId, clinicName } = params;
+
+    // 1. WhatsApp (if needed)
+    if (communicationPhone) {
+      const message = `ഹലോ ${patientName}, ${clinicName}-ൽ നിങ്ങളുടെ മുൻപിൽ ഇനി ${peopleAhead} പേർ കൂടി മാത്രമേ ഉള്ളൂ. ദയവായി തയ്യാറായിരിക്കുക. 🏥`;
+      await this.sendWhatsAppMessage({ to: communicationPhone, message });
+    }
+
+    // 2. PWA Push
+    if (patientId && this.fcmService) {
+      this.fcmService.sendToUser(patientId, clinicId, {
+        title: 'നിങ്ങളുടെ ഊഴം ഉടനെത്തും!',
+        body: `മുൻപിൽ ഇനി ${peopleAhead} പേർ കൂടി മാത്രം. ദയവായി തയ്യാറായിരിക്കുക. 🩺`,
+        data: { appointmentId, type: 'queue_update', clinicId, peopleAhead: String(peopleAhead) }
+      }).catch(err => console.error('[FCM] Queue position push failed:', err));
+    }
+  }
+
+  async sendAppointmentBookedNotification(params: {
+    patientId: string;
+    appointmentId: string;
+    doctorName: string;
+    clinicName: string;
+    date: string;
+    time: string;
+    clinicId: string;
+    tokenNumber?: string;
+  }): Promise<void> {
+    const { patientId, appointmentId, doctorName, clinicName, date, time, clinicId, tokenNumber } = params;
+
+    const malayalamDateTime = getMalayalamFriendlyDateTime(date, time);
+
+    if (patientId && this.fcmService) {
+      this.fcmService.sendToUser(patientId, clinicId, {
+        title: 'അപ്പോയ്ൻ്റ്മെന്റ് ബുക്ക് ചെയ്തു ✅',
+        body: `Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് (${malayalamDateTime}) വിജയകരമായി ബുക്ക് ചെയ്തിരിക്കുന്നു. ടോക്കൺ: ${tokenNumber || '--'}`,
+        data: { appointmentId, type: 'appointment_booked', clinicId }
+      }).catch(err => console.error('[FCM] Booking push failed:', err));
+    }
+  }
+
   async notifyNextPatientsWhenCompleted(params: {
     clinicId: string;
     completedAppointmentId: string;
@@ -491,19 +699,34 @@ export class NotificationService {
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, date);
     const doctorAppointments = appointments.filter(a =>
       a.doctorName === completedAppointment.doctorName &&
-      a.status === 'Confirmed' &&
+      ['Confirmed', 'Pending'].includes(a.status) &&
       a.id !== completedAppointment.id
     );
 
     const sorted = doctorAppointments.sort((a, b) => (a.slotIndex || 0) - (b.slotIndex || 0));
-    const nextTwo = sorted.slice(0, 2);
+    
+    // Notify the next few people for "Live Tracking"
+    const nextFive = sorted.slice(0, 5);
 
-    for (let i = 0; i < nextTwo.length; i++) {
-      const apt = nextTwo[i];
+    for (let i = 0; i < nextFive.length; i++) {
+      const apt = nextFive[i];
       const position = i + 1;
-      if (apt.communicationPhone) {
-        const message = `Hi ${apt.patientName}, you are now #${position} in the queue at ${clinicName}. Please be ready.`;
+
+      // WhatsApp for #1 and #2
+      if (position <= 2 && apt.communicationPhone) {
+        const message = `ഹലോ ${apt.patientName}, ${clinicName}-ൽ നിങ്ങളുടെ മുൻപിൽ ഇനി ${position} പേർ കൂടി മാത്രമേ ഉള്ളൂ. ദയവായി തയ്യാറായിരിക്കുക.`;
         await this.sendWhatsAppMessage({ to: apt.communicationPhone, message });
+      }
+
+      // PWA Push for all 5 (Zomato-style tracking)
+      if (apt.patientId && this.fcmService) {
+        this.fcmService.sendToUser(apt.patientId, clinicId, {
+          title: position === 1 ? 'അടുത്തത് നിങ്ങളാണ്!' : `ക്യൂ നിലവിവരം: #${position}`,
+          body: position === 1 
+            ? 'ദയവായി ഡോക്ടറുടെ മുറിയുടെ അടുത്തേക്ക് വരൂ.' 
+            : `നിങ്ങളുടെ മുൻപിൽ ${position - 1} പേർ കൂടിയുണ്ട്.`,
+          data: { appointmentId: apt.id, type: 'queue_update', position: String(position) }
+        }).catch(err => console.error('[FCM] Live tracking push failed:', err));
       }
     }
   }

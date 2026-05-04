@@ -163,12 +163,13 @@ export function useHomeState() {
             if ((a as any).cancelledByBreak !== undefined || a.status === 'Cancelled' || a.status === 'Completed') return false;
             
             const date = parseClinicDate(a.date);
-            if (a.tokenNumber?.startsWith('W')) {
-                if (isToday(date)) return false;
-            }
+            // If it's the featured walk-in card, we can skip it in the carousel to avoid duplication
+            if (walkInAppointment && a.id === walkInAppointment.id) return false;
+            
+            // Allow all future appointments and today's appointments
             return !isPast(date) || isToday(date);
         }).sort(compareAppointments as any);
-    }, [effectiveAppointments]);
+    }, [effectiveAppointments, walkInAppointment]);
 
     // 8. Handlers
     const handleSearchChange = useCallback((value: string) => {

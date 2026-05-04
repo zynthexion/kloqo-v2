@@ -1,12 +1,15 @@
 'use client';
 
+import { motion } from 'framer-motion';
+
 import { MapPin, Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
-import { Building2 } from 'lucide-react';
+import { Building2, Globe } from 'lucide-react';
 import { NotificationHistory } from '@/components/notification-history';
+import { useLanguage } from '@/contexts/language-context';
 import type { SearchResult } from '@/hooks/use-home-state';
 import { Doctor } from '@kloqo/shared';
 
@@ -28,12 +31,29 @@ export function HomeHeader({
     user, t, location, isRefreshingLocation, refreshLocation,
     searchQuery, searchResults, onSearchChange, onClearSearch, onResultClick, language
 }: HomeHeaderProps) {
+    const { setLanguage } = useLanguage();
+
     return (
-        <div className="bg-primary text-primary-foreground p-6 rounded-b-[2rem] pb-24">
-            <div className="flex justify-between items-center mb-4">
-                <div>
-                    <h1 className="text-2xl font-bold">{t.home.hello}, {user?.name || user?.displayName || t.home.user}</h1>
-                    <div
+        <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-primary text-primary-foreground p-6 rounded-b-[2rem] pb-24 shadow-2xl shadow-primary/20 relative overflow-hidden"
+        >
+            <div className="absolute -right-20 -top-20 h-64 w-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex justify-between items-center mb-4 relative z-10">
+                <div className="space-y-1">
+                    <motion.h1 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="text-2xl font-black tracking-tight"
+                    >
+                        {t.home.hello}, {user?.name || user?.displayName || t.home.user}
+                    </motion.h1>
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.4 }}
                         className="flex items-center gap-2 text-sm min-h-[20px] cursor-pointer hover:opacity-80 transition-opacity select-none"
                         onClick={!isRefreshingLocation ? refreshLocation : undefined}
                         role="button"
@@ -46,7 +66,18 @@ export function HomeHeader({
                         <span className="truncate max-w-[200px]">{location}</span>
                     </div>
                 </div>
-                <NotificationHistory />
+                <div className="flex items-center gap-2">
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-10 w-10 bg-primary-foreground/10 hover:bg-primary-foreground/20 text-primary-foreground rounded-xl"
+                        onClick={() => setLanguage(language === 'en' ? 'ml' : 'en')}
+                    >
+                        <Globe className="h-5 w-5" />
+                        <span className="sr-only">Toggle Language</span>
+                    </Button>
+                    <NotificationHistory />
+                </div>
             </div>
 
             <div className="relative mt-4">
@@ -94,6 +125,6 @@ export function HomeHeader({
                     </Card>
                 )}
             </div>
-        </div>
+        </motion.div>
     );
 }

@@ -139,34 +139,6 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
     // Encapsulated actions
     const actions = useLiveTokenActions(yourAppointment);
 
-    // ── PROGRESSIVE NOTIFICATIONS: App-Only Waiting Room Replacement ──────────
-    useEffect(() => {
-        if (!yourAppointment || yourAppointment.status !== 'Confirmed') return;
-
-        const { patientsAhead, isYourTurn } = queue;
-        const token = yourAppointment.tokenNumber || '';
-
-        // 1. "Almost There" Ping (Tokens Ahead === 1)
-        if (patientsAhead === 1 && !notifiedAlmostThere) {
-            NotificationService.notifyAlmostThere(token);
-            setNotifiedAlmostThere(true);
-        }
-
-        // 2. "Your Turn" Alert (Direct Match)
-        if (isYourTurn && !notifiedYourTurn) {
-            NotificationService.notifyYourTurn(token);
-            setNotifiedYourTurn(true);
-            setNotifiedAlmostThere(true); // Ensure both are marked
-        }
-
-        // 3. Reset Guards if queue regresses (e.g., doctor skips back or patient is bubbled away)
-        if (patientsAhead > 1 && (notifiedAlmostThere || notifiedYourTurn)) {
-            setNotifiedAlmostThere(false);
-            setNotifiedYourTurn(false);
-        }
-    }, [queue.patientsAhead, queue.isYourTurn, yourAppointment?.id, yourAppointment?.tokenNumber, yourAppointment?.status]);
-
-    // Loading shim
     const isLoading = userLoading || familyAppointmentsLoading || doctorsLoading;
     if (isLoading) return { loading: true } as any;
 
@@ -176,6 +148,67 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
     const isConfirmedAppointment = yourAppointment?.status === 'Confirmed' || yourAppointment?.status === 'InConsultation';
     const isConsulting = yourAppointment?.status === 'InConsultation';
     const isSkippedAppointment = yourAppointment?.status === 'Skipped';
+
+    // ── WAKE LOCK: Keep Screen On for Live Tracking ──────────────────────────
+    useEffect(() => {
+        if (!('wakeLock' in navigator) || !isConfirmedAppointment) return;
+        
+        let wakeLock: any = null;
+        const requestWakeLock = async () => {
+            try {
+                wakeLock = await (navigator as any).wakeLock.request('screen');
+            } catch (err) { console.warn('Wake Lock failed:', err); }
+        };
+
+        requestWakeLock();
+        
+        const handleVisibilityChange = () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (wakeLock) wakeLock.release();
+        };
+    }, [isConfirmedAppointment]);
+
+    // ── PROGRESSIVE NOTIFICATIONS & VIBRATION ──────────────────────────────────
+    useEffect(() => {
+        if (!yourAppointment || yourAppointment.status !== 'Confirmed') return;
+
+        const { patientsAhead, isYourTurn } = queue;
+        const token = yourAppointment.tokenNumber || '';
+        const isLockedAtDoor = (yourAppointment as any).isNextLocked;
+
+        // 1. "Almost There" Ping (Tokens Ahead === 1)
+        if (patientsAhead === 1 && !notifiedAlmostThere) {
+            NotificationService.notifyAlmostThere(token);
+            setNotifiedAlmostThere(true);
+            // Subtle pulse
+            if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+        }
+
+        // 2. "Your Turn" / "At Door" Alert
+        if ((isYourTurn || isLockedAtDoor) && !notifiedYourTurn) {
+            NotificationService.notifyYourTurn(token);
+            setNotifiedYourTurn(true);
+            setNotifiedAlmostThere(true); // Ensure both are marked
+
+            // Deep Zomato-style vibration [Vibrate 500ms, pause 200ms, Vibrate 500ms]
+            if ('vibrate' in navigator) {
+                navigator.vibrate([500, 200, 500, 200, 800]);
+            }
+        }
+
+        // 3. Reset Guards if queue regresses
+        if (patientsAhead > 1 && !isLockedAtDoor && (notifiedAlmostThere || notifiedYourTurn)) {
+            setNotifiedAlmostThere(false);
+            setNotifiedYourTurn(false);
+        }
+    }, [queue.patientsAhead, queue.isYourTurn, (yourAppointment as any)?.isNextLocked, yourAppointment?.id, yourAppointment?.tokenNumber, yourAppointment?.status]);
 
     return {
         yourAppointment,

@@ -363,6 +363,19 @@ export class UpdateAppointmentStatusUseCase {
         updates.isNextLocked = shouldBeLocked;
         updates.lockedAt = shouldBeLocked ? now : null;
         changed = true;
+
+        // 📢 NOTIFY: Locked at Door (Zomato-style "Your order is ready")
+        if (shouldBeLocked && this.notificationService && appt.patientId) {
+          this.notificationService.sendQueuePositionUpdateNotification({
+            patientId: appt.patientId,
+            appointmentId: appt.id,
+            clinicName: clinic?.name || '',
+            peopleAhead: 0,
+            clinicId,
+            communicationPhone: appt.communicationPhone,
+            patientName: appt.patientName
+          }).catch(err => console.error('[Notification] At Door notify failed:', err));
+        }
       }
 
       if (changed) {

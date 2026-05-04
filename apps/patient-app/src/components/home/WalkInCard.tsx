@@ -31,16 +31,21 @@ export function WalkInCard({ appointment, userDoctors, t, departments, language,
     const appointmentDoctor = userDoctors.find(d => d.name === appointment.doctor);
 
     return (
-        <Card className="bg-primary-foreground/10 border-primary-foreground/20 shadow-lg text-primary-foreground">
-            <CardContent className="p-4">
+        <Card className="bg-primary border-none shadow-xl shadow-primary/20 text-white rounded-[2rem] overflow-hidden relative">
+            {/* Subtle glass effect pattern */}
+            <div className="absolute -right-10 -top-10 h-40 w-40 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <CardContent className="p-6 relative z-10">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="bg-primary-foreground/20 p-3 rounded-lg">
-                            <Ticket className="h-8 w-8" />
+                        <div className="bg-white/20 p-4 rounded-2xl backdrop-blur-md">
+                            <Ticket className="h-8 w-8 text-white" />
                         </div>
                         <div>
-                            <p className="font-bold text-lg">{t.home.yourWalkInToken}</p>
-                            <p className="text-3xl font-bold">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">
+                                {t.home.yourWalkInToken}
+                            </p>
+                            <p className="text-4xl font-black tracking-tight mt-0.5">
                                 {isClassic
                                     ? (appointment.classicTokenNumber ? `#${appointment.classicTokenNumber}` : '--')
                                     : appointment.tokenNumber
@@ -48,21 +53,27 @@ export function WalkInCard({ appointment, userDoctors, t, departments, language,
                             </p>
                         </div>
                     </div>
-                    <Button asChild variant="secondary" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90">
-                        <Link href="/live-token">{t.home.viewLiveQueue}</Link>
+                    <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-bold rounded-2xl h-12 shadow-md">
+                        <Link href={`/live-token/${appointment.id}`}>{t.home.viewLiveQueue}</Link>
                     </Button>
                 </div>
-                <div className="mt-4 border-t border-primary-foreground/20 pt-4 flex items-start justify-between">
-                    <div>
-                        <p className="font-bold text-lg">{appointment.doctor}</p>
-                        <p className="text-sm opacity-80">{getLocalizedDepartmentName(appointment.department, language, departments)}</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            {t.home.patientLabel}: <span className="font-semibold">{appointment.patientName}</span>
+                
+                <div className="mt-8 pt-6 border-t border-white/10 flex items-start justify-between">
+                    <div className="space-y-1">
+                        <p className="font-bold text-xl leading-tight">{appointment.doctor}</p>
+                        <p className="text-sm text-white/70 font-medium">
+                            {getLocalizedDepartmentName(appointment.department, language, departments)}
                         </p>
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full mt-2">
+                            <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                            <p className="text-[10px] font-bold uppercase tracking-wider">
+                                {appointment.patientName}
+                            </p>
+                        </div>
                     </div>
                     <div className="text-right">
-                        <p className="text-xs opacity-80">{t.home.timeLabel}</p>
-                        <p className="font-bold text-lg">{getArriveByTimeFromAppointment(appointment, appointmentDoctor)}</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-1">{t.home.timeLabel}</p>
+                        <p className="font-black text-xl">{getArriveByTimeFromAppointment(appointment, appointmentDoctor)}</p>
                     </div>
                 </div>
             </CardContent>

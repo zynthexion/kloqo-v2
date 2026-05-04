@@ -22,7 +22,7 @@ export function HomeAppointments({
     const showLoading = appointmentsLoading && !walkInAppointment && upcomingAppointments.length === 0;
 
     return (
-        <div className="mt-[-80px] px-6 space-y-4">
+        <div className="px-6 space-y-4">
             {showLoading ? (
                 <Skeleton className="h-40 w-full bg-primary/20" />
             ) : (

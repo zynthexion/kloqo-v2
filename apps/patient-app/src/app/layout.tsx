@@ -10,8 +10,11 @@ import { LanguageProvider } from '@/contexts/language-context';
 import { ErrorBoundaryWithLogging } from '@/components/ErrorBoundary';
 import { GlobalErrorHandler } from '@/components/GlobalErrorHandler';
 import { RoutePrefetcher } from '@/components/route-prefetcher';
+import { LocationOnboard } from '@/components/location-onboard';
+import { LanguageOnboard } from '@/components/language-onboard';
 import { ReviewChecker, AppointmentReminderHandler } from '@/components/deferred-components';
 import { PwaTracker } from '@/components/pwa-tracker';
+import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { AttributionTracker } from '@/components/attribution/attribution-tracker';
 import { MarketingAnalyticsInitializer } from '@/components/marketing-analytics-initializer';
 import { TrafficTrackerInitializer } from '@/components/traffic-tracker-initializer';
@@ -119,11 +122,14 @@ export default function RootLayout({
                 <ReviewChecker />
                 <AppointmentReminderHandler />
                 <RoutePrefetcher />
+                <LocationOnboard />
+                <LanguageOnboard />
               </ErrorBoundaryWithLogging>
               <Toaster />
               <PwaTracker />
               <MessagingInitializer />
               <NotificationOnboard />
+              <PWAInstallPrompt />
               {process.env.NODE_ENV === 'production' && <AttributionTracker />}
               <Suspense fallback={null}>
                 {process.env.NODE_ENV === 'production' && <MarketingAnalyticsInitializer />}

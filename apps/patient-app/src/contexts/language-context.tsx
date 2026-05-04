@@ -21,16 +21,20 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const savedLanguage = localStorage.getItem('app-language') as Language;
+    
     if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'ml')) {
       setLanguageState(savedLanguage);
+    } else {
+      // Default to Malayalam for this specific deployment if no choice made
+      setLanguageState('ml');
+      localStorage.setItem('app-language', 'ml');
     }
     setIsMounted(true);
   }, []);
 
-  const setLanguage = async (lang: Language) => {
+  const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem('app-language', lang);
-    // Sync to backend could be added here via apiRequest if supported
   };
 
   const value = {

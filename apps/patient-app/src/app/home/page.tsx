@@ -7,6 +7,7 @@ import { HomeHeader } from '@/components/home/HomeHeader';
 import { HomeAppointments } from '@/components/home/HomeAppointments';
 import { HomeQuickActions } from '@/components/home/HomeQuickActions';
 import { HomeDoctorTabs } from '@/components/home/HomeDoctorTabs';
+import { HomePrescriptions } from '@/components/home/HomePrescriptions';
 import { AuthGuard } from '@/components/auth-guard';
 import { SplashScreen } from '@/components/splash-screen';
 import { Suspense } from 'react';
@@ -105,6 +106,20 @@ function HomePageContent() {
                 <HomeQuickActions
                     onScanConsult={() => handleScanQR('consult')}
                     onScanConfirm={() => handleScanQR('confirm')}
+                />
+
+                {/* My Prescriptions Section */}
+                <HomePrescriptions 
+                    t={t}
+                    prescriptions={[
+                        {
+                            id: '1',
+                            doctorName: 'Dr. Sarah Wilson',
+                            clinicName: 'City Medical Center',
+                            date: new Date(),
+                            fileUrl: '#'
+                        }
+                    ]}
                 />
 
                 {/* View All Clinics (Legacy Pattern) */}

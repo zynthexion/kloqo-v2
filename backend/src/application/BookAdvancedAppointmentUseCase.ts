@@ -34,6 +34,7 @@ export interface BookAdvancedAppointmentRequest {
 }
 
 import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorService';
+import { NotificationService } from '../domain/services/NotificationService';
 
 export class BookAdvancedAppointmentUseCase {
   constructor(
@@ -44,7 +45,8 @@ export class BookAdvancedAppointmentUseCase {
     private managePatientUseCase: ManagePatientUseCase,
     private tokenGenerator: TokenGeneratorService,
     private tokenStrategyFactory: TokenStrategyFactory,
-    private sseService: SSEService
+    private sseService: SSEService,
+    private notificationService?: NotificationService
   ) {}
 
   async execute(request: BookAdvancedAppointmentRequest): Promise<Appointment> {
@@ -204,6 +206,36 @@ export class BookAdvancedAppointmentUseCase {
       this.sseService.emit('walk_in_created', appointment.clinicId, {
         appointment
       });
+
+      // ── Notifications: PWA & WhatsApp ──────────────────────────────────────────
+      if (this.notificationService) {
+        if (request.rescheduleFromId) {
+          this.notificationService.sendAppointmentRescheduledNotification({
+            patientId: appointment.patientId!,
+            appointmentId: appointment.id,
+            doctorName: appointment.doctorName,
+            clinicName: clinic.name,
+            oldDate: '', // Not strictly needed for the PWA body we wrote
+            oldTime: '',
+            newDate: appointment.date,
+            newTime: appointment.time,
+            clinicId: appointment.clinicId,
+            communicationPhone: request.communicationPhone,
+            patientName: appointment.patientName
+          }).catch(err => console.error('[Notification] Reschedule notify failed:', err));
+        } else {
+          this.notificationService.sendAppointmentBookedNotification({
+            patientId: appointment.patientId!,
+            appointmentId: appointment.id,
+            doctorName: appointment.doctorName,
+            clinicName: clinic.name,
+            date: appointment.date,
+            time: appointment.time,
+            clinicId: appointment.clinicId,
+            tokenNumber: appointment.tokenNumber
+          }).catch(err => console.error('[Notification] Booking notify failed:', err));
+        }
+      }
 
       return appointment;
     } catch (error: any) {

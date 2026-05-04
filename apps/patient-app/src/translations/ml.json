@@ -166,7 +166,10 @@
     "arriveBy": "എത്തേണ്ട സമയം",
     "seeAllDoctors": "ബാക്കി ഡോക്ടർമാരെ കാണുക",
     "patientLabel": "രോഗി",
-    "timeLabel": "സമയം"
+    "timeLabel": "സമയം",
+    "myPrescriptions": "എന്റെ പ്രിസ്ക്രിപ്ഷനുകൾ",
+    "viewPrescriptions": "നിങ്ങളുടെ പ്രിസ്ക്രിപ്ഷനുകൾ ഇവിടെ കാണാം",
+    "noPrescriptions": "പ്риസ്ക്രിപ്ഷനുകൾ ഒന്നും തന്നെ ലഭ്യമല്ല."
   },
   "discovery": {
     "nearbyDoctors": "സമീപത്തുള്ള ഡോക്ടർമാർ",

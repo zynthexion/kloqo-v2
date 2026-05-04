@@ -8,6 +8,7 @@ import {
 } from '../domain/services/DateUtils';
 import { BreakPeriod, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { subMinutes } from 'date-fns';
+import { NotificationService } from '../domain/services/NotificationService';
 
 export interface EditBreakRequest {
     clinicId: string;
@@ -30,7 +31,8 @@ export class EditBreakUseCase {
         private appointmentRepo: IAppointmentRepository,
         private doctorRepo: IDoctorRepository,
         private clinicRepo: IClinicRepository,
-        private activityRepo: IActivityRepository
+        private activityRepo: IActivityRepository,
+        private notificationService?: NotificationService
     ) {}
 
     async execute(request: EditBreakRequest): Promise<void> {
@@ -125,5 +127,12 @@ export class EditBreakUseCase {
             timestamp: new Date(),
             expiresAt: null
         });
+
+        // NOTIFY: Break updated (Broadcast)
+        if (this.notificationService) {
+            this.notificationService.notifyAllPatientsOfBreak({
+                clinicId, doctorId, date, durationMinutes: newDuration
+            }).catch(err => console.error('[EditBreak] Notify failed:', err));
+        }
     }
 }

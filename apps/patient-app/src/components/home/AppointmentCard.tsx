@@ -46,20 +46,23 @@ export function AppointmentCard({ appointment, departments, language, doctors, t
 
     return (
         <Link href="/appointments">
-            <Card className="bg-primary-foreground/10 border-primary-foreground/20 shadow-none text-primary-foreground cursor-pointer hover:bg-primary-foreground/20 transition-colors">
+            <Card className="bg-white border-primary/10 shadow-sm text-slate-900 cursor-pointer hover:shadow-md transition-all active:scale-[0.98] rounded-2xl overflow-hidden">
                 <CardContent className="p-4 flex gap-4 items-center">
-                    <div className="text-center w-14 shrink-0 bg-primary-foreground/20 rounded-lg p-2">
-                        <p className="text-sm font-medium">{month}</p>
-                        <p className="text-2xl font-bold">{dayOfMonth}</p>
-                        <p className="text-sm font-medium">{day}</p>
+                    <div className="text-center w-14 shrink-0 bg-primary/10 rounded-xl p-2 border border-primary/5">
+                        <p className="text-[10px] font-bold text-primary uppercase tracking-tighter">{month}</p>
+                        <p className="text-2xl font-black text-slate-900">{dayOfMonth}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">{day}</p>
                     </div>
-                    <div className="border-l border-primary-foreground/20 pl-4">
-                        <p className="text-xs opacity-80">
-                            {t.home.arriveBy}: {getArriveByTimeFromAppointment(appointment, appointmentDoctor)}
-                        </p>
-                        <p className="font-bold text-md mt-1">{appointment.doctor}</p>
-                        <p className="text-sm opacity-80">{getLocalizedDepartmentName(appointment.department, language, departments)}</p>
-                        <p className="text-sm opacity-80">{appointment.patientName}</p>
+                    <div className="border-l border-slate-100 pl-4 flex-grow min-w-0">
+                        <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                {t.home.arriveBy}: <span className="text-slate-600">{getArriveByTimeFromAppointment(appointment, appointmentDoctor)}</span>
+                            </p>
+                        </div>
+                        <p className="font-bold text-slate-900 mt-1 truncate">{appointment.doctor}</p>
+                        <p className="text-xs text-slate-500 truncate">{getLocalizedDepartmentName(appointment.department, language, departments)}</p>
+                        <p className="text-xs text-primary font-bold mt-1">{appointment.patientName}</p>
                     </div>
                 </CardContent>
             </Card>

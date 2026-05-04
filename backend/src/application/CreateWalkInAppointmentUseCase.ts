@@ -14,6 +14,7 @@ import { TokenGeneratorService } from '../domain/services/token/TokenGeneratorSe
 import { SSEService } from '../domain/services/SSEService';
 import { getClinicNow, getClinicDateString, getClinicISODateString, parseClinicDate, getClinicTimeString } from '../domain/services/DateUtils';
 import { DuplicateBookingError } from '../domain/errors';
+import { NotificationService } from '../domain/services/NotificationService';
 
 export interface CreateWalkInAppointmentDTO {
   clinicId: string;
@@ -41,7 +42,8 @@ export class CreateWalkInAppointmentUseCase {
     private clinicRepo: IClinicRepository,
     private managePatientUseCase: ManagePatientUseCase,
     private tokenGenerator: TokenGeneratorService,
-    private sseService: SSEService
+    private sseService: SSEService,
+    private notificationService?: NotificationService
   ) {}
 
   async execute(dto: CreateWalkInAppointmentDTO): Promise<Appointment> {
@@ -189,6 +191,36 @@ export class CreateWalkInAppointmentUseCase {
       appointment: finalAppointment
     });
 
+    // ── Notifications ────────────────────────────────────────────────────────
+    if (this.notificationService) {
+      if (dto.rescheduleFromId) {
+        this.notificationService.sendAppointmentRescheduledNotification({
+          patientId: finalAppointment.patientId!,
+          appointmentId: finalAppointment.id,
+          doctorName: finalAppointment.doctorName,
+          clinicName: clinic.name,
+          oldDate: '',
+          oldTime: '',
+          newDate: finalAppointment.date,
+          newTime: finalAppointment.time,
+          clinicId: finalAppointment.clinicId,
+          communicationPhone: dto.communicationPhone,
+          patientName: finalAppointment.patientName
+        }).catch(err => console.error('[Notification] Reschedule notify failed:', err));
+      } else {
+        this.notificationService.sendAppointmentBookedNotification({
+          patientId: finalAppointment.patientId!,
+          appointmentId: finalAppointment.id,
+          doctorName: finalAppointment.doctorName,
+          clinicName: clinic.name,
+          date: finalAppointment.date,
+          time: finalAppointment.time,
+          clinicId: finalAppointment.clinicId,
+          tokenNumber: finalAppointment.tokenNumber
+        }).catch(err => console.error('[Notification] Booking notify failed:', err));
+      }
+    }
+
     return finalAppointment;
   }
 
@@ -217,9 +249,6 @@ export class CreateWalkInAppointmentUseCase {
 
     const top2Ids = sorted.slice(0, 2).map(a => a.id);
     
-    // Check if anyone is currently in consultation
-    const hasInConsultation = appointments.some(a => a.doctorId === doctorId && a.status === 'InConsultation');
-
     for (const appt of confirmedAppts) {
       const shouldBeBuffered = top2Ids.includes(appt.id);
       const isFirst = sorted.length > 0 && sorted[0].id === appt.id;
@@ -240,6 +269,19 @@ export class CreateWalkInAppointmentUseCase {
         updates.isNextLocked = shouldBeLocked;
         updates.lockedAt = shouldBeLocked ? now : null;
         changed = true;
+
+        // 📢 NOTIFY: Locked at Door (Zomato-style "Your order is ready")
+        if (shouldBeLocked && this.notificationService && appt.patientId) {
+          this.notificationService.sendQueuePositionUpdateNotification({
+            patientId: appt.patientId,
+            appointmentId: appt.id,
+            clinicName: clinic?.name || '',
+            peopleAhead: 0,
+            clinicId,
+            communicationPhone: appt.communicationPhone,
+            patientName: appt.patientName
+          }).catch(err => console.error('[Notification] At Door notify failed:', err));
+        }
       }
 
       if (changed) {

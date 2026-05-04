@@ -55,16 +55,23 @@ export class FirebaseFCMService implements IFCMService {
         data: payload.data || {},
         android: {
           priority: 'high',
-          notification: { sound: 'default', channelId: 'kloqo_appointments' },
+          notification: { 
+            sound: 'default', 
+            channelId: 'kloqo_appointments',
+            vibrateTimingsMillis: [500, 200, 500, 200, 800, 200, 800] 
+          },
         },
         apns: {
-          payload: { aps: { sound: 'default', badge: 1 } },
+          payload: { aps: { sound: 'default', badge: 1, 'interruption-level': 'critical' } },
         },
         webpush: {
           notification: {
             icon: '/icons/icon-192x192.png',
             badge: '/icons/badge.png',
+            vibrate: [500, 200, 500, 200, 800, 200, 800],
             requireInteraction: true,
+            tag: payload.data?.type || 'kloqo-alert',
+            renotify: true
           },
         },
       };

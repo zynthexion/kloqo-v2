@@ -12,11 +12,11 @@ export class NotificationService {
    * Condition: User is next in line (Tokens Ahead === 1).
    */
   static async notifyAlmostThere(tokenNumber: string) {
-    const title = "You are next!";
-    const body = `Please wait near the Doctor's cabin. Your token ${tokenNumber} is up next.`;
+    const title = "നിങ്ങളുടെ ഊഴം അടുത്തെത്തി! (Almost There)";
+    const body = `ടോക്കൺ ${tokenNumber}, ദയവായി ഡോക്ടറുടെ മുറിയുടെ അടുത്തേക്ക് വരൂ.`;
     
-    this.vibrate([200, 100, 200]); // Short double pulse
-    this.sendBrowserNotification(title, body);
+    this.vibrate([300, 100, 300]); // Premium double pulse
+    this.sendBrowserNotification(title, body, false, 'almost-there');
   }
 
   /**
@@ -24,12 +24,12 @@ export class NotificationService {
    * Condition: Active Token matches User Token.
    */
   static async notifyYourTurn(tokenNumber: string) {
-    const title = "It is your turn!";
-    const body = `Token ${tokenNumber}, please enter the Doctor's cabin now.`;
+    const title = "നിങ്ങളുടെ ഊഴമായി! (Your Turn)";
+    const body = `ടോക്കൺ ${tokenNumber}, ദയവായി ഇപ്പോൾ ഡോക്ടറുടെ മുറിയിലേക്ക് പ്രവേശിക്കുക.`;
     
-    // Heavy, persistent vibration pattern
-    this.vibrate([500, 200, 500, 200, 500]); 
-    this.sendBrowserNotification(title, body, true);
+    // Deep, persistent Zomato-style vibration
+    this.vibrate([500, 200, 500, 200, 800, 200, 800]); 
+    this.sendBrowserNotification(title, body, true, 'your-turn');
   }
 
   private static vibrate(pattern: number[]) {
@@ -38,20 +38,41 @@ export class NotificationService {
     }
   }
 
-  private static async sendBrowserNotification(title: string, body: string, requireInteraction = false) {
+  private static async sendBrowserNotification(title: string, body: string, requireInteraction = false, tag?: string) {
     if (typeof Notification === 'undefined') return;
 
     if (Notification.permission === 'granted') {
-      new Notification(title, { 
-        body, 
-        icon: '/favicon.ico', // Update with actual icon path if available
-        requireInteraction,
-        silent: false
-      });
+      try {
+        // Use ServiceWorker registration if available for better background support
+        const registration = await navigator.serviceWorker?.ready;
+        if (registration && registration.showNotification) {
+          const options: any = {
+            body,
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/icon-192x192.png',
+            vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40],
+            tag: tag || 'kloqo-alert',
+            renotify: true,
+            requireInteraction,
+            data: { url: window.location.href }
+          };
+          registration.showNotification(title, options);
+        } else {
+          new Notification(title, { 
+            body, 
+            icon: '/icons/icon-192x192.png',
+            requireInteraction,
+            tag: tag || 'kloqo-alert',
+            silent: false
+          });
+        }
+      } catch (err) {
+        console.warn('Browser notification failed:', err);
+      }
     } else if (Notification.permission !== 'denied') {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        this.sendBrowserNotification(title, body, requireInteraction);
+        this.sendBrowserNotification(title, body, requireInteraction, tag);
       }
     }
   }

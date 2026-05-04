@@ -164,9 +164,12 @@
     "noAppointmentsYet": "You haven't booked any appointments yet.",
     "bookFirstAppointment": "Book your first appointment to see doctors here.",
     "arriveBy": "Arrive by",
-    "seeAllDoctors": "See All Doctors",
+    "seeAllDoctors": "See all doctors",
     "patientLabel": "Patient",
-    "timeLabel": "Time"
+    "timeLabel": "Time",
+    "myPrescriptions": "My Prescriptions",
+    "viewPrescriptions": "View your medical prescriptions",
+    "noPrescriptions": "No prescriptions found yet."
   },
   "discovery": {
     "nearbyDoctors": "Nearby Doctors",

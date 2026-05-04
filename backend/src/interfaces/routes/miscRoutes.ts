@@ -118,6 +118,21 @@ router.post('/notifications/cron/grace-periods/global', cronAuthMiddleware, asyn
   }
 });
 
+// Global Reminder Cron (2 days, today morning)
+router.post('/notifications/cron/reminders/global', cronAuthMiddleware, async (req: any, res: Response) => {
+  try {
+    const activeClinics = await clinicRepo.findAll() as any[];
+    const results = await Promise.allSettled(
+      activeClinics.map(clinic => 
+        notificationController.notificationService.sendScheduledReminders(clinic.id)
+      )
+    );
+    res.json({ processed: activeClinics.length, results });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Global Nightly Cleanup (End Session)
 router.post('/notifications/cron/end-session-cleanup/global', cronAuthMiddleware, async (req: any, res: Response) => {
   try {

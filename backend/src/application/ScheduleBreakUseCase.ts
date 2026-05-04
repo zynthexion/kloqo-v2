@@ -9,6 +9,7 @@ import {
 } from '../domain/services/DateUtils';
 import { BreakPeriod, KloqoRole, KLOQO_ROLES } from '../../../packages/shared/src/index';
 import { subMinutes } from 'date-fns';
+import { NotificationService } from '../domain/services/NotificationService';
 
 export type BreakCompensationMode = 'GAP_ABSORPTION' | 'FULL_COMPENSATION';
 
@@ -46,7 +47,8 @@ export class ScheduleBreakUseCase {
         private appointmentRepo: IAppointmentRepository,
         private doctorRepo: IDoctorRepository,
         private clinicRepo: IClinicRepository,
-        private activityRepo: IActivityRepository
+        private activityRepo: IActivityRepository,
+        private notificationService?: NotificationService
     ) {}
 
     async execute(request: ScheduleBreakRequest): Promise<ScheduleBreakResult> {
@@ -224,6 +226,13 @@ export class ScheduleBreakUseCase {
                 details: { date, startTime, endTime, sessionIndex, reason: reason || null, breakDuration: breakDurationMinutes, actualShiftApplied: actualShiftMinutes, occupiedSlotsInBreak: appointmentsInBreak.length, shiftedCount: preview.length, ghostsCreated, notifiableCount: preview.length },
                 timestamp: new Date(), expiresAt: null
             });
+
+            // 5. Notify all patients (Rule: Broadcast to all affected)
+            if (this.notificationService) {
+                this.notificationService.notifyAllPatientsOfBreak({
+                    clinicId, doctorId, date, durationMinutes: breakDurationMinutes, reason
+                }).catch(err => console.error('[Break] Broadcast failed:', err));
+            }
         } else {
             const alreadyOccupied = new Set(appointmentsInBreak.map(a => a.time));
             ghostsCreated = Math.ceil(breakDurationMinutes / slotDuration) - alreadyOccupied.size;
