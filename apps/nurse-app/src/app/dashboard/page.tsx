@@ -35,7 +35,7 @@ export default function DashboardPage() {
     if (!data?.appointments) return [];
     
     const filtered = data.appointments.filter(a => 
-      ['Confirmed', 'Skipped', 'InConsultation'].includes(a.status)
+      ['Confirmed', 'InConsultation'].includes(a.status)
     );
 
     // Use unified sorting logic from @kloqo/shared
