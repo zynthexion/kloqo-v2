@@ -26,6 +26,7 @@ export class SlotCalculator {
         override.slots.forEach((session, sessionIndex) => {
           let currentTime = parseClinicTime(session.from, date);
           let endTime = parseClinicTime(session.to, date);
+          let slotIndex = sessionIndex * 1000;
 
           while (isBefore(currentTime, endTime)) {
             slots.push({ index: slotIndex, time: new Date(currentTime), sessionIndex });
@@ -71,6 +72,9 @@ export class SlotCalculator {
     availability.timeSlots.forEach((session, sessionIndex) => {
       let currentTime = parseClinicTime(session.from, date);
       let endTime = parseClinicTime(session.to, date);
+
+      // Segmented Indexing: Each session starts at its own range (0, 1000, 2000...)
+      let slotIndex = sessionIndex * 1000;
 
       const sessionExtension = (extension as any)?.sessions?.find((s: any) => s.sessionIndex === sessionIndex);
       if (sessionExtension?.newEndTime) {

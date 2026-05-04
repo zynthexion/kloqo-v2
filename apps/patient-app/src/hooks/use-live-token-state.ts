@@ -65,7 +65,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         consultationCount,
         clinics,
         loading: listenersLoading,
-        liveDelay
+        liveDelay,
+        queue: queueStatusData
     } = useLiveTokenListeners({
         clinicIds,
         doctorId: activeDoctorId,
@@ -101,16 +102,13 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         appointmentDate: timingDate(yourAppointment),
         language,
         t,
-        validBreaks: calculateValidBreaks(currentDoctor, yourAppointment, allRelevantAppointments),
         currentTime,
         clinicData,
-        doctorAppointmentsToday: [], // Will be handled inside useQueueCalculation effectively
-        masterQueue: [], // Placeholder, will be updated by dependencies if needed
-        arrivedEstimates: [], // Placeholder
+        queueState: queueStatusData, // Initial pass
         liveDelay
     });
 
-    // Compute Queue state
+    // Compute Queue state (Pure pass-through)
     const queue = useQueueCalculation({
         yourAppointment,
         activeDoctorId,
@@ -118,25 +116,23 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         currentDoctor,
         allRelevantAppointments,
         clinicData,
-        validBreaks: calculateValidBreaks(currentDoctor, yourAppointment, allRelevantAppointments),
+        validBreaks: [], 
         currentTime,
         appointmentDate: timingDate(yourAppointment),
-        consultationCount
+        consultationCount,
+        queueState: queueStatusData
     });
 
-    // Re-bind timing to queue outputs for wait-time estimations
+    // Final timing pass with calculated queueState
     const finalTiming = useArrivalTiming({
         yourAppointment,
         yourAppointmentDoctor,
         appointmentDate: timingDate(yourAppointment),
         language,
         t,
-        validBreaks: calculateValidBreaks(currentDoctor, yourAppointment, allRelevantAppointments),
         currentTime,
         clinicData,
-        doctorAppointmentsToday: queue.doctorAppointmentsToday,
-        masterQueue: queue.masterQueue,
-        arrivedEstimates: queue.arrivedEstimates,
+        queueState: queue.queueState,
         liveDelay
     });
 
@@ -177,7 +173,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
     // Gating
     const isDoctorIn = currentDoctor?.consultationStatus === 'In';
     const isAppointmentToday = finalTiming.isAppointmentToday;
-    const isConfirmedAppointment = yourAppointment?.status === 'Confirmed';
+    const isConfirmedAppointment = yourAppointment?.status === 'Confirmed' || yourAppointment?.status === 'InConsultation';
+    const isConsulting = yourAppointment?.status === 'InConsultation';
     const isSkippedAppointment = yourAppointment?.status === 'Skipped';
 
     return {
@@ -205,12 +202,12 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         ...finalTiming,
         appointmentDate: timingDate(yourAppointment),
         isDoctorIn,
-        validBreaks: calculateValidBreaks(currentDoctor, yourAppointment, allRelevantAppointments),
+        validBreaks: [], // Logic moved to backend
         totalDelayMinutes: liveDelay,
         estimatedDelay: liveDelay,
         
         // Location & Actions
-        locationStatus: 'idle', // Managed by useArrivalState in larger flow or here
+        locationStatus: 'idle', 
         locationError: null,
         locationDenied: false,
         locationCheckAttempted: false,
@@ -224,6 +221,7 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         
         isSkippedAppointment,
         isConfirmedAppointment,
+        isConsulting,
         uniquePatientAppointments,
         t,
         language,
@@ -234,9 +232,7 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
             ? (isConfirmedAppointment ? 'OUT_CLINIC' : 'OUT_HOME')
             : (isConfirmedAppointment ? 'IN_CLINIC' : 'IN_HOME'),
         doctorStatusInfo: {
-            isBreak: currentDoctor?.consultationStatus === 'Break',
-            isLate: liveDelay > 15,
-            isAffected: false, // Defaulting to false as it was missing
+            ...finalTiming.doctorStatusInfo,
             awayReason: (currentDoctor as any)?.awayReason || '',
         }
     };
@@ -249,22 +245,4 @@ function timingDate(appointment: any) {
     try {
         return parseClinicDate(appointment.date);
     } catch { return new Date(); }
-}
-
-function calculateValidBreaks(doctor: any, appointment: any, appointments: any[]) {
-    if (!doctor?.breakPeriods || !appointment) return [];
-    try {
-        const { format } = require('date-fns');
-        const appointmentDate = parseClinicDate(appointment.date);
-        const dateKey = format(appointmentDate, 'd MMMM yyyy');
-        const breaks = doctor.breakPeriods[dateKey] || [];
-        return breaks.filter((bp: any) => {
-            const isCancelled = appointments.some(appt =>
-                appt.status === 'Cancelled' &&
-                appt.cancelledByBreak === true &&
-                (appt.time === bp.startTimeFormatted || appt.id === bp.id)
-            );
-            return !isCancelled;
-        });
-    } catch { return []; }
 }

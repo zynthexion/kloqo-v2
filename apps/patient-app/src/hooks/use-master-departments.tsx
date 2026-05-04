@@ -20,9 +20,9 @@ export interface Department {
  * Fetches the master list of clinical departments from the V2 Backend.
  * Standardized to use the same logic as the nurse-app and clinic-admin.
  */
-export function useMasterDepartments() {
+export function useMasterDepartments(clinicId?: string) {
   const { data, error, isLoading, mutate } = useSWR<any>(
-    '/clinics/departments',
+    clinicId ? `/clinics/departments?clinicId=${clinicId}` : '/clinics/departments',
     apiRequest,
     {
       revalidateOnFocus: false,

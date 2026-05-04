@@ -32,7 +32,9 @@ export const AppointmentStatusCard = () => {
         handleConfirmArrivalInline,
         quadrant,
         originalReportByTime,
-        liveDelay
+        liveDelay,
+        doctorNextActionMessage,
+        isConsulting
     } = useLiveToken() as any;
     
     const isHome = quadrant === 'OUT_HOME' || quadrant === 'IN_HOME';
@@ -52,24 +54,25 @@ export const AppointmentStatusCard = () => {
             <div className="relative overflow-hidden bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2rem] p-4 shadow-2xl">
                 {/* 🚩 DYNAMIC BANNER ZONE */}
                 <div className="mb-4">
-                    {quadrant === 'OUT_HOME' && (
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-amber-500" />
-                            <p className="text-[10px] font-bold text-amber-400">
-                                {language === 'ml' ? 'സെഷൻ താൽക്കാലികമായി നിർത്തിയിരിക്കുന്നു' : 'Session Temporarily Paused'}
-                            </p>
-                        </div>
-                    )}
-                    {quadrant === 'OUT_CLINIC' && (
-                        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                                <AlertCircle className="w-4 h-4 text-rose-500" />
-                                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest">
-                                    {language === 'ml' ? 'ഡോക്ടർ സ്ഥലത്തില്ല' : 'Doctor Away'}
+                    {isOut && (
+                        <div className={cn(
+                            "rounded-xl p-3 flex flex-col gap-1",
+                            quadrant === 'OUT_CLINIC' ? "bg-rose-500/10 border border-rose-500/20" : "bg-amber-500/10 border border-amber-500/20"
+                        )}>
+                            <div className="flex items-center gap-2">
+                                <AlertCircle className={cn("w-4 h-4", quadrant === 'OUT_CLINIC' ? "text-rose-500" : "text-amber-500")} />
+                                <p className={cn(
+                                    "text-[10px] font-black uppercase tracking-widest",
+                                    quadrant === 'OUT_CLINIC' ? "text-rose-400" : "text-amber-400"
+                                )}>
+                                    {language === 'ml' ? 'സ്റ്റാറ്റസ് അപ്ഡേറ്റ്' : 'Status Update'}
                                 </p>
                             </div>
-                            <p className="text-xs font-bold text-rose-400/90 leading-tight">
-                                {doctorStatusInfo?.awayReason || (language === 'ml' ? 'അത്യാവശ്യമായി ഒരിടം വരെ പോകേണ്ടി വന്നു.' : 'Doctor is attending an emergency.')}
+                            <p className={cn(
+                                "text-sm font-bold leading-tight",
+                                quadrant === 'OUT_CLINIC' ? "text-rose-400/90" : "text-amber-400/90"
+                            )}>
+                                {doctorNextActionMessage}
                             </p>
                         </div>
                     )}
@@ -107,10 +110,15 @@ export const AppointmentStatusCard = () => {
                     <div className="w-full space-y-4">
                         {isConfirmedAppointment ? (
                             <div className="space-y-4">
-                                <div className="flex items-center justify-center gap-3 py-2 bg-primary/10 border border-primary/20 rounded-xl">
-                                    <UserCheck className="w-4 h-4 text-primary" />
-                                    <span className="text-xs font-bold text-primary uppercase tracking-wide">
-                                        {language === 'ml' ? 'നിങ്ങൾ റിപ്പോർട്ട് ചെയ്തു' : 'Arrived & Verified'}
+                                <div className={cn(
+                                    "flex items-center justify-center gap-3 py-2 rounded-xl border",
+                                    isConsulting ? "bg-emerald-500/10 border-emerald-500/20" : "bg-primary/10 border-primary/20"
+                                )}>
+                                    <UserCheck className={cn("w-4 h-4", isConsulting ? "text-emerald-500" : "text-primary")} />
+                                    <span className={cn("text-xs font-bold uppercase tracking-wide", isConsulting ? "text-emerald-500" : "text-primary")}>
+                                        {isConsulting 
+                                            ? (language === 'ml' ? 'നിങ്ങൾ കൺസൾട്ടേഷനിലാണ്' : 'In Consultation')
+                                            : (language === 'ml' ? 'നിങ്ങൾ റിപ്പോർട്ട് ചെയ്തു' : 'Arrived & Verified')}
                                     </span>
                                 </div>
                                 

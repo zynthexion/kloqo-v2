@@ -71,6 +71,9 @@ export interface LiveTokenContextValue {
     // Wait time estimates
     confirmedEstimatedWaitMinutes: number;
     estimatedWaitTime: number;
+    sessionStartTime: Date | null;
+    sessionStartTimeDisplay: string;
+    doctorNextActionMessage: string;
 
     // Location & arrival state
     locationStatus: 'idle' | 'checking' | 'success' | 'error';
@@ -87,6 +90,7 @@ export interface LiveTokenContextValue {
     shouldShowEstimatedWaitTime: boolean;
     isSkippedAppointment: boolean;
     isConfirmedAppointment: boolean;
+    isConsulting: boolean;
 
     // Callbacks
     handleConfirmArrivalInline: () => Promise<void>;

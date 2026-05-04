@@ -38,20 +38,18 @@ export const QuadrantContent = () => {
                         <PatientSwitcher />
                     </div>
 
-                    {/* Hero Visualization - Takes the bulk of the space */}
-                    <div className="w-full flex-grow flex items-center justify-center min-h-0">
+                    {/* Hero Visualization - Flexibly shrinks to fit */}
+                    <div className="w-full flex-[1.5] min-h-0 flex items-center justify-center relative">
                         <QueueVisualization />
                     </div>
 
-                    {/* Footer Section: Status Card + Up Next */}
-                    <div className="w-full space-y-4">
+                    {/* Footer Section - Takes up exactly what it needs */}
+                    <div className="w-full flex-none space-y-6 mt-auto">
                         <AppointmentStatusCard />
                         
-                        {(quadrant === 'IN_CLINIC' || quadrant === 'OUT_CLINIC') && (
-                            <div className="w-full">
-                                <UpNextFeed />
-                            </div>
-                        )}
+                        <div className="w-full pb-2">
+                            <UpNextFeed />
+                        </div>
                     </div>
                 </motion.div>
             )}

@@ -32,6 +32,7 @@ interface UseLiveTokenListenersResult {
     loading: boolean;
     liveDelay: number;
     consultationCount: number;
+    queue: any | null;
 }
 
 export function useLiveTokenListeners({
@@ -45,6 +46,7 @@ export function useLiveTokenListeners({
     const [liveDoctor, setLiveDoctor] = useState<Doctor | null>(null);
     const [consultationCount, setConsultationCount] = useState(0);
     const [clinics, setClinics] = useState<Clinic[]>([]);
+    const [queue, setQueue] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [liveDelay, setLiveDelay] = useState(0);
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -62,20 +64,23 @@ export function useLiveTokenListeners({
         const now = getClinicNow();
         const todayStr = getClinicDateString(now);
         const appointmentDateStr = activeAppointment?.date || todayStr;
+        const appointmentId = activeAppointment?.id;
 
         try {
-            const data = await apiRequest(`/public-booking/clinics/${clinicId}/doctors/${doctorId}/queue?date=${appointmentDateStr}`);
+            const data = await apiRequest(`/public-booking/clinics/${clinicId}/doctors/${doctorId}/queue?date=${appointmentDateStr}${appointmentId ? `&appointmentId=${appointmentId}` : ''}`);
             
             if (data) {
                 setLiveDoctor(data.doctor as Doctor);
+                setQueue(data.queue);
                 if (data.doctor?.consultationCount !== undefined) {
                     setConsultationCount(data.doctor.consultationCount);
                 }
                 setLiveDelay(data.doctor?.liveDelayMinutes || 0);
+                const masterQueue = data.queue?.masterQueue || [];
                 if (appointmentDateStr === todayStr) {
-                    setAllClinicAppointments(data.masterQueue as Appointment[]);
+                    setAllClinicAppointments(masterQueue as Appointment[]);
                 } else {
-                    setFutureAppointments(data.masterQueue as Appointment[]);
+                    setFutureAppointments(masterQueue as Appointment[]);
                 }
             }
         } catch (err) {
@@ -83,7 +88,7 @@ export function useLiveTokenListeners({
         } finally {
             setLoading(false);
         }
-    }, [doctorId, clinicId, activeAppointment?.date]);
+    }, [doctorId, clinicId, activeAppointment?.date, activeAppointment?.id]);
 
     // 3. Initial fetch
     useEffect(() => {
@@ -182,7 +187,8 @@ export function useLiveTokenListeners({
         consultationCount,
         clinics,
         loading,
-        liveDelay
+        liveDelay,
+        queue
     };
 }
 

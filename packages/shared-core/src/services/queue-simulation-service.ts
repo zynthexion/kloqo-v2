@@ -54,9 +54,9 @@ export function buildSimulatedQueue(
   now: Date = new Date(),
   targetAppointmentId?: string
 ): Appointment[] {
-  // Get Pending and Confirmed appointments (these are at their current positions)
+  // Get Pending, Confirmed and InConsultation appointments
   const pendingAndConfirmed = allAppointmentsForDoctorAndDate.filter(apt =>
-      apt.status === 'Pending' || apt.status === 'Confirmed'
+      apt.status === 'Pending' || apt.status === 'Confirmed' || apt.status === 'InConsultation'
   );
 
   // Identify patient's natural position if passing targetId

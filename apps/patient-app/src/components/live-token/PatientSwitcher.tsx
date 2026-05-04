@@ -27,7 +27,7 @@ export const PatientSwitcher = () => {
                 </p>
             </div>
 
-            <div className="flex overflow-x-auto gap-3 px-6 pb-2 no-scrollbar">
+            <div className="flex overflow-x-auto gap-3 px-6 pb-2 no-scrollbar snap-x snap-mandatory scroll-smooth">
                 {uniquePatientAppointments.map((appt, index) => {
                     const isSelected = yourAppointment?.id === appt.id;
                     const apptClinic = clinics.find(c => c.id === appt.clinicId);
@@ -41,7 +41,7 @@ export const PatientSwitcher = () => {
                             key={appt.id}
                             onClick={() => router.push(`/live-token/${appt.id}`)}
                             className={cn(
-                                "relative shrink-0 flex flex-col justify-center min-w-[140px] max-w-[160px] rounded-2xl p-3 border transition-all duration-300",
+                                "relative shrink-0 snap-center flex flex-col justify-center min-w-[140px] max-w-[160px] rounded-2xl p-3 border transition-all duration-300",
                                 isSelected
                                     ? "bg-primary border-primary/50 shadow-[0_10px_20px_rgba(var(--primary),0.2)]"
                                     : "bg-white/5 border-white/5 hover:bg-white/10"

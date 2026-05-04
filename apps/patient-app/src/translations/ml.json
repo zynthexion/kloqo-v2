@@ -370,7 +370,10 @@
     "systemNotice": "അറിയിപ്പ്",
     "actionRequired": "ശ്രദ്ധിക്കുക",
     "doctorOnShortBreak": "ഡോക്ടർ ചെറിയൊരു വിശ്രമത്തിലാണ്",
-    "consultationInProgress": "പരിശോധന നടന്നുകൊണ്ടിരിക്കുന്നു"
+    "consultationInProgress": "പരിശോധന നടന്നുകൊണ്ടിരിക്കുന്നു",
+    "expectingPatient": "രോഗിയെ പ്രതീക്ഷിക്കുന്നു",
+    "inside": "അകത്ത്",
+    "queueStatus": "ക്യൂ സ്റ്റാറ്റസ്"
   },
   "clinics": {
     "title": "ക്ലിനിക്കുകൾ",

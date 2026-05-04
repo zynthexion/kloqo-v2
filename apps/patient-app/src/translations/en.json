@@ -365,7 +365,10 @@
     "systemNotice": "System Notice",
     "actionRequired": "Action Required",
     "doctorOnShortBreak": "Doctor is on a short break",
-    "consultationInProgress": "Consultation in Progress"
+    "consultationInProgress": "Consultation in Progress",
+    "expectingPatient": "Expecting Patient",
+    "inside": "INSIDE",
+    "queueStatus": "QUEUE STATUS"
   },
   "clinics": {
     "title": "Clinics",

@@ -137,12 +137,16 @@ export async function computeQueues(
     };
 
     const allArrived = relevantAppointments
-        .filter(apt => apt.status === 'Confirmed');
+        .filter(apt => apt.status === 'Confirmed' || apt.status === 'InConsultation');
 
     // Separate Priority Queue
     const priorityQueue = allArrived
         .filter(apt => apt.isPriority)
         .sort((a, b) => {
+            // If one is already in consultation, it takes top priority
+            if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+            if (b.status === 'InConsultation' && a.status !== 'InConsultation') return 1;
+            
             // Sort by priorityAt (FIFO)
             const pA = a.priorityAt?.seconds || 0;
             const pB = b.priorityAt?.seconds || 0;
@@ -152,7 +156,13 @@ export async function computeQueues(
     // Standard Arrived Queue (excludes priority)
     const arrivedQueue = allArrived
         .filter(apt => !apt.isPriority)
-        .sort(tokenDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
+        .sort((a, b) => {
+             // If one is already in consultation, it takes top priority
+            if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+            if (b.status === 'InConsultation' && a.status !== 'InConsultation') return 1;
+            
+            return (tokenDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic)(a, b);
+        });
 
     // Buffer Queue: Appointments explicitly marked as being in the buffer (excludes priority)
     // Note: Priority patients effectively "skip" the buffer queue visually, but if they were in buffer before,
@@ -165,14 +175,21 @@ export async function computeQueues(
         .sort(compareAppointments);
 
     // Current Consultation:
+    // 0. Explicit InConsultation (takes absolute precedence)
     // 1. Priority Queue Top
     // 2. Buffer Queue Top
     // 3. Arrived Queue Top (fallback if buffer specific logic isn't used)
     let currentConsultation: Appointment | null = null;
-    if (priorityQueue.length > 0) {
+    const explicitlyInConsultation = allArrived.find(apt => apt.status === 'InConsultation');
+
+    if (explicitlyInConsultation) {
+        currentConsultation = explicitlyInConsultation;
+    } else if (priorityQueue.length > 0) {
         currentConsultation = priorityQueue[0];
     } else if (bufferQueue.length > 0) {
         currentConsultation = bufferQueue[0];
+    } else if (arrivedQueue.length > 0) {
+        currentConsultation = arrivedQueue[0];
     }
 
     // Next Break Duration: Calculate duration of the active break block (if any)

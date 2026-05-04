@@ -15,7 +15,8 @@ export class DepartmentController {
   async getAllDepartments(req: Request, res: Response) {
     try {
       const user = (req as any).user;
-      const clinicId = user?.clinicId;
+      const clinicId = user?.clinicId || (req.query.clinicId as string);
+      
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
       const { page, limit } = req.query;
       const params = page && limit ? { 

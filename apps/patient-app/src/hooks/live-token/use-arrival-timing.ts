@@ -4,33 +4,29 @@ import { useMemo } from 'react';
 import { 
     format, 
     isToday, 
-    differenceInMinutes, 
-    differenceInDays, 
-    differenceInHours, 
     startOfDay, 
-    parse, 
     addMinutes, 
-    subMinutes, 
-    isAfter, 
-    isBefore, 
-    parseISO 
+    differenceInDays,
 } from 'date-fns';
-import { parseAppointmentDateTime, parseTime, getArriveByTimeFromAppointment } from '@/lib/utils';
+import { getClinicNow, displayTime12h } from '@kloqo/shared-core';
+import { parseAppointmentDateTime, getArriveByTimeFromAppointment } from '@/lib/utils';
 import { formatDate } from '@/lib/date-utils';
 import type { Appointment, Doctor } from '@kloqo/shared';
 
+/**
+ * useArrivalTiming (Dumb Frontend Version - Re-stabilized)
+ * 
+ * Logic has been migrated to GetPublicQueueStatusUseCase (Backend).
+ * This hook now purely formats data for display and satisfies the Context interface.
+ */
 export function useArrivalTiming({
     yourAppointment,
     yourAppointmentDoctor,
     appointmentDate,
     language,
     t,
-    validBreaks,
     currentTime,
-    clinicData,
-    doctorAppointmentsToday,
-    masterQueue,
-    arrivedEstimates,
+    queueState,
     liveDelay = 0
 }: {
     yourAppointment: Appointment | null;
@@ -38,12 +34,9 @@ export function useArrivalTiming({
     appointmentDate: Date;
     language: 'en' | 'ml';
     t: any;
-    validBreaks: any[];
     currentTime: Date;
     clinicData: any;
-    doctorAppointmentsToday: Appointment[];
-    masterQueue: Appointment[];
-    arrivedEstimates: any[];
+    queueState: any;
     liveDelay?: number;
 }) {
     // 1. Core formatted date
@@ -68,116 +61,45 @@ export function useArrivalTiming({
     const daysUntilAppointment = useMemo(() => {
         if (!yourAppointment) return null;
         try {
-            const today = startOfDay(new Date());
+            const today = startOfDay(getClinicNow());
             const apptDay = startOfDay(appointmentDate);
             return differenceInDays(apptDay, today);
         } catch { return null; }
     }, [yourAppointment, appointmentDate]);
 
-    // 2. Doctor status/Break logic
-    const doctorStatusInfo = useMemo(() => {
-        if (!yourAppointment || !yourAppointmentDoctor?.availabilitySlots) {
-            return { isLate: false, isBreak: false, isAffected: false };
+    // 2. Doctor Status Message (Driven by backend queueState)
+    const breakMinutes = queueState?.breakMinutes ?? 0;
+    const estimatedWaitTime = queueState?.estimatedWaitTime ?? 0;
+
+    const sessionStartTime = useMemo(() => {
+        if (!queueState?.masterQueue || queueState.currentSessionIndex === undefined) return null;
+        const sessionIdx = queueState.currentSessionIndex;
+        const slot = queueState.masterQueue.find((s: any) => s.sessionIndex === sessionIdx);
+        return slot?.time ? new Date(slot.time) : null;
+    }, [queueState]);
+
+    const sessionStartTimeDisplay = useMemo(() => {
+        if (!sessionStartTime) return '';
+        return displayTime12h(format(sessionStartTime, 'HH:mm'));
+    }, [sessionStartTime]);
+
+    const doctorNextActionMessage = useMemo(() => {
+        const isOut = yourAppointmentDoctor?.consultationStatus === 'Out' || yourAppointmentDoctor?.consultationStatus === 'Break';
+        if (!isOut) return '';
+
+        if (breakMinutes > 0) {
+            if (sessionStartTimeDisplay) {
+                return language === 'ml' 
+                    ? `ഡോക്ടർ ${sessionStartTimeDisplay}ന് തുടങ്ങും` 
+                    : `Doctor starting at ${sessionStartTimeDisplay}`;
+            }
+            return language === 'ml' ? 'ഡോക്ടർ ബ്രേക്കിലാണ്' : 'Doctor on break';
         }
-        try {
-            const appointmentDateTime = parseAppointmentDateTime(yourAppointment.date, yourAppointment.time);
-            const breaks = validBreaks;
-            if (breaks.length === 0) return { isLate: false, isBreak: false, isAffected: false };
 
-            const dayOfWeekIndex = appointmentDateTime.getDay();
-            const dayAvailability = yourAppointmentDoctor.availabilitySlots.find(slot => String(slot.day) === String(dayOfWeekIndex));
-            if (!dayAvailability || !dayAvailability.timeSlots.length) return { isLate: false, isBreak: false, isAffected: false };
+        return language === 'ml' ? 'ഉടൻ തുടങ്ങും' : 'Starting soon';
+    }, [yourAppointmentDoctor?.consultationStatus, breakMinutes, sessionStartTimeDisplay, language]);
 
-            const firstSession = dayAvailability.timeSlots[0];
-            const firstSlotTime = parseTime(firstSession.from, appointmentDateTime);
-
-            const affectingBreak = breaks.find((bp: any) => {
-                const start = parseISO(bp.startTime);
-                const end = parseISO(bp.endTime);
-                return isBefore(appointmentDateTime, end) && isAfter(appointmentDateTime, start);
-            });
-
-            const isAffected = !!affectingBreak;
-            let isLate = false;
-            let isBreak = false;
-
-            if (isAffected && affectingBreak) {
-                const bpStart = parseISO(affectingBreak.startTime);
-                if (differenceInMinutes(bpStart, firstSlotTime) <= 30) isLate = true;
-                else isBreak = true;
-            }
-            return { isLate, isBreak, isAffected };
-        } catch { return { isLate: false, isBreak: false, isAffected: false }; }
-    }, [yourAppointment, yourAppointmentDoctor, validBreaks]);
-
-    const breakMinutes = useMemo(() => {
-        if (!yourAppointment || !yourAppointmentDoctor?.breakPeriods) return 0;
-        try {
-            const appointmentDateTime = parseAppointmentDateTime(yourAppointment.date, yourAppointment.time);
-            const breaks = validBreaks;
-            if (breaks.length === 0) return 0;
-            const now = new Date();
-            const isDoctorWorking = yourAppointmentDoctor?.consultationStatus === 'In';
-
-            for (const bp of breaks) {
-                const end = parseISO(bp.endTime);
-                const start = parseISO(bp.startTime);
-                if (isAfter(now, start) && isBefore(now, end)) {
-                    if (isDoctorWorking) return 0;
-                    if (isBefore(appointmentDateTime, start)) continue;
-                    return Math.max(0, differenceInMinutes(end, now));
-                }
-            }
-            return 0;
-        } catch { return 0; }
-    }, [yourAppointment, yourAppointmentDoctor, currentTime, validBreaks]);
-
-    // 3. Reporting Window
-    const arrivalReminderDateTime = useMemo(() => {
-        if (!yourAppointment) return null;
-        try {
-            const arriveByString = getArriveByTimeFromAppointment(yourAppointment, yourAppointmentDoctor);
-            
-            // Try parsing as 12h format first
-            let parsedDate = parse(arriveByString, "hh:mm a", appointmentDate);
-            
-            // Fallback to 24h format if 12h fails
-            if (isNaN(parsedDate.getTime())) {
-                parsedDate = parse(arriveByString, "HH:mm", appointmentDate);
-            }
-
-            if (isNaN(parsedDate.getTime())) {
-                // Last resort: manual parse
-                const [time, modifier] = arriveByString.split(' ');
-                let [hours, minutes] = time.split(':').map(Number);
-                if (modifier?.toUpperCase() === 'PM' && hours < 12) hours += 12;
-                if (modifier?.toUpperCase() === 'AM' && hours === 12) hours = 0;
-                
-                const fallback = new Date(appointmentDate);
-                fallback.setHours(hours, minutes, 0, 0);
-                parsedDate = fallback;
-            }
-
-            // --- THE STABILITY FIX: 10-Minute Threshold ---
-            // We only shift the time in solid 10-minute blocks to prevent jitter
-            const stableDelay = Math.floor(liveDelay / 10) * 10;
-
-            if (stableDelay > 0) {
-                return addMinutes(parsedDate, stableDelay);
-            }
-
-            return parsedDate;
-        } catch (error) {
-            try {
-                const scheduledDateTime = parseAppointmentDateTime(yourAppointment.date, yourAppointment.time);
-                const isWalkIn = yourAppointment.tokenNumber?.startsWith('W');
-                const baseTime = isWalkIn ? scheduledDateTime : subMinutes(scheduledDateTime, 15);
-                const stableDelay = Math.floor(liveDelay / 10) * 10;
-                return stableDelay > 0 ? addMinutes(baseTime, stableDelay) : baseTime;
-            } catch { return null; }
-        }
-    }, [yourAppointment, yourAppointmentDoctor, appointmentDate, liveDelay]);
-
+    // 3. Arrive By Time Calculation
     const originalReportByTime = useMemo(() => {
         if (!yourAppointment) return '--';
         try { return getArriveByTimeFromAppointment(yourAppointment, yourAppointmentDoctor); } 
@@ -186,140 +108,38 @@ export function useArrivalTiming({
 
     const reportByTimeDisplay = useMemo(() => {
         if (!yourAppointment) return '--';
-        try { 
-            const base = originalReportByTime;
-            const stableDelay = Math.floor(liveDelay / 10) * 10;
-            
-            if (stableDelay > 0) {
-                // Return the "Adjusted" time for display if doctor is late
+        const base = originalReportByTime;
+        const stableDelay = Math.floor(liveDelay / 10) * 10;
+        if (stableDelay > 0) {
+            try {
                 const [time, modifier] = base.split(' ');
                 let [hours, minutes] = time.split(':').map(Number);
                 if (modifier?.toUpperCase() === 'PM' && hours < 12) hours += 12;
                 if (modifier?.toUpperCase() === 'AM' && hours === 12) hours = 0;
-                const d = new Date();
+                const d = getClinicNow();
                 d.setHours(hours, minutes, 0, 0);
                 return format(addMinutes(d, stableDelay), 'hh:mm a');
-            }
-            return base;
-        } 
-        catch { return originalReportByTime; }
-    }, [yourAppointment, yourAppointmentDoctor, liveDelay, originalReportByTime]);
+            } catch { return base; }
+        }
+        return base;
+    }, [yourAppointment, originalReportByTime, liveDelay]);
+
+    const arrivalReminderDateTime = useMemo(() => {
+        if (!yourAppointment) return null;
+        try {
+            const baseTime = parseAppointmentDateTime(yourAppointment.date, originalReportByTime);
+            const stableDelay = Math.floor(liveDelay / 10) * 10;
+            return stableDelay > 0 ? addMinutes(baseTime, stableDelay) : baseTime;
+        } catch { return null; }
+    }, [yourAppointment, originalReportByTime, liveDelay]);
 
     const reportByDiffMinutes = useMemo(() => {
         if (!arrivalReminderDateTime) return null;
-        return differenceInMinutes(arrivalReminderDateTime, currentTime);
+        const diff = Math.ceil((arrivalReminderDateTime.getTime() - currentTime.getTime()) / (1000 * 60));
+        return diff;
     }, [arrivalReminderDateTime, currentTime]);
 
     const isReportingPastDue = useMemo(() => reportByDiffMinutes !== null && reportByDiffMinutes < 0, [reportByDiffMinutes]);
-
-    const reportingCountdownLabel = useMemo(() => {
-        if (reportByDiffMinutes === null) return null;
-        
-        // Handle "Arrive Immediately" state
-        if (reportByDiffMinutes < 0) {
-            return language === 'ml' ? 'ഉടൻ എത്തുക' : 'Arrive Immediately';
-        }
-
-        const minutesValue = Math.abs(reportByDiffMinutes);
-        
-        const inLabel = t.liveToken?.in ?? (language === 'ml' ? 'ഇനി' : 'In');
-        const daySingular = t.liveToken?.day ?? (language === 'ml' ? 'ദിവസം' : 'day');
-        const dayPlural = t.liveToken?.days ?? (language === 'ml' ? 'ദിവസങ്ങൾ' : 'days');
-        const hourSingular = t.liveToken?.hour ?? (language === 'ml' ? 'മണിക്കൂർ' : 'hour');
-        const hourPlural = t.liveToken?.hours ?? (language === 'ml' ? 'മണിക്കൂർ' : 'hours');
-        const minuteSingular = t.liveToken?.minutes ?? (language === 'ml' ? 'മിനിറ്റ്' : 'minute');
-        const minutePlural = t.liveToken?.minutes ?? (language === 'ml' ? 'മിനിറ്റുകൾ' : 'minutes');
-
-        const formatLabel = (value: number, singular: string, plural: string) => {
-            const absValue = Math.max(1, value);
-            const unitLabel = absValue === 1 ? singular : plural;
-            return `${inLabel} ${absValue} ${unitLabel}`;
-        };
-
-        if (minutesValue >= 1440) return formatLabel(Math.floor(minutesValue / 1440), daySingular, dayPlural);
-        if (minutesValue >= 60) {
-            const hours = Math.floor(minutesValue / 60);
-            const mins = minutesValue % 60;
-            const hLab = hours === 1 ? hourSingular : hourPlural;
-            const str = mins > 0 ? `${hours} ${hLab} ${mins} ${minutely(mins, language, t)}` : `${hours} ${hLab}`;
-            return `${inLabel} ${str}`;
-        }
-        return formatLabel(Math.round(minutesValue), minuteSingular, minutePlural);
-    }, [reportByDiffMinutes, language, t]);
-
-    // Assistance helper
-    function minutely(val: number, lang: string, t: any) {
-        if (lang === 'ml') return val === 1 ? 'മിനിറ്റ്' : 'മിനിറ്റുകൾ';
-        return val === 1 ? 'minute' : 'minutes';
-    }
-
-    // 4. Wait estimations
-    const confirmedEstimatedWaitMinutes = useMemo(() => {
-        if (!yourAppointment || yourAppointment.status !== 'Confirmed') return 0;
-        if (clinicData?.tokenDistribution === 'classic') {
-            const confirmedQueue = doctorAppointmentsToday.filter(a => a.status === 'Confirmed');
-            const pos = confirmedQueue.findIndex(a => a.id === yourAppointment.id);
-            if (pos !== -1) {
-                const ahead = pos;
-                const avg = yourAppointmentDoctor?.averageConsultingTime || 15;
-                let simTime = new Date(currentTime);
-                const isDocIn = yourAppointmentDoctor?.consultationStatus === 'In';
-                if (!isDocIn) {
-                    if (breakMinutes > 0) simTime = addMinutes(simTime, breakMinutes);
-                    else {
-                        try {
-                            const dayIndex = appointmentDate.getDay();
-                            const slot = yourAppointmentDoctor?.availabilitySlots?.find(s => String(s.day) === String(dayIndex));
-                            if (slot?.timeSlots[yourAppointment.sessionIndex || 0]) {
-                                const start = parseTime(slot.timeSlots[yourAppointment.sessionIndex || 0].from, appointmentDate);
-                                const wait = differenceInMinutes(start, currentTime);
-                                if (wait > 0) simTime = addMinutes(simTime, wait);
-                            }
-                        } catch {}
-                    }
-                }
-                let remaining = ahead * avg;
-                try {
-                    const brks = validBreaks.map(b => ({ start: parseISO(b.startTime), end: parseISO(b.endTime) })).sort((a,b) => a.start.getTime() - b.start.getTime());
-                    for (const brk of brks.filter(b => isAfter(b.end, simTime))) {
-                        if (remaining <= 0) break;
-                        const isBrkActive = currentTime >= brk.start && currentTime < brk.end;
-                        if (isDocIn && isBrkActive) continue;
-                        let untilBrk = differenceInMinutes(brk.start, simTime);
-                        if (untilBrk < 0) {
-                            simTime = addMinutes(simTime, Math.max(0, differenceInMinutes(brk.end, simTime)));
-                            continue;
-                        }
-                        if (remaining < untilBrk) {
-                            simTime = addMinutes(simTime, remaining);
-                            remaining = 0;
-                        } else {
-                            simTime = addMinutes(simTime, untilBrk);
-                            remaining -= untilBrk;
-                            simTime = addMinutes(simTime, differenceInMinutes(brk.end, brk.start));
-                        }
-                    }
-                } catch {}
-                if (remaining > 0) simTime = addMinutes(simTime, remaining);
-                return Math.max(0, differenceInMinutes(simTime, currentTime));
-            }
-        }
-        try {
-            const est = arrivedEstimates.find(e => e.appointmentId === yourAppointment.id);
-            if (est) return Math.max(0, differenceInMinutes(parseTime(est.estimatedTime, appointmentDate), currentTime));
-            const apptTime = parseAppointmentDateTime(yourAppointment.date, yourAppointment.time);
-            return Math.max(0, differenceInMinutes(apptTime, currentTime)); // Placeholder logic if no estimate
-        } catch { return 0; }
-    }, [yourAppointment, currentTime, clinicData, yourAppointmentDoctor, appointmentDate, breakMinutes, arrivedEstimates, validBreaks, doctorAppointmentsToday]);
-
-    const estimatedWaitTime = useMemo(() => {
-        if (!yourAppointment) return 0;
-        if (yourAppointment.status === 'Confirmed') return confirmedEstimatedWaitMinutes;
-        try {
-            const time = parseAppointmentDateTime(yourAppointment.date, yourAppointment.time);
-            return Math.max(0, differenceInMinutes(time, currentTime));
-        } catch { return 0; }
-    }, [yourAppointment, currentTime, confirmedEstimatedWaitMinutes]);
 
     const hoursUntilArrivalReminder = useMemo(() => {
         if (reportByDiffMinutes === null) return null;
@@ -331,20 +151,37 @@ export function useArrivalTiming({
         return Math.max(0, Math.floor(Math.abs(reportByDiffMinutes) % 60));
     }, [reportByDiffMinutes]);
 
+    const reportingCountdownLabel = useMemo(() => {
+        if (reportByDiffMinutes === null) return null;
+        if (reportByDiffMinutes < 0) return language === 'ml' ? 'ഉടൻ എത്തുക' : 'Arrive Immediately';
+        
+        const inLabel = t.liveToken?.in ?? (language === 'ml' ? 'ഇനി' : 'In');
+        const minLabel = language === 'ml' ? 'മിനിറ്റ്' : 'min';
+        return `${inLabel} ${reportByDiffMinutes} ${minLabel}`;
+    }, [reportByDiffMinutes, language, t]);
+
     return {
         formattedDate,
         isAppointmentToday: isTodayAppointment,
         daysUntilAppointment,
-        doctorStatusInfo,
+        doctorStatusInfo: {
+            isBreak: breakMinutes > 0,
+            isLate: false,
+            isAffected: breakMinutes > 0,
+            awayReason: '' // Placeholder to satisfy interface
+        },
         breakMinutes,
         reportByTimeDisplay,
         originalReportByTime,
         reportByDiffMinutes,
         isReportingPastDue,
+        hoursUntilArrivalReminder,
+        minutesUntilArrivalReminder,
         reportingCountdownLabel,
         estimatedWaitTime,
-        confirmedEstimatedWaitMinutes,
-        hoursUntilArrivalReminder,
-        minutesUntilArrivalReminder
+        confirmedEstimatedWaitMinutes: estimatedWaitTime, // Aligned to backend
+        sessionStartTime,
+        sessionStartTimeDisplay,
+        doctorNextActionMessage
     };
 }

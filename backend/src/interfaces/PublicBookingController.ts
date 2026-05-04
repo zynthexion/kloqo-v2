@@ -139,17 +139,26 @@ export class PublicBookingController {
   async getQueueStatus(req: Request, res: Response) {
     try {
       const { clinicId, doctorId } = req.params;
-      const { date } = req.query;
-
+      const { date, appointmentId } = req.query;
+      
       if (!clinicId || !doctorId || !date) {
         return res.status(400).json({ error: 'clinicId, doctorId, and date are required' });
+      }
+
+      // If we have an appointmentId, use it to find the patientId for the calculation
+      let patientId = (req as any).user?.patientId;
+      if (!patientId && appointmentId) {
+        const appointment = await this.appointmentRepo.findById(appointmentId as string, clinicId);
+        if (appointment) {
+          patientId = appointment.patientId;
+        }
       }
 
       const status = await this.getPublicQueueStatusUseCase.execute(
         clinicId,
         doctorId,
         date as string,
-        (req as any).user?.patientId
+        patientId
       );
       res.json(status);
     } catch (error: any) {
