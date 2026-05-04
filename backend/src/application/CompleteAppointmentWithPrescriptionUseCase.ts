@@ -46,24 +46,27 @@ export class CompleteAppointmentWithPrescriptionUseCase {
     const dateStr = format(now, 'yyyy-MM-dd');
     const bucket = storage.bucket();
 
-    // 2. AUDIT TRAIL: Upload Raw Handwriting (PNG)
-    const rawPath = `raw-ink/${clinicId}/${dateStr}/${patientId}_${appointmentId}.png`;
-    const rawFileRef = bucket.file(rawPath);
-    await rawFileRef.save(inkFileBuffer, {
-      contentType: inkFileMimeType,
-      public: true,
-      metadata: { appointmentId, clinicId, patientId, type: 'raw-handwriting' }
-    });
+    // 2 & 3. PARALLEL EXECUTION: Upload Raw Handwriting and Generate PDF simultaneously
+    const [rawInkResult, pdfBuffer] = await Promise.all([
+      (async () => {
+        const rawPath = `raw-ink/${clinicId}/${dateStr}/${patientId}_${appointmentId}.png`;
+        const rawFileRef = bucket.file(rawPath);
+        await rawFileRef.save(inkFileBuffer, {
+          contentType: inkFileMimeType,
+          public: true,
+          metadata: { appointmentId, clinicId, patientId, type: 'raw-handwriting' }
+        });
+        return `https://storage.googleapis.com/${bucket.name}/${rawPath}`;
+      })(),
+      this.pdfService.generate({
+        appointment,
+        clinic,
+        doctor,
+        inkBuffer: fullFileBuffer
+      })
+    ]);
 
-    const rawInkUrl = `https://storage.googleapis.com/${bucket.name}/${rawPath}`;
-
-    // 3. GENERATION: Composite High-Fidelity PDF
-    const pdfBuffer = await this.pdfService.generate({
-      appointment,
-      clinic,
-      doctor,
-      inkBuffer: fullFileBuffer
-    });
+    const rawInkUrl = rawInkResult;
 
     // 4. DELIVERY: Upload Final Merged PDF
     const pdfPath = `prescriptions/${clinicId}/${dateStr}/${patientId}_${appointmentId}.pdf`;

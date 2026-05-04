@@ -278,22 +278,9 @@ export function NurseDashboardProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const imageCompression = (await import('browser-image-compression')).default;
-      const compressionOptions = { maxSizeMB: 2, maxWidthOrHeight: 10000, useWebWorker: true, fileType: 'image/png' as const };
-      
-      const compressedFull = await imageCompression(
-        new File([fullBlob], 'prescription.png', { type: 'image/png' }),
-        compressionOptions
-      );
-      
-      const compressedInk = await imageCompression(
-        new File([inkBlob], 'ink.png', { type: 'image/png' }),
-        compressionOptions
-      );
-
       const formData = new FormData();
-      formData.append('fullFile', compressedFull);
-      formData.append('inkFile', compressedInk);
+      formData.append('fullFile', new File([fullBlob], 'prescription.png', { type: 'image/png' }));
+      formData.append('inkFile', new File([inkBlob], 'ink.png', { type: 'image/png' }));
       formData.append('appointmentId', appointmentId);
       formData.append('patientId', patientId);
 
