@@ -15,6 +15,8 @@
     "dev:patient": "npm run dev --workspace=patient-app",
     "backup": "npm run backup --workspace=kloqo-v2-backend",
     "build:backend": "npm run build --workspace=kloqo-v2-backend",
-    "build:shared": "npm run build --workspace=@kloqo/shared"
+    "build:shared": "npm run build --workspace=@kloqo/shared",
+    "snapshot": "npm run snapshot --workspace=kloqo-v2-backend --",
+    "backup": "npm run backup:v2 --workspace=kloqo-v2-backend"
   }
 }

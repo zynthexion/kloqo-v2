@@ -188,6 +188,8 @@ export interface Appointment {
   priorityAt?: any;
   isInBuffer?: boolean;
   bufferedAt?: any;
+  isNextLocked?: boolean;
+  lockedAt?: any;
   skippedAt?: any;
   noShowAt?: any;
   createdAt?: any | Date | string;
@@ -742,50 +744,72 @@ export interface QueueState {
 }
 
 export function compareAppointments(a: Appointment, b: Appointment): number {
+  // 1. Consultation Status
+  if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+  if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
+
+  // 2. The Lock (At Door)
+  if (a.isNextLocked && !b.isNextLocked) return -1;
+  if (!a.isNextLocked && b.isNextLocked) return 1;
+  if (a.isNextLocked && b.isNextLocked) {
+    const lockTimeA = (a.lockedAt as any)?.seconds || 0;
+    const lockTimeB = (b.lockedAt as any)?.seconds || 0;
+    if (lockTimeA !== lockTimeB) return lockTimeA - lockTimeB;
+  }
+
+  // 3. Priority patients
   if (a.isPriority && !b.isPriority) return -1;
   if (!a.isPriority && b.isPriority) return 1;
   if (a.isPriority && b.isPriority) {
     const pA = (a.priorityAt as any)?.seconds || 0;
     const pB = (b.priorityAt as any)?.seconds || 0;
-    return pA - pB;
+    if (pA !== pB) return pA - pB;
   }
 
+  // 4. Session & Slot (The Master Schedule)
   const sA = a.sessionIndex ?? 0;
   const sB = b.sessionIndex ?? 0;
   if (sA !== sB) return sA - sB;
 
+  const slotA = a.slotIndex ?? 999;
+  const slotB = b.slotIndex ?? 999;
+  if (slotA !== slotB) return slotA - slotB;
+
+  // 5. Time as fallback for index 0 slots
+  try {
+    const timeA = a.time ? parseInt(a.time.replace(':', '')) : 9999;
+    const timeB = b.time ? parseInt(b.time.replace(':', '')) : 9999;
+    if (timeA !== timeB) return timeA - timeB;
+  } catch (e) {}
+
+  // 6. Arrival Buffer Tie-breaker
   if (a.isInBuffer && !b.isInBuffer) return -1;
   if (!a.isInBuffer && b.isInBuffer) return 1;
-
+  
   if (a.isInBuffer && b.isInBuffer) {
-    const bufferTimeA = (a.bufferedAt as any)?.toMillis ? (a.bufferedAt as any).toMillis() : 0;
-    const bufferTimeB = (b.bufferedAt as any)?.toMillis ? (b.bufferedAt as any).toMillis() : 0;
-    if (bufferTimeA && bufferTimeB && bufferTimeA !== bufferTimeB) {
-      return bufferTimeA - bufferTimeB;
-    }
+    const bufferTimeA = (a.bufferedAt as any)?.seconds || (a.bufferedAt as any)?.toMillis?.() || 0;
+    const bufferTimeB = (b.bufferedAt as any)?.seconds || (b.bufferedAt as any)?.toMillis?.() || 0;
+    if (bufferTimeA !== bufferTimeB) return bufferTimeA - bufferTimeB;
   }
 
-  try {
-    const timeA = new Date(`2000-01-01 ${a.time}`);
-    const timeB = new Date(`2000-01-01 ${b.time}`);
-
-    if (timeA.getTime() !== timeB.getTime()) {
-      return timeA.getTime() - timeB.getTime();
-    }
-
-    const isASkipped = !!a.skippedAt;
-    const isBSkipped = !!b.skippedAt;
-    if (isASkipped !== isBSkipped) {
-      return isASkipped ? -1 : 1;
-    }
-
-    return (a.numericToken || 0) - (b.numericToken || 0);
-  } catch (e) {
-    return (a.numericToken || 0) - (b.numericToken || 0);
-  }
+  return (a.numericToken || 0) - (b.numericToken || 0);
 }
 
 export function compareAppointmentsClassic(a: Appointment, b: Appointment): number {
+  // 1. Consultation Status
+  if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+  if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
+
+  // 2. The Lock (At Door)
+  if (a.isNextLocked && !b.isNextLocked) return -1;
+  if (!a.isNextLocked && b.isNextLocked) return 1;
+  if (a.isNextLocked && b.isNextLocked) {
+    const lockTimeA = (a.lockedAt as any)?.seconds || 0;
+    const lockTimeB = (b.lockedAt as any)?.seconds || 0;
+    if (lockTimeA !== lockTimeB) return lockTimeA - lockTimeB;
+  }
+
+  // 3. Priority check
   if (a.isPriority && !b.isPriority) return -1;
   if (!a.isPriority && b.isPriority) return 1;
   if (a.isPriority && b.isPriority) {
@@ -794,10 +818,23 @@ export function compareAppointmentsClassic(a: Appointment, b: Appointment): numb
     return pA - pB;
   }
 
+  // 4. Session boundary check
   const sA = a.sessionIndex ?? 0;
   const sB = b.sessionIndex ?? 0;
   if (sA !== sB) return sA - sB;
 
+  // 5. HYBRID RULE: Slot Index / Time (The Schedule Boss)
+  const slotA = a.slotIndex ?? 999;
+  const slotB = b.slotIndex ?? 999;
+  if (slotA !== slotB) return slotA - slotB;
+
+  try {
+    const timeA = a.time ? parseInt(a.time.replace(':', '')) : 9999;
+    const timeB = b.time ? parseInt(b.time.replace(':', '')) : 9999;
+    if (timeA !== timeB) return timeA - timeB;
+  } catch (e) {}
+
+  // 6. Arrival Time (The FIFO Tie-breaker)
   const getMillis = (val: any) => {
     if (!val) return 0;
     if (typeof val.toMillis === 'function') return val.toMillis();
@@ -819,7 +856,8 @@ export function compareAppointmentsClassic(a: Appointment, b: Appointment): numb
     return 1;
   }
 
-  return compareAppointments(a, b);
+  // 7. Final Tie-breaker
+  return (a.numericToken || 0) - (b.numericToken || 0);
 }
 
 export interface Medicine {

@@ -132,33 +132,23 @@ export class GetNurseDashboardUseCase {
 
     doctorsList.forEach((doctor: Doctor) => {
       const doctorAppointments = filteredAppointments.filter((apt: Appointment) => apt.doctorId === doctor.id);
-
       const docDistribution = doctor.tokenDistribution || clinic.tokenDistribution || 'advanced';
       
+      // 1. Unified Arrived Queue (Includes Priority + Standard, sorted by core engine)
       const arrivedQueue = doctorAppointments
-        .filter(apt => apt.status === 'Confirmed' && !apt.isPriority)
+        .filter(apt => apt.status === 'Confirmed')
         .sort(docDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
 
-      const priorityQueue = doctorAppointments
-        .filter(apt => apt.status === 'Confirmed' && apt.isPriority)
-        .sort((a, b) => {
-          const pA = (a.priorityAt as any)?.seconds || 0;
-          const pB = (b.priorityAt as any)?.seconds || 0;
-          return pA - pB;
-        });
-
+      // 2. Buffer & Priority subsets (for UI badges/sections)
       const bufferQueue = arrivedQueue.filter(apt => apt.isInBuffer);
+      const priorityQueue = arrivedQueue.filter(apt => apt.isPriority);
       
       const skippedQueue = doctorAppointments
         .filter(apt => apt.status === 'Skipped')
         .sort(compareAppointments);
 
-      let currentConsultation: Appointment | null = null;
-      if (priorityQueue.length > 0) {
-        currentConsultation = priorityQueue[0];
-      } else if (bufferQueue.length > 0) {
-        currentConsultation = bufferQueue[0];
-      }
+      // 3. Current Consultation (Strictly the one in the room)
+      const currentConsultation = doctorAppointments.find(apt => apt.status === 'InConsultation') || null;
 
       queues[doctor.id] = {
         arrivedQueue,
@@ -166,8 +156,8 @@ export class GetNurseDashboardUseCase {
         priorityQueue,
         skippedQueue,
         currentConsultation,
-        consultationCount: 0, // Should be fetched from a separate collection if needed
-        nextBreakDuration: null // TBD
+        consultationCount: 0,
+        nextBreakDuration: null
       };
     });
 

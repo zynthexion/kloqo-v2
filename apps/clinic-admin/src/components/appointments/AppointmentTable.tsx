@@ -50,7 +50,11 @@ export function AppointmentTable({
                   </TableCell>
                 </TableRow>
               )}
-              <TableRow className={cn(appointment.status === 'Skipped' && "bg-orange-50/50")}>
+              <TableRow className={cn(
+                appointment.status === 'Skipped' && "bg-orange-50/50",
+                appointment.isNextLocked && "bg-indigo-50/30 border-l-4 border-l-indigo-500",
+                (appointment as any).isInBuffer && !appointment.isPriority && !appointment.isNextLocked && "bg-blue-50/30 border-l-4 border-l-blue-400"
+              )}>
                 <TableCell className="font-bold text-slate-700">{appointment.patientName}</TableCell>
                 <TableCell className="text-xs text-slate-500 font-medium">
                   {appointment.age}y • {appointment.sex} • {appointment.place}
@@ -70,6 +74,12 @@ export function AppointmentTable({
                   )}
                   {appointment.status === 'Completed' && (
                     <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[8px] font-black uppercase">Done</Badge>
+                  )}
+                  {appointment.isNextLocked && (
+                    <Badge variant="default" className="bg-indigo-600 text-white border-indigo-700 text-[8px] font-black uppercase ml-2 animate-pulse">At Door</Badge>
+                  )}
+                  {(appointment as any).isInBuffer && !appointment.isPriority && !appointment.isNextLocked && appointment.status === 'Confirmed' && (
+                    <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-[8px] font-black uppercase ml-2 animate-pulse">Ready</Badge>
                   )}
                 </TableCell>
                 <TableCell className="text-right">

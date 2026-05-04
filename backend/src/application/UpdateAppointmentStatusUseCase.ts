@@ -103,10 +103,12 @@ export class UpdateAppointmentStatusUseCase {
       (appointment as any).cancelledAt = new Date();
     }
     
-    // Clear buffer flag if moving out of Confirmed
+    // Clear buffer and lock flags if moving out of active states
     if (['Skipped', 'No-show', 'Cancelled', 'Pending', 'InConsultation'].includes(status)) {
       appointment.isInBuffer = false;
       appointment.bufferedAt = null;
+      appointment.isNextLocked = false;
+      appointment.lockedAt = null;
     }
 
     // ── ATOMIC WRITE: Appointment update + counter maintenance ─────────────
@@ -173,6 +175,57 @@ export class UpdateAppointmentStatusUseCase {
         }
       }
 
+      // 🔒 NEXT-PATIENT LOCK (The "Door Lock")
+      // When a doctor starts a consultation, we scan the remaining queue, 
+      // find the highest-priority Confirmed patient, and flag them as isNextLocked.
+      if (status === 'InConsultation') {
+        const allAppointments = await this.appointmentRepo.findByDoctorAndDate(
+          appointment.doctorId,
+          appointment.clinicId,
+          appointment.date,
+          txn
+        );
+        
+        // 1. Clear any existing locks for this session to prevent multiple locks
+        const lockedAppts = allAppointments.filter(a => a.isNextLocked && a.sessionIndex === appointment.sessionIndex);
+        for (const locked of lockedAppts) {
+          if (locked.id !== appointment.id) {
+            await this.appointmentRepo.update(locked.id, appointment.clinicId, { isNextLocked: false, lockedAt: null }, txn);
+          }
+        }
+
+        // 2. Identify the new "Next" person from the arrived pool
+        const doctor = await this.doctorRepo.findById(appointment.doctorId, appointment.clinicId, txn);
+        const distribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
+
+        const confirmedAppts = allAppointments
+          .filter(a => 
+            a.id !== appointment.id && 
+            a.status === 'Confirmed' && 
+            a.sessionIndex === appointment.sessionIndex
+          )
+          .sort(distribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
+        
+        console.log(`[NextLock] Mode: ${distribution}. Next: ${confirmedAppts[0]?.tokenNumber}(Slot:${confirmedAppts[0]?.slotIndex})`);
+
+        if (confirmedAppts.length > 0) {
+          const nextPatient = confirmedAppts[0];
+          await this.appointmentRepo.update(nextPatient.id, appointment.clinicId, { 
+            isNextLocked: true, 
+            lockedAt: new Date() 
+          }, txn);
+          
+          // 📢 Emit SSE for the newly locked patient so the UI updates immediately
+          this.sseService.emit('appointment_status_changed', appointment.clinicId, {
+            appointmentId: nextPatient.id,
+            newStatus: nextPatient.status,
+            isNextLocked: true
+          });
+          
+          console.log(`[QueueLock] 🔒 Locked ${nextPatient.tokenNumber} as NEXT patient.`);
+        }
+      }
+
       await this.appointmentRepo.update(appointmentId, appointment.clinicId, appointment, txn);
 
       if (status === 'Completed' && appointment.sessionIndex !== undefined) {
@@ -211,6 +264,7 @@ export class UpdateAppointmentStatusUseCase {
       sessionIndex: appointment.sessionIndex,
       slotIndex: appointment.slotIndex,
       isInBuffer: appointment.isInBuffer,
+      isNextLocked: appointment.isNextLocked,
     });
 
     if (status === 'Completed') {
@@ -248,53 +302,61 @@ export class UpdateAppointmentStatusUseCase {
         doctorId: appointment.doctorId,
         clinicId: appointment.clinicId,
         date: appointment.date,
-      }).catch(err => console.warn('[UpdateStatus] QueueBubbling failed:', err.message));
+        }).catch(err => console.warn('[UpdateStatus] QueueBubbling failed:', err.message));
     }
 
     return appointment;
   }
 
   private async triggerBufferRefill(clinicId: string, doctorId: string, doctorName: string) {
-    const today = getClinicISODateString(new Date());
+    const now = getClinicNow();
+    const today = getClinicISODateString(now);
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
+    
     const doctorAppointments = appointments.filter(
       apt => apt.doctorId === doctorId && apt.status === 'Confirmed'
     );
 
-    if (doctorAppointments.length === 0) return;
-
-    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
     const clinic = await this.clinicRepo.findById(clinicId);
-    
-    const tokenDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
+    const distribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
 
-    let currentBuffered = doctorAppointments.filter(a => a.isInBuffer);
-    
-    const sorted = doctorAppointments.sort((a, b) => {
-      const sA = a.slotIndex ?? 999;
-      const sB = b.slotIndex ?? 999;
-      return sA - sB;
-    });
+    const sorted = doctorAppointments.sort(
+      distribution === 'advanced' ? compareAppointments : compareAppointmentsClassic
+    );
 
-    const correctBufferIds = sorted.slice(0, 2).map(a => a.id);
+    console.log(`[BufferSync] Mode: ${distribution}. Top 2 IDs:`, sorted.slice(0, 2).map(a => `${a.tokenNumber}(Slot:${a.slotIndex})`));
+
+    const top2Ids = sorted.slice(0, 2).map(a => a.id);
 
     for (const appt of doctorAppointments) {
-      const shouldBeBuffered = correctBufferIds.includes(appt.id);
+      const shouldBeBuffered = top2Ids.includes(appt.id);
+      const isFirst = sorted.length > 0 && sorted[0].id === appt.id;
       
-      if (shouldBeBuffered && !appt.isInBuffer) {
+      // Lock logic: Always lock the first confirmed person so they are "At Door"
+      const shouldBeLocked = isFirst;
+
+      const updates: any = {};
+      let changed = false;
+
+      if (shouldBeBuffered !== appt.isInBuffer) {
+        updates.isInBuffer = shouldBeBuffered;
+        updates.bufferedAt = shouldBeBuffered ? now : null;
+        changed = true;
+      }
+
+      if (shouldBeLocked !== appt.isNextLocked) {
+        updates.isNextLocked = shouldBeLocked;
+        updates.lockedAt = shouldBeLocked ? now : null;
+        changed = true;
+      }
+
+      if (changed) {
         await this.appointmentRepo.update(appt.id, clinicId, {
-          isInBuffer: true,
-          bufferedAt: new Date(),
-          updatedAt: new Date()
+          ...updates,
+          updatedAt: now
         });
-        console.log(`Buffer Sync: ✅ Promoted ${appt.tokenNumber} to buffer`);
-      } else if (!shouldBeBuffered && appt.isInBuffer) {
-        await this.appointmentRepo.update(appt.id, clinicId, {
-          isInBuffer: false,
-          bufferedAt: null,
-          updatedAt: new Date()
-        });
-        console.log(`Buffer Sync: ⚠️ Removed ${appt.tokenNumber} from buffer (out of rank)`);
+        console.log(`[QueueSync] Updated ${appt.tokenNumber}: Buffer=${shouldBeBuffered}, Locked=${shouldBeLocked}`);
       }
     }
   }

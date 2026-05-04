@@ -175,7 +175,7 @@ export default function AppointmentList(props: AppointmentListProps) {
                     isActionable={isActionable(appt)}
                     isInactive={['Completed', 'Cancelled'].includes(appt.status)}
                     isSwiping={false}
-                    isBuffer={isInBufferQueue?.(appt) || false}
+                    isBuffer={isInBufferQueue ? isInBufferQueue(appt) : (appt as any).isInBuffer === true}
                     isClinicOut={isClinicOut}
                     isSwipeOnCooldown={isSwipeOnCooldown}
                     isCapturing={false}

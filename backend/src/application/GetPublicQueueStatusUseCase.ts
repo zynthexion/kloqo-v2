@@ -83,22 +83,23 @@ export class GetPublicQueueStatusUseCase {
     // engine and must never be visible to patients or counted in queue metrics.
     const realAppointments = appointments.filter(a => !a.isSystemBlocker);
 
-    // Same logic as NurseDashboard but sanitized
+    // 1. Unified Arrived Queue (Includes Priority + Standard, sorted by core engine)
     const arrivedQueue = realAppointments
-      .filter(apt => apt.status === 'Confirmed' && !apt.isPriority)
+      .filter(apt => apt.status === 'Confirmed')
       .sort(tokenDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
 
-    const priorityQueue = realAppointments
-      .filter(apt => apt.status === 'Confirmed' && apt.isPriority)
-      .sort((a, b) => {
-        const pA = (a.priorityAt as any)?.seconds || (a.priorityAt ? new Date(a.priorityAt).getTime() / 1000 : 0);
-        const pB = (b.priorityAt as any)?.seconds || (b.priorityAt ? new Date(b.priorityAt).getTime() / 1000 : 0);
-        return pA - pB;
-      });
-
+    // 2. Subsets for tracking
+    const priorityQueue = arrivedQueue.filter(apt => apt.isPriority);
     const bufferQueue = arrivedQueue.filter(apt => apt.isInBuffer);
     
-    let currentConsultation = priorityQueue[0] || bufferQueue[0] || null;
+    // 3. Current Consultation (Ground Truth)
+    // In V2, we strictly use InConsultation status. 
+    // Fallback to top of queue ONLY for wait-time prediction purposes if doctor is 'In'.
+    let currentConsultation = realAppointments.find(apt => apt.status === 'InConsultation') || null;
+    
+    if (!currentConsultation && doctor.consultationStatus === 'In' && arrivedQueue.length > 0) {
+      currentConsultation = arrivedQueue[0];
+    }
 
     // Calculate patients ahead for the specific patient
     let patientsAhead = 0;

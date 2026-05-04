@@ -2836,87 +2836,100 @@ export async function calculateSkippedTokenRejoinSlot(
  * Tertiary sort: numericToken (ascending)
  */
 export function compareAppointments(a: Appointment, b: Appointment): number {
-  // 1. Priority check (Top Priority)
+  // 1. Consultation Status
+  if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+  if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
+
+  // 2. The Lock (At Door)
+  if (a.isNextLocked && !b.isNextLocked) return -1;
+  if (!a.isNextLocked && b.isNextLocked) return 1;
+  if (a.isNextLocked && b.isNextLocked) {
+    const lockTimeA = (a.lockedAt as any)?.seconds || 0;
+    const lockTimeB = (b.lockedAt as any)?.seconds || 0;
+    if (lockTimeA !== lockTimeB) return lockTimeA - lockTimeB;
+  }
+
+  // 3. Priority patients
   if (a.isPriority && !b.isPriority) return -1;
   if (!a.isPriority && b.isPriority) return 1;
   if (a.isPriority && b.isPriority) {
-    const pA = a.priorityAt?.seconds || 0;
-    const pB = b.priorityAt?.seconds || 0;
-    return pA - pB;
+    const pA = (a.priorityAt as any)?.seconds || 0;
+    const pB = (b.priorityAt as any)?.seconds || 0;
+    if (pA !== pB) return pA - pB;
   }
 
-  // 2. Session boundary check (Crucial for multi-session doctors)
+  // 4. Session & Slot (The Master Schedule)
   const sA = a.sessionIndex ?? 0;
   const sB = b.sessionIndex ?? 0;
   if (sA !== sB) return sA - sB;
 
-  // 3. Buffer priority
+  const slotA = a.slotIndex ?? 999;
+  const slotB = b.slotIndex ?? 999;
+  if (slotA !== slotB) return slotA - slotB;
+
+  // 5. Time as fallback for index 0 slots
+  try {
+    const timeA = a.time ? parseInt(a.time.replace(':', '')) : 9999;
+    const timeB = b.time ? parseInt(b.time.replace(':', '')) : 9999;
+    if (timeA !== timeB) return timeA - timeB;
+  } catch (e) {}
+
+  // 6. Arrival Buffer Tie-breaker
   if (a.isInBuffer && !b.isInBuffer) return -1;
   if (!a.isInBuffer && b.isInBuffer) return 1;
-
-  // 1b. Buffer Stability: If both are in buffer, sort by bufferedAt (FIFO)
-  // This ensures that once a patient enters the buffer, they are not displaced by a "more urgent" late arrival.
+  
   if (a.isInBuffer && b.isInBuffer) {
-    const bufferTimeA = (a.bufferedAt as any)?.toMillis ? (a.bufferedAt as any).toMillis() : 0;
-    const bufferTimeB = (b.bufferedAt as any)?.toMillis ? (b.bufferedAt as any).toMillis() : 0;
-
-    if (bufferTimeA && bufferTimeB && bufferTimeA !== bufferTimeB) {
-      return bufferTimeA - bufferTimeB;
-    }
-    // If timestamps are missing or equal, fall back to natural sort below
+    const bufferTimeA = (a.bufferedAt as any)?.seconds || (a.bufferedAt as any)?.toMillis?.() || 0;
+    const bufferTimeB = (b.bufferedAt as any)?.seconds || (b.bufferedAt as any)?.toMillis?.() || 0;
+    if (bufferTimeA !== bufferTimeB) return bufferTimeA - bufferTimeB;
   }
 
-  try {
-    const parseRes = (apt: Appointment) => {
-      // Appointments can have different date formats, but 'd MMMM yyyy' is the standard in Kloqo
-      const appointmentDate = parse(apt.date, 'd MMMM yyyy', new Date());
-      return parseTimeString(apt.time, appointmentDate);
-    };
-
-    const timeA = parseRes(a);
-    const timeB = parseRes(b);
-
-    if (timeA.getTime() !== timeB.getTime()) {
-      return timeA.getTime() - timeB.getTime();
-    }
-
-    // Tie-breaker: skippedAt field existence
-    // Prioritize previously skipped tokens at the same time slot
-    const isASkipped = !!a.skippedAt;
-    const isBSkipped = !!b.skippedAt;
-
-    if (isASkipped !== isBSkipped) {
-      return isASkipped ? -1 : 1;
-    }
-
-    // Final tie-breaker: numericToken
-    return (a.numericToken || 0) - (b.numericToken || 0);
-  } catch (e) {
-    // Fail-safe sorting
-    return (a.numericToken || 0) - (b.numericToken || 0);
-  }
+  return (a.numericToken || 0) - (b.numericToken || 0);
 }
 
 /**
  * Classic Distribution comparison function.
- * Primary sort: confirmedAt (Ascending - FIFO based on arrival time)
- * Secondary sort: original scheduled time (via compareAppointments)
  */
 export function compareAppointmentsClassic(a: Appointment, b: Appointment): number {
-  // 1. Priority check
+  // 1. Consultation Status
+  if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
+  if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
+
+  // 2. The Lock (At Door)
+  if (a.isNextLocked && !b.isNextLocked) return -1;
+  if (!a.isNextLocked && b.isNextLocked) return 1;
+  if (a.isNextLocked && b.isNextLocked) {
+    const lockTimeA = (a.lockedAt as any)?.seconds || 0;
+    const lockTimeB = (b.lockedAt as any)?.seconds || 0;
+    if (lockTimeA !== lockTimeB) return lockTimeA - lockTimeB;
+  }
+
+  // 3. Priority check
   if (a.isPriority && !b.isPriority) return -1;
   if (!a.isPriority && b.isPriority) return 1;
   if (a.isPriority && b.isPriority) {
-    const pA = (a.priorityAt?.seconds || 0) * 1000;
-    const pB = (b.priorityAt?.seconds || 0) * 1000;
+    const pA = ((a.priorityAt as any)?.seconds || 0) * 1000;
+    const pB = ((b.priorityAt as any)?.seconds || 0) * 1000;
     return pA - pB;
   }
 
-  // 2. Session boundary check (Crucial for Classic mode to prevent cross-session jumping)
+  // 4. Session boundary check
   const sA = a.sessionIndex ?? 0;
   const sB = b.sessionIndex ?? 0;
   if (sA !== sB) return sA - sB;
 
+  // 5. HYBRID RULE: Slot Index / Time (The Schedule Boss)
+  const slotA = a.slotIndex ?? 999;
+  const slotB = b.slotIndex ?? 999;
+  if (slotA !== slotB) return slotA - slotB;
+
+  try {
+    const timeA = a.time ? parseInt(a.time.replace(':', '')) : 9999;
+    const timeB = b.time ? parseInt(b.time.replace(':', '')) : 9999;
+    if (timeA !== timeB) return timeA - timeB;
+  } catch (e) {}
+
+  // 6. Arrival Time (The FIFO Tie-breaker)
   const getMillis = (val: any) => {
     if (!val) return 0;
     if (typeof val.toMillis === 'function') return val.toMillis();
@@ -2925,9 +2938,8 @@ export function compareAppointmentsClassic(a: Appointment, b: Appointment): numb
     return new Date(val).getTime();
   };
 
-  const confirmedA = getMillis(a.confirmedAt);
-  const confirmedB = getMillis(b.confirmedAt);
-  // ... existing logic
+  const confirmedA = getMillis(a.confirmedAt || a.createdAt);
+  const confirmedB = getMillis(b.confirmedAt || b.createdAt);
 
   if (confirmedA && confirmedB) {
     if (confirmedA !== confirmedB) {
@@ -2939,7 +2951,8 @@ export function compareAppointmentsClassic(a: Appointment, b: Appointment): numb
     return 1;
   }
 
-  return compareAppointments(a, b);
+  // 7. Final Tie-breaker
+  return (a.numericToken || 0) - (b.numericToken || 0);
 }
 
 

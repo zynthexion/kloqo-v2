@@ -97,15 +97,13 @@ export class QueueBubblingService {
 
       const protectedThreshold = Math.max(liveFreezeThreshold, bufferThreshold);
 
-      if (protectedThreshold >= 0) {
-        console.log(`[QueueBubbling] 🔒 Freeze active: consultationBoundary=${consultationBoundary}, doorBoundary=${doorBoundary}, protectedThreshold=${protectedThreshold}`);
-      }
+      console.log(`[QueueBubbling] 🔒 Freeze active: live=${liveFreezeThreshold}, buffer=${bufferThreshold}`);
 
       // 2. Identify Gaps and Candidates
       // Gaps: Empty slots ABOVE the protected threshold and below the max occupied index.
       // Candidates: Confirmed Walk-ins above both the gaps and the protected threshold.
       const activeAppts = sessionAppointments.filter(a => 
-        ['Confirmed', 'InConsultation', 'Completed'].includes(a.status)
+        ['Pending', 'Confirmed', 'InConsultation', 'Completed'].includes(a.status)
       );
       const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
       const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
@@ -114,8 +112,6 @@ export class QueueBubblingService {
 
       const gaps: number[] = [];
       for (let i = 0; i <= maxOccupiedIndex; i++) {
-        // 🔒 FREEZE: Never allow a gap at or below the consultation/buffer boundary
-        if (i <= protectedThreshold) continue;
         if (!occupiedIndices.has(i)) {
           gaps.push(i);
         }
@@ -127,8 +123,10 @@ export class QueueBubblingService {
         .filter(a =>
           a.bookedVia === 'Walk-in' &&
           a.status === 'Confirmed' &&
-          a.slotIndex! > protectedThreshold &&
-          !gaps.includes(a.slotIndex!) // Candidate must not already be in a gap (though shouldn't happen)
+          // Candidates must be above the current consultation to be eligible
+          a.slotIndex! > consultationBoundary &&
+          // Safety: Candidate must not already be in a gap
+          !gaps.includes(a.slotIndex!) 
         )
         .sort((a, b) => a.slotIndex! - b.slotIndex!);
 
@@ -144,6 +142,24 @@ export class QueueBubblingService {
         const gapIndex = gaps[i];
         const candidate = candidates[i];
         
+        // 🔒 SAFETY CHECK: Consultation Boundary Lock
+        // RULE 1: The Consultation Zone (<= liveFreezeThreshold) is ABSOLUTELY frozen.
+        // No one can move into a slot at or below where the doctor is currently working.
+        if (gapIndex <= liveFreezeThreshold) {
+          console.log(`[QueueBubbling] 🔒 Lock Active: Slot ${gapIndex} is in the Consultation Zone. Skipping.`);
+          continue;
+        }
+
+        // RULE 2: Buffer Protection
+        // External candidates (outside buffer) cannot jump into the Buffer Zone.
+        const isCandidateBuffered = candidate.slotIndex! <= bufferThreshold;
+        const isGapBuffered = gapIndex <= bufferThreshold;
+
+        if (!isCandidateBuffered && isGapBuffered) {
+          console.log(`[QueueBubbling] 🔒 Buffer Lock: Preventing external ${candidate.tokenNumber} from jumping to buffered gap ${gapIndex}`);
+          continue;
+        }
+
         // Safety: Candidate must be after the gap
         if (candidate.slotIndex! <= gapIndex) continue;
 

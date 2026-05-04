@@ -52,6 +52,8 @@ export function AppointmentQueueView({
                 )}
                 <TableRow className={cn(
                   appointment.isPriority && "bg-amber-50/50 border-l-4 border-l-amber-500",
+                  appointment.isNextLocked && "bg-indigo-50/50 border-l-4 border-l-indigo-600",
+                  (appointment as any).isInBuffer && !appointment.isPriority && !appointment.isNextLocked && "bg-blue-50/50 border-l-4 border-l-blue-500",
                   activeTab === 'skipped' && "bg-orange-50/20"
                 )}>
                   <TableCell className="font-bold text-slate-700 py-3">
@@ -62,6 +64,16 @@ export function AppointmentQueueView({
                         </span>
                       )}
                       <span>{appointment.patientName}</span>
+                      {(appointment as any).isInBuffer && !appointment.isPriority && !appointment.isNextLocked && (
+                        <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-700 border-blue-200 text-[8px] uppercase px-1 py-0 rounded animate-pulse">
+                          Ready
+                        </Badge>
+                      )}
+                      {appointment.isNextLocked && (
+                        <Badge variant="default" className="ml-2 bg-indigo-600 text-white border-indigo-700 text-[8px] uppercase px-1 py-0 rounded animate-pulse">
+                          At Door
+                        </Badge>
+                      )}
                       {activeTab === 'skipped' && (
                         <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-600 border-yellow-200 text-[8px] uppercase px-1 py-0 rounded">
                           {appointment.status}

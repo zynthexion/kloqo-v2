@@ -1,4 +1,4 @@
-import { Appointment } from '../../../packages/shared/src/index';
+import { Appointment, compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
 import {
   IAppointmentRepository,
   IDoctorRepository,
@@ -194,12 +194,75 @@ export class CreateWalkInAppointmentUseCase {
 
     if (!finalAppointment) throw new Error('Failed to find an available slot.');
 
+    // ── TRIGGER QUEUE SYNC ──────────────────────────────────────────────────
+    await this.triggerBufferRefill(dto.clinicId, dto.doctorId);
+
     // ── SSE ──────────────────────────────────────────────────────────────────
     this.sseService.emit('walk_in_created', dto.clinicId, {
       appointment: finalAppointment
     });
 
     return finalAppointment;
+  }
+
+  /**
+   * Re-evaluates the top of the queue and updates buffer/lock tags.
+   */
+  private async triggerBufferRefill(clinicId: string, doctorId: string) {
+    const now = getClinicNow();
+    const today = getClinicISODateString(now);
+    const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
+    
+    const clinic = await this.clinicRepo.findById(clinicId);
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
+    const distribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
+
+    // Find all active confirmed patients for this doctor
+    const confirmedAppts = appointments
+      .filter(a => 
+        a.doctorId === doctorId && 
+        a.status === 'Confirmed'
+      );
+
+    const sorted = confirmedAppts.sort(
+      distribution === 'advanced' ? compareAppointments : compareAppointmentsClassic
+    );
+
+    const top2Ids = sorted.slice(0, 2).map(a => a.id);
+    
+    // Check if anyone is currently in consultation
+    const hasInConsultation = appointments.some(a => a.doctorId === doctorId && a.status === 'InConsultation');
+
+    for (const appt of confirmedAppts) {
+      const shouldBeBuffered = top2Ids.includes(appt.id);
+      const isFirst = sorted.length > 0 && sorted[0].id === appt.id;
+      
+      // Lock logic: Always lock the first confirmed person so they are "At Door"
+      const shouldBeLocked = isFirst;
+
+      const updates: any = {};
+      let changed = false;
+
+      if (shouldBeBuffered !== appt.isInBuffer) {
+        updates.isInBuffer = shouldBeBuffered;
+        updates.bufferedAt = shouldBeBuffered ? now : null;
+        changed = true;
+      }
+
+      if (shouldBeLocked !== appt.isNextLocked) {
+        updates.isNextLocked = shouldBeLocked;
+        updates.lockedAt = shouldBeLocked ? now : null;
+        changed = true;
+      }
+
+      if (changed) {
+        await this.appointmentRepo.update(appt.id, clinicId, {
+          ...updates,
+          updatedAt: now
+        });
+        console.log(`[QueueSync] Updated ${appt.tokenNumber}: Buffer=${shouldBeBuffered}, Locked=${shouldBeLocked}`);
+      }
+    }
   }
 
   private async _bookSlot(

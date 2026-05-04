@@ -17,13 +17,13 @@ import { NurseDesktopShell } from '@/components/layout/NurseDesktopShell';
 import { NurseDesktopDashboard } from '@/components/dashboard/NurseDesktopDashboard';
 import { useActiveIdentity } from '@/hooks/useActiveIdentity';
 import { Loader2, Sparkles, Users, Power, AlertCircle } from 'lucide-react';
-import { Appointment, Doctor } from '@kloqo/shared';
+import { Appointment, Doctor, compareAppointments, compareAppointmentsClassic } from '@kloqo/shared';
 import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { data, loading: dashboardLoading, completeWithPrescription } = useNurseDashboardContext();
+  const { data, loading: dashboardLoading, completeWithPrescription, updateAppointmentStatus } = useNurseDashboardContext();
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -38,14 +38,14 @@ export default function DashboardPage() {
       ['Confirmed', 'Skipped', 'InConsultation'].includes(a.status)
     );
 
+    // Use unified sorting logic from @kloqo/shared
     return [...filtered].sort((a, b) => {
-      if (a.status === 'InConsultation' && b.status !== 'InConsultation') return -1;
-      if (a.status !== 'InConsultation' && b.status === 'InConsultation') return 1;
-      if (a.isPriority && !b.isPriority) return -1;
-      if (!a.isPriority && b.isPriority) return 1;
-      if (a.status === 'Confirmed' && b.status === 'Skipped') return -1;
-      if (a.status === 'Skipped' && b.status === 'Confirmed') return 1;
-      return (a.time || '').localeCompare(b.time || '');
+      const doctor = data.doctors?.[0];
+      const distribution = doctor?.tokenDistribution || 'advanced';
+      
+      return distribution === 'advanced' 
+        ? compareAppointments(a, b) 
+        : compareAppointmentsClassic(a, b);
     });
   }, [data]);
 
@@ -64,6 +64,26 @@ export default function DashboardPage() {
       setSelectedAppointment(null);
     }
   }, [arrivedQueue, selectedAppointment]);
+
+  const handleStartConsultation = async () => {
+    if (!selectedAppointment) return;
+    setIsSubmitting(true);
+    try {
+      await updateAppointmentStatus(selectedAppointment.id, 'InConsultation');
+      toast({
+        title: "Consultation Started",
+        description: `${selectedAppointment.patientName} is now in consultation.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start consultation. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleComplete = async (fullBlob: Blob, inkBlob: Blob) => {
     if (!selectedAppointment) return;
@@ -111,13 +131,6 @@ export default function DashboardPage() {
       communicationPhone: selectedAppointment.communicationPhone,
       phone: (selectedAppointment as any).phone || '',
     } : null;
-
-    if (selectedAppointment) {
-      console.log('--- PRESCRIPTION DATA DEBUG ---');
-      console.log('Selected Appointment raw data:', selectedAppointment);
-      console.log('Mapped currentPatient data:', currentPatient);
-      console.log('-------------------------------');
-    }
 
     const headerActions = (
       <div className="flex items-center gap-4">
@@ -174,17 +187,83 @@ export default function DashboardPage() {
         >
           {selectedAppointment && currentDoctor && currentPatient ? (
             currentDoctor.consultationStatus === 'In' ? (
-              <PrescriptionCanvas
-                key={selectedAppointment.id} 
-                ref={canvasRef}
-                doctor={currentDoctor}
-                clinic={data.clinic}
-                appointment={selectedAppointment}
-                patient={currentPatient as any}
-                onComplete={handleComplete}
-                onSkip={handleSkip}
-                isSubmitting={isSubmitting}
-              />
+              selectedAppointment.status === 'InConsultation' ? (
+                <PrescriptionCanvas
+                  key={selectedAppointment.id} 
+                  ref={canvasRef}
+                  doctor={currentDoctor}
+                  clinic={data.clinic}
+                  appointment={selectedAppointment}
+                  patient={currentPatient as any}
+                  onComplete={handleComplete}
+                  onSkip={handleSkip}
+                  isSubmitting={isSubmitting}
+                />
+              ) : (
+                /* Verification Gatekeeper Card */
+                <div className="flex flex-col items-center justify-center h-full bg-slate-50 p-6 overflow-y-auto">
+                  <div className="w-full max-w-2xl bg-white rounded-[3rem] shadow-premium p-12 space-y-10 border border-slate-100 relative overflow-hidden group">
+                    {/* Background Accents */}
+                    <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-700" />
+                    
+                    <div className="text-center space-y-4">
+                      <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 text-[10px] font-black uppercase tracking-widest animate-pulse mb-2">
+                        <Users className="h-3 w-3" />
+                        Next Patient Waiting
+                      </div>
+                      <h2 className="text-5xl font-black text-slate-900 tracking-tighter leading-none">
+                        {currentPatient.name}
+                      </h2>
+                      <div className="flex items-center justify-center gap-4 text-slate-400 font-bold uppercase tracking-widest text-xs">
+                        <span>{currentPatient.age} Years</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-slate-200" />
+                        <span>{currentPatient.sex}</span>
+                        {selectedAppointment.tokenNumber && (
+                          <>
+                            <div className="w-1.5 h-1.5 rounded-full bg-slate-200" />
+                            <span className="text-primary">Token #{selectedAppointment.tokenNumber}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Booked Via</p>
+                        <p className="text-lg font-black text-slate-800">{selectedAppointment.bookedVia}</p>
+                      </div>
+                      <div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100 space-y-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Appt. Time</p>
+                        <p className="text-lg font-black text-slate-800">{selectedAppointment.time || 'Walk-in'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                      <Button 
+                        size="lg" 
+                        onClick={handleStartConsultation}
+                        disabled={isSubmitting}
+                        className="h-20 rounded-[2rem] text-xl font-black uppercase tracking-widest shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-95 group/btn overflow-hidden relative"
+                      >
+                        <span className="relative z-10 flex items-center gap-3">
+                          {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <Sparkles className="h-6 w-6 group-hover/btn:rotate-12 transition-transform" />}
+                          Yes, Start Consultation
+                        </span>
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                      </Button>
+                      
+                      <Button 
+                        variant="ghost" 
+                        size="lg" 
+                        onClick={() => setIsQueueOpen(true)}
+                        className="h-14 rounded-[1.5rem] text-slate-400 font-bold hover:text-primary transition-colors"
+                      >
+                        No, choose someone else from queue
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="flex flex-col items-center justify-center h-full bg-white/40 backdrop-blur-md p-12 text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-24 h-24 rounded-[2.5rem] bg-amber-50 flex items-center justify-center shadow-xl shadow-amber-500/10 border border-amber-100/50">
@@ -222,7 +301,7 @@ export default function DashboardPage() {
         </TabletFocusLayout>
       </TabletDashboardLayout>
     );
-  }, [data, selectedAppointment, handleComplete, handleSkip, isSubmitting, user?.clinicId]);
+  }, [data, selectedAppointment, handleComplete, handleSkip, isSubmitting, user?.clinicId, isQueueOpen]);
 
   if (authLoading || (user && dashboardLoading)) {
     return (

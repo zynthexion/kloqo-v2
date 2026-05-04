@@ -5,7 +5,7 @@ import type { Appointment } from '@kloqo/shared';
 import { cn } from '@/lib/utils';
 import { getClinicNow } from '@kloqo/shared-core';
 import { motion } from 'framer-motion';
-import { Star, Loader2 } from 'lucide-react';
+import { Star, Loader2, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from './StatusBadge';
 import { AppointmentTimeInfo } from './AppointmentTimeInfo';
@@ -109,9 +109,11 @@ export function AppointmentItem({
         isModern ? "rounded-[2rem] border-white/50 bg-white shadow-premium" : "rounded-xl",
         isSwiping && 'text-white',
         !isModern && !isSwiping && "bg-white border-border shadow-md hover:shadow-lg",
-        !isModern && !isSwiping && appt.status === 'Confirmed' && !appt.isPriority && "bg-green-50 border-green-200",
+        !isModern && !isSwiping && appt.status === 'Confirmed' && !appt.isPriority && !appt.isNextLocked && "bg-green-50 border-green-200",
         !isModern && !isSwiping && appt.isPriority && "bg-amber-50 border-amber-400 shadow-md ring-1 ring-amber-400/50",
-        !isModern && !isSwiping && isBuffer && !appt.isPriority && "bg-blue-50/80 border-blue-400",
+        !isModern && !isSwiping && appt.isNextLocked && "bg-indigo-50 border-indigo-500 shadow-md ring-1 ring-indigo-500/50",
+        !isModern && !isSwiping && isBuffer && !appt.isPriority && !appt.isNextLocked && "bg-blue-50/80 border-blue-400",
+        isModern && !isSwiping && isBuffer && !appt.isPriority && !appt.isNextLocked && "bg-blue-50/30 border-blue-200/50 shadow-blue-100/20",
         !isModern && !isSwiping && appt.skippedAt && "bg-amber-50/50 border-amber-400",
         !isModern && !isSwiping && appt.status === 'No-show' && "bg-red-50 border-red-200",
       )}
@@ -203,6 +205,18 @@ export function AppointmentItem({
                   <Badge variant="default" className="ml-2 bg-amber-500 text-white hover:bg-amber-600 border-amber-600 flex gap-1 items-center">
                     <Star className="h-3 w-3 fill-current" />
                     Priority
+                  </Badge>
+                )}
+                {appt.isNextLocked && (
+                  <Badge variant="default" className="ml-2 bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-700 flex gap-1 items-center animate-pulse">
+                    <div className="h-2 w-2 rounded-full bg-white animate-ping" />
+                    At Door
+                  </Badge>
+                )}
+                {isBuffer && !appt.isPriority && (
+                  <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-700 border-blue-200 flex gap-1 items-center animate-pulse">
+                    <Clock className="h-3 w-3" />
+                    Ready
                   </Badge>
                 )}
                 {!showStatusBadge && appt.status === 'Skipped' && (
