@@ -56,10 +56,19 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, router]);
 
-  // Hook 8: Auto-selection
+  // Hook 8: Auto-selection & Sync with Context Data
   useEffect(() => {
-    if (arrivedQueue.length > 0 && !selectedAppointment) {
-      setSelectedAppointment(arrivedQueue[0]);
+    if (arrivedQueue.length > 0) {
+      if (!selectedAppointment) {
+        setSelectedAppointment(arrivedQueue[0]);
+      } else {
+        // 🔄 SYNC CHECK: If the same appointment exists in the queue but has a newer status (e.g. InConsultation), update the local state
+        const currentVersion = arrivedQueue.find(a => a.id === selectedAppointment.id);
+        if (currentVersion && currentVersion.status !== selectedAppointment.status) {
+          console.log(`[DashboardPage] Syncing status: ${selectedAppointment.status} -> ${currentVersion.status}`);
+          setSelectedAppointment(currentVersion);
+        }
+      }
     } else if (arrivedQueue.length === 0) {
       setSelectedAppointment(null);
     }
@@ -69,12 +78,16 @@ export default function DashboardPage() {
     if (!selectedAppointment) return;
     setIsSubmitting(true);
     try {
+      // 🚀 OPTIMISTIC UPDATE: Transition immediately to show prescription canvas
+      setSelectedAppointment({ ...selectedAppointment, status: 'InConsultation' });
+      
       await updateAppointmentStatus(selectedAppointment.id, 'InConsultation');
       toast({
         title: "Consultation Started",
         description: `${selectedAppointment.patientName} is now in consultation.`,
       });
     } catch (error) {
+      // Rollback on error if needed (though SSE will eventually sync)
       toast({
         title: "Error",
         description: "Failed to start consultation. Please try again.",
