@@ -301,6 +301,22 @@ export class UpdateAppointmentStatusUseCase {
         patientName: appointment.patientName,
         reason: 'clinic adjustment'
       }).catch(err => console.error('[UpdateStatus] Cancelled notification error:', err));
+    } else if (time && appointment.patientId) {
+      // 📢 Notify if time was manually changed (Manual Reschedule)
+      this.notificationService.sendAppointmentRescheduledNotification({
+        patientId: appointment.patientId,
+        appointmentId,
+        doctorName: appointment.doctorName,
+        clinicName,
+        oldDate: appointment.date,
+        oldTime: '', 
+        newDate: appointment.date,
+        newTime: appointment.time,
+        clinicId: appointment.clinicId,
+        communicationPhone: appointment.communicationPhone,
+        patientName: appointment.patientName,
+        arriveByTime: appointment.arriveByTime
+      }).catch(err => console.error('[UpdateStatus] Rescheduled notification error:', err));
     }
 
     const shouldBubble = ['Cancelled', 'Skipped', 'No-show'].includes(status);

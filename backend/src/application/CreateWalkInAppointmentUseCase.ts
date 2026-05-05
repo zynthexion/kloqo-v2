@@ -205,7 +205,8 @@ export class CreateWalkInAppointmentUseCase {
           newTime: finalAppointment.time,
           clinicId: finalAppointment.clinicId,
           communicationPhone: dto.communicationPhone,
-          patientName: finalAppointment.patientName
+          patientName: finalAppointment.patientName,
+          arriveByTime: finalAppointment.arriveByTime
         }).catch(err => console.error('[Notification] Reschedule notify failed:', err));
       } else {
         this.notificationService.sendAppointmentBookedNotification({
@@ -216,7 +217,8 @@ export class CreateWalkInAppointmentUseCase {
           date: finalAppointment.date,
           time: finalAppointment.time,
           clinicId: finalAppointment.clinicId,
-          tokenNumber: finalAppointment.tokenNumber
+          tokenNumber: finalAppointment.tokenNumber,
+          arriveByTime: finalAppointment.arriveByTime
         }).catch(err => console.error('[Notification] Booking notify failed:', err));
       }
     }

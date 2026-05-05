@@ -28,12 +28,9 @@ export function NotificationSettings() {
         
         const resolvePrimaryId = async () => {
             try {
-                // If the AppUser already has dbUserId, that's our primary anchor for notifications
-                // In Kloqo V2, primaryUserId usually equals the patient's User UID
                 if (user.dbUserId) {
                     setPrimaryUserId(user.dbUserId);
                 } else {
-                     // Fallback: fetch from backend if needed
                      const profile = await apiRequest('/auth/me');
                      if (profile?.user?.id) setPrimaryUserId(profile.user.id);
                 }
@@ -97,11 +94,12 @@ export function NotificationSettings() {
                 setNotificationsEnabled(false);
                 toast({ title: notifTexts.disabledTitle });
             }
-            mutate(`/users/${primaryUserId}/notifications`);
+            // Clear loading BEFORE background mutation for snappier UI
+            setLoading(false);
+            await mutate(`/users/${primaryUserId}/notifications`);
         } catch (error) {
             console.error('Error toggling notifications:', error);
             toast({ title: notifTexts.errorTitle, variant: 'destructive' });
-        } finally {
             setLoading(false);
         }
     };

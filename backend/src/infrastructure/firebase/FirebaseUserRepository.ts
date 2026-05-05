@@ -61,6 +61,20 @@ export class FirebaseUserRepository implements IUserRepository {
     return user.isDeleted !== true ? user : null;
   }
 
+  async findByPatientId(patientId: string, clinicId: string): Promise<User | null> {
+    let query = this.collection.where('patientId', '==', patientId);
+    
+    if (clinicId !== 'SYSTEM') {
+      query = query.where('clinicId', '==', clinicId);
+    }
+
+    const snapshot = await query.limit(1).get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    const user = { id: doc.id, ...doc.data() } as User;
+    return user.isDeleted !== true ? user : null;
+  }
+
   async countByRole(role: string): Promise<number> {
     const snapshot = await this.collection.where('role', '==', role).where('isDeleted', '==', false).count().get();
     const data = snapshot.data();
@@ -98,6 +112,13 @@ export class FirebaseUserRepository implements IUserRepository {
     } else {
       await docRef.update(payload);
     }
+  }
+
+  async updateLanguage(userId: string, language: 'en' | 'ml'): Promise<void> {
+    await this.collection.doc(userId).update({
+      language,
+      updatedAt: new Date()
+    });
   }
 
   async delete(id: string, clinicId: string, soft: boolean = true, transaction?: ITransaction): Promise<void> {

@@ -52,18 +52,24 @@ app.use(cors({
 
     const isAllowed = allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*');
     
-    // Auto-allow local network IPs in development for iPad testing
+    // Auto-allow local network IPs and tunnel domains for testing
     const isLocalIP = origin.startsWith('http://192.168.') || origin.startsWith('http://10.') || origin.startsWith('http://172.');
+    const isTunnel = origin.includes('.ngrok-free.app') || 
+                     origin.includes('.ngrok-free.dev') || 
+                     origin.includes('.loca.lt') || 
+                     origin.includes('.trycloudflare.com') ||
+                     origin.includes('localhost');
 
-    if (isAllowed || isLocalIP) {
+    if (isAllowed || isLocalIP || isTunnel) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked request from origin: ${origin}`);
-      // Returning null, false tells CORS to block the request without throwing a 500 error
       callback(null, false);
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'ngrok-skip-browser-warning']
 }));
 app.use(cookieParser());
 app.use(express.json());

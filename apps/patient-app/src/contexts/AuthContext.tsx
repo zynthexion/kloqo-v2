@@ -84,8 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('[AuthContext] Login success. UserData:', userData);
     setUser(userData);
 
-    // Register FCM push token with backend — fire-and-forget, non-critical
-    registerFCMToken(token);
+    // Register FCM push token — MUST await to ensure prompt shows on iOS during user interaction
+    try {
+      await registerFCMToken(token, userData.id);
+    } catch (e) {
+      console.warn('[FCM] Registration failed but continuing:', e);
+    }
 
     router.push('/live-token');
   };

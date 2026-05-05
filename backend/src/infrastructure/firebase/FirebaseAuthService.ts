@@ -75,30 +75,32 @@ export class FirebaseAuthService implements IAuthService {
   }
 
   async verifyToken(token: string): Promise<any> {
+    const start = Date.now();
     try {
       const decodedToken = await admin.auth().verifyIdToken(token);
+      const authTime = Date.now() - start;
+      
+      const dbStart = Date.now();
       let user = await this.userRepo.findById(decodedToken.uid, 'SYSTEM') as any;
       
       if (!user && this.patientRepo) {
         user = await this.patientRepo.findById(decodedToken.uid, 'SYSTEM') as any;
       }
+      const dbTime = Date.now() - dbStart;
       
       if (!user) {
         throw new Error('User/Patient not found');
       }
 
       // 1. GOD MODE OVERRIDE
-      // If the token contains impersonation claims, prioritize them over the DB record.
-      // This allows Super Admins (who have clinicId: null in DB) to "act" as a clinic.
       if (decodedToken.isImpersonating && decodedToken.clinicId) {
           user.clinicId = decodedToken.clinicId;
           user.roles = decodedToken.roles || user.roles;
           user.role = decodedToken.role || user.role;
           user.isImpersonating = true;
-          console.log(`[AUTH] God Mode active for ${user.email} -> Acting as ${user.clinicId}`);
       }
 
-      // Auto-link patientId if missing but patient profile exists (syncs after manual registration)
+      // Auto-link patientId if missing but patient profile exists
       if (user && !user.patientId && user.phone) {
           try {
               const patients = await this.patientRepo.findByPhone(user.phone, 'SYSTEM');
@@ -106,16 +108,15 @@ export class FirebaseAuthService implements IAuthService {
                   const primary = patients.find((p: any) => p.isPrimary) || patients[0];
                   user.patientId = primary.id;
                   await this.userRepo.save(user, user.clinicId || 'SYSTEM');
-                  console.log(`[verifyToken] Auto-linked patient profile ${primary.id} to user ${user.id}`);
               }
           } catch (e) {
-              console.warn('[verifyToken] Could not auto-link patient profile:', e);
+              console.warn('[AUTH VERIFY] Link warning:', e);
           }
       }
       
       return user;
     } catch (error: any) {
-      console.error('Firebase token verification failed:', error);
+      console.error(`[AUTH VERIFY] Failed after ${Date.now() - start}ms:`, error.message);
       throw new Error(`Invalid token: ${error.message}`);
     }
   }

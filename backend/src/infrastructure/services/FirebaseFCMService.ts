@@ -12,7 +12,7 @@
  */
 
 import * as admin from 'firebase-admin';
-import { IUserRepository } from '../../domain/repositories';
+import { IUserRepository, IPatientRepository } from '../../domain/repositories';
 
 export interface FCMNotificationPayload {
   title: string;
@@ -29,7 +29,10 @@ export interface IFCMService {
 }
 
 export class FirebaseFCMService implements IFCMService {
-  constructor(private userRepo: IUserRepository) {}
+  constructor(
+    private userRepo: IUserRepository,
+    private patientRepo: IPatientRepository
+  ) {}
 
   /**
    * Send a push notification to a single user.
@@ -37,8 +40,28 @@ export class FirebaseFCMService implements IFCMService {
    */
   async sendToUser(userId: string, clinicId: string, payload: FCMNotificationPayload): Promise<boolean> {
     try {
-      const user = await this.userRepo.findById(userId, clinicId);
-      const tokens: string[] = (user as any)?.fcmTokens || [];
+      // 🛡️ SECURITY: Use 'SYSTEM' bypass because patients are global users 
+      // and their record might not match the specific clinicId sending the alert.
+      let user = await this.userRepo.findById(userId, 'SYSTEM');
+
+      // 🔄 FALLBACK 1: If userId (patientId) is not the Auth UID, lookup by patientId field
+      if (!user) {
+        user = await this.userRepo.findByPatientId(userId, 'SYSTEM');
+      }
+
+      // 🔄 FALLBACK 2: Family/Relative Lookup
+      // If we still have no user, it means userId is likely a Relative's Patient ID.
+      // We lookup the Patient record to find the Primary's communicationPhone.
+      if (!user) {
+        const patient = await this.patientRepo.findById(userId, 'SYSTEM');
+        if (patient && patient.communicationPhone) {
+          // Find the User record associated with the Primary's phone
+          user = await this.userRepo.findByPhone(patient.communicationPhone, 'SYSTEM');
+        }
+      }
+
+      const rawTokens: string[] = (user as any)?.fcmTokens || [];
+      const tokens = Array.from(new Set(rawTokens)).filter(Boolean);
 
       if (tokens.length === 0) {
         console.log(`[FCM] No tokens for user ${userId}. Skipping push.`);
@@ -89,7 +112,7 @@ export class FirebaseFCMService implements IFCMService {
       }
 
       return response.successCount > 0;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`[FCM] sendToUser error for ${userId}:`, err);
       return false;
     }
@@ -121,13 +144,15 @@ export class FirebaseFCMService implements IFCMService {
    * Merges into the user's fcmTokens array — deduplicates in-place.
    */
   async storeToken(userId: string, clinicId: string, fcmToken: string): Promise<void> {
-    const user = await this.userRepo.findById(userId, clinicId);
+    // 🛡️ SECURITY: Use 'SYSTEM' bypass to ensure we find the user regardless of their primary clinicId.
+    // Patients often move between clinics, but their push token is global to their account.
+    const user = await this.userRepo.findById(userId, 'SYSTEM');
     if (!user) throw new Error(`User ${userId} not found`);
 
     const existing: string[] = (user as any).fcmTokens || [];
     if (!existing.includes(fcmToken)) {
       const updated = [...existing, fcmToken].slice(-5); // keep max 5 tokens per user
-      await this.userRepo.update(userId, clinicId, { fcmTokens: updated } as any);
+      await this.userRepo.update(userId, 'SYSTEM', { fcmTokens: updated } as any);
       console.log(`[FCM] Stored token for user ${userId}. Total tokens: ${updated.length}`);
     }
   }
@@ -136,12 +161,12 @@ export class FirebaseFCMService implements IFCMService {
    * Remove a stale or revoked FCM token.
    */
   async removeToken(userId: string, clinicId: string, fcmToken: string): Promise<void> {
-    const user = await this.userRepo.findById(userId, clinicId);
+    const user = await this.userRepo.findById(userId, 'SYSTEM');
     if (!user) return;
 
     const existing: string[] = (user as any).fcmTokens || [];
     const updated = existing.filter((t) => t !== fcmToken);
-    await this.userRepo.update(userId, clinicId, { fcmTokens: updated } as any);
+    await this.userRepo.update(userId, 'SYSTEM', { fcmTokens: updated } as any);
     console.log(`[FCM] Pruned stale token for user ${userId}`);
   }
 }

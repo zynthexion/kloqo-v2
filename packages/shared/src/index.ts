@@ -424,6 +424,11 @@ export interface User {
   updatedAt?: any;
   isDeleted?: boolean; 
   mustChangePassword?: boolean;
+  notificationsEnabled?: boolean;
+  whatsappEnabled?: boolean;
+  notificationPermissionGranted?: boolean;
+  fcmTokens?: string[];
+  language?: 'en' | 'ml';
 }
 
 export interface TrafficData {

@@ -21,20 +21,27 @@ import { useCurrentTime } from './live-token/use-current-time';
 
 import { NotificationService } from '@/services/NotificationService';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function timingDate(appointment: any) {
+    if (!appointment) return new Date();
+    try {
+        return parseClinicDate(appointment.date);
+    } catch { return new Date(); }
+}
+
 /**
  * useLiveTokenState (Orchestrator)
  */
 export function useLiveTokenState(appointmentId: string | undefined): LiveTokenContextValue | { loading: boolean } {
     const { user, loading: userLoading } = useAuth();
     const { t, language } = useLanguage();
-    const { departments } = useMasterDepartments();
     const { currentTime } = useCurrentTime();
 
     // Notification Guard State
     const [notifiedAlmostThere, setNotifiedAlmostThere] = useState(false);
     const [notifiedYourTurn, setNotifiedYourTurn] = useState(false);
     const { appointments: familyAppointments, loading: familyAppointmentsLoading } = useAppointments(user?.patientId);
-    const clinicIdFromUser = (user as any)?.clinicId; // V2 roles might have it
+    const clinicIdFromUser = (user as any)?.clinicId;
     const clinicIds = useMemo(() => {
         if ((user as any)?.clinicIds) return (user as any).clinicIds;
         if (clinicIdFromUser) return [clinicIdFromUser];
@@ -43,7 +50,6 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
 
     const { doctors, loading: doctorsLoading } = useDoctors(clinicIds);
 
-    // ... (logic remains similar)
     const {
         activeAppointmentBase,
         uniquePatientAppointments,
@@ -57,6 +63,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
 
     const activeDoctorId = doctor?.id || activeAppointmentBase?.doctorId || '';
     const activeClinicId = (doctor as any)?.clinicId || activeAppointmentBase?.clinicId || '';
+
+    const { departments } = useMasterDepartments(activeClinicId);
 
     // Data-sync layer
     const {
@@ -140,7 +148,6 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
     const actions = useLiveTokenActions(yourAppointment);
 
     const isLoading = userLoading || familyAppointmentsLoading || doctorsLoading;
-    if (isLoading) return { loading: true } as any;
 
     // Gating
     const isDoctorIn = currentDoctor?.consultationStatus === 'In';
@@ -183,8 +190,11 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
         const token = yourAppointment.tokenNumber || '';
         const isLockedAtDoor = (yourAppointment as any).isNextLocked;
 
+        console.log(`[NotificationGuard] State: ahead=${patientsAhead}, isYourTurn=${isYourTurn}, lockedAtDoor=${isLockedAtDoor}`);
+
         // 1. "Almost There" Ping (Tokens Ahead === 1)
         if (patientsAhead === 1 && !notifiedAlmostThere) {
+            console.log(`[NotificationGuard] Triggering ALMOST_THERE for token: ${token}`);
             NotificationService.notifyAlmostThere(token);
             setNotifiedAlmostThere(true);
             // Subtle pulse
@@ -193,6 +203,7 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
 
         // 2. "Your Turn" / "At Door" Alert
         if ((isYourTurn || isLockedAtDoor) && !notifiedYourTurn) {
+            console.log(`[NotificationGuard] Triggering YOUR_TURN for token: ${token} (LockedAtDoor: ${isLockedAtDoor})`);
             NotificationService.notifyYourTurn(token);
             setNotifiedYourTurn(true);
             setNotifiedAlmostThere(true); // Ensure both are marked
@@ -209,6 +220,8 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
             setNotifiedYourTurn(false);
         }
     }, [queue.patientsAhead, queue.isYourTurn, (yourAppointment as any)?.isNextLocked, yourAppointment?.id, yourAppointment?.tokenNumber, yourAppointment?.status]);
+
+    if (isLoading) return { loading: true } as any;
 
     return {
         yourAppointment,
@@ -271,11 +284,3 @@ export function useLiveTokenState(appointmentId: string | undefined): LiveTokenC
     };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function timingDate(appointment: any) {
-    if (!appointment) return new Date();
-    try {
-        return parseClinicDate(appointment.date);
-    } catch { return new Date(); }
-}

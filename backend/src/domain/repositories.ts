@@ -125,9 +125,11 @@ export interface IUserRepository {
   findById(id: string, clinicId: string): Promise<User | null>;
   findByPhone(phone: string, clinicId: string): Promise<User | null>;
   findByEmail(email: string, clinicId: string): Promise<User | null>;
+  findByPatientId(patientId: string, clinicId: string): Promise<User | null>;
   countByRole(clinicId: string, role: string): Promise<number>;
   save(user: User, clinicId: string, transaction?: ITransaction): Promise<void>;
   update(id: string, clinicId: string, data: Partial<User>, transaction?: ITransaction): Promise<void>;
+  updateLanguage(userId: string, language: 'en' | 'ml'): Promise<void>;
   delete(id: string, clinicId: string, soft?: boolean, transaction?: ITransaction): Promise<void>;
   findAdminsByClinicId(clinicId: string): Promise<User[]>;
   runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T>;

@@ -182,7 +182,7 @@ const activityRepo = new FirebaseActivityRepository();
 
 const authService = new FirebaseAuthService(userRepo, clinicRepo, patientRepo);
 const emailService = new ResendEmailService(process.env.RESEND_API_KEY || '');
-const fcmService = new FirebaseFCMService(userRepo);
+const fcmService = new FirebaseFCMService(userRepo, patientRepo);
 const whatsappService = new WhatsAppNotificationService();
 const pdfService = new PrescriptionPDFService();
 
@@ -496,4 +496,6 @@ export const container = {
   getPublicQueueStatusUseCase,
   processGracePeriodsUseCase,
   endSessionCleanupUseCase,
+  notificationService,
+  userRepo,
 };

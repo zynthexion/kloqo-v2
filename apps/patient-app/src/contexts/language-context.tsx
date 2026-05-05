@@ -32,9 +32,33 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     setIsMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (user?.language && isMounted) {
+      setLanguageState(user.language);
+      localStorage.setItem('app-language', user.language);
+    }
+  }, [user?.id, isMounted]);
+
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem('app-language', lang);
+
+    // Sync to database if user is logged in
+    if (user?.id) {
+      const token = localStorage.getItem('token');
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      if (token) {
+        fetch(`${API_URL}/auth/profile`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ language: lang })
+        }).catch(err => console.error('[Language] Sync failed:', err));
+      }
+    }
   };
 
   const value = {

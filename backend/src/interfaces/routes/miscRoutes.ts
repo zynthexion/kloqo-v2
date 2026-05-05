@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { prescriptionController, appointmentController, doctorController,
         notificationController, analyticsController, webhookController, whatsappWebhookController,
         paymentController, storageController, sseController, fcmService,
-        processGracePeriodsUseCase, endSessionCleanupUseCase, clinicRepo } = container;
+        processGracePeriodsUseCase, endSessionCleanupUseCase, clinicRepo, notificationService } = container;
 
 // ── Breaks ────────────────────────────────────────────────────────────────
 router.post('/breaks/schedule', auth, (req, res) => doctorController.scheduleBreak(req, res));
@@ -124,7 +124,7 @@ router.post('/notifications/cron/reminders/global', cronAuthMiddleware, async (r
     const activeClinics = await clinicRepo.findAll() as any[];
     const results = await Promise.allSettled(
       activeClinics.map(clinic => 
-        notificationController.notificationService.sendScheduledReminders(clinic.id)
+        notificationService.sendScheduledReminders(clinic.id)
       )
     );
     res.json({ processed: activeClinics.length, results });
@@ -186,6 +186,57 @@ router.delete('/users/me/fcm-token', auth, async (req: any, res: Response) => {
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ── User Notification Settings (for legacy frontend support) ──────────────
+router.get('/users/:id/notifications', auth, async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Allow users to fetch their own settings or superadmins to fetch anyone's
+    if (req.user.id !== id && req.user.role !== KLOQO_ROLES.SUPER_ADMIN) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const user = await container.userRepo.findById(id, 'SYSTEM');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    res.json({
+      notificationsEnabled: user.notificationsEnabled ?? false,
+      whatsappEnabled: user.whatsappEnabled ?? false,
+      notificationPermissionGranted: user.notificationPermissionGranted ?? false,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/users/:id/notifications', auth, async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.id !== id && req.user.role !== KLOQO_ROLES.SUPER_ADMIN) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { fcmToken, notificationsEnabled, notificationPermissionGranted } = req.body;
+    
+    // 1. Update user record
+    await container.userRepo.update(id, 'SYSTEM', {
+      notificationsEnabled,
+      notificationPermissionGranted
+    });
+
+    // 2. If token provided, sync to FCM service (manages the fcmTokens array)
+    if (fcmToken) {
+       // Patients might not have a clinicId in their session; use SYSTEM as fallback
+       await fcmService.storeToken(id, req.user.clinicId || 'SYSTEM', fcmToken);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

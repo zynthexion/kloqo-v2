@@ -221,7 +221,8 @@ export class BookAdvancedAppointmentUseCase {
             newTime: appointment.time,
             clinicId: appointment.clinicId,
             communicationPhone: request.communicationPhone,
-            patientName: appointment.patientName
+            patientName: appointment.patientName,
+            arriveByTime: appointment.arriveByTime
           }).catch(err => console.error('[Notification] Reschedule notify failed:', err));
         } else {
           this.notificationService.sendAppointmentBookedNotification({
@@ -232,7 +233,8 @@ export class BookAdvancedAppointmentUseCase {
             date: appointment.date,
             time: appointment.time,
             clinicId: appointment.clinicId,
-            tokenNumber: appointment.tokenNumber
+            tokenNumber: appointment.tokenNumber,
+            arriveByTime: appointment.arriveByTime
           }).catch(err => console.error('[Notification] Booking notify failed:', err));
         }
       }

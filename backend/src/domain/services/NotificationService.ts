@@ -15,6 +15,113 @@ import { getClinicNow } from './DateUtils';
 
 const WINDOW_HOURS = 24;
 
+const PWA_TEMPLATES = {
+  token_called: {
+    en: {
+      title: 'You are being called! (Token Called)',
+      body: 'Token {token} has been called. Please proceed to the doctor\'s room. 🩺',
+    },
+    ml: {
+      title: 'നിങ്ങളെ വിളിക്കുന്നു (Token Called)',
+      body: 'ടോക്കൺ {token} വിളിച്ചിരിക്കുന്നു. ഡോക്ടറുടെ അടുത്തേക്ക് ദയവായി വരൂ. 🩺',
+    }
+  },
+  consultation_started: {
+    en: {
+      title: 'Consultations Started',
+      body: 'Dr. {doctor} has started consultations. Your token: {token}.',
+    },
+    ml: {
+      title: 'കൺസൾട്ടേഷൻ ആരംഭിച്ചു',
+      body: 'Dr. {doctor} കൺസൾട്ടേഷൻ ആരംഭിച്ചു. നിങ്ങളുടെ ടോക്കൺ: {token}.',
+    }
+  },
+  appointment_rescheduled: {
+    en: {
+      title: 'Appointment Rescheduled',
+      body: 'Your appointment with Dr. {doctor} has been moved to {date}. IMPORTANT: You MUST report at the clinic before {arriveByTime}. Late arrivals will lose their slot and be moved to the end of the queue. ⚠️',
+    },
+    ml: {
+      title: 'അപ്പോയ്ൻ്റ്മെന്റ് സമയം മാറ്റി',
+      body: 'Dr. {doctor}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് {date}-ലേക്ക് മാറ്റിയിരിക്കുന്നു. പ്രത്യേകം ശ്രദ്ധിക്കുക: നിങ്ങൾ {arriveByTime}-ന് മുൻപായി ക്ലിനിക്കിൽ റിപ്പോർട്ട് ചെയ്യേണ്ടതാണ്. വൈകി വന്നാൽ നിങ്ങളുടെ ഊഴം നഷ്ടപ്പെടുകയും, ക്യൂവിൽ ഏറ്റവും പുറകിലാകുകയും ചെയ്യും. ⚠️',
+    }
+  },
+  doctor_break: {
+    en: {
+      title: 'Doctor is on a short break',
+      body: 'Dr. {doctor} is on a {duration} minute break. Your turn might be slightly delayed. ⏳',
+    },
+    ml: {
+      title: 'ഡോക്ടർ ചെറിയ ബ്രേക്കിലാണ് (Short Break)',
+      body: 'ഡോക്ടർ {doctor} {duration} മിനിറ്റ് ബ്രേക്കിലാണ്. നിങ്ങളുടെ ഊഴം അല്പം വൈകാൻ സാധ്യതയുണ്ട്. ⏳',
+    }
+  },
+  appointment_reminder: {
+    '2_days': {
+      en: { title: 'Appointment Reminder', body: 'Your appointment with Dr. {doctor} is in 2 days ({date}).' },
+      ml: { title: 'അപ്പോയ്ൻ്റ്മെന്റ് ഓർമ്മപ്പെടുത്തൽ (Reminder)', body: 'Dr. {doctor}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് 2 ദിവസത്തിന് ശേഷമാണ്. ({date})' },
+    },
+    'today_morning': {
+      en: { title: 'Appointment Today', body: 'Your appointment with Dr. {doctor} is today. Reminder: You MUST report before {arriveByTime}. Late arrivals will lose their slot and be moved to the end of the queue. ⚠️' },
+      ml: { title: 'അപ്പോയ്ൻ്റ്മെന്റ് ഇന്നാണ്', body: 'Dr. {doctor}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് ഇന്നാണ്. പ്രത്യേകം ശ്രദ്ധിക്കുക: നിങ്ങൾ {arriveByTime}-ന് മുൻപായി ക്ലിനിക്കിൽ റിപ്പോർട്ട് ചെയ്യേണ്ടതാണ്. വൈകി വന്നാൽ നിങ്ങളുടെ ഊഴം നഷ്ടപ്പെടുകയും, ക്യൂവിൽ ഏറ്റവും പുറകിലാകുകയും ചെയ്യും. ⚠️' },
+    },
+    '3_hours': {
+      en: { title: 'Appointment Soon', body: 'Your appointment with Dr. {doctor} is in 3 hours. 🏥 IMPORTANT: Report before {arriveByTime} or your slot will be moved to the end of the queue. ⚠️' },
+      ml: { title: 'അപ്പോയ്ൻ്റ്മെന്റ് ഉടനെ', body: 'Dr. {doctor}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് 3 മണിക്കൂറിനുള്ളിലാണ്. 🏥 പ്രത്യേകം ശ്രദ്ധിക്കുക: {arriveByTime}-ന് മുൻപായി റിപ്പോർട്ട് ചെയ്തില്ലെങ്കിൽ നിങ്ങളുടെ ഊഴം നഷ്ടപ്പെടുകയും ഏറ്റവും പുറകിലാകുകയും ചെയ്യും. ⚠️' },
+    }
+  },
+  queue_update: {
+    en: {
+      title: 'Your turn is coming!',
+      body: 'Only 3 more people ahead of you. If you are outside, please reach the clinic immediately. 🩺',
+    },
+    ml: {
+      title: 'നിങ്ങളുടെ ഊഴം വരുന്നു!',
+      body: 'മുൻപിൽ ഇനി 3 പേർ കൂടി മാത്രം. നിങ്ങൾ ക്ലിനിക്കിന് പുറത്താണെങ്കിൽ ദയവായി ഉടൻ ഇവിടെ എത്തുക. 🩺',
+    }
+  },
+  appointment_booked: {
+    en: {
+      title: 'Appointment Booked ✅',
+      body: 'Your appointment with Dr. {doctor} has been successfully booked. Token: {token}. IMPORTANT: You MUST report at the clinic before {arriveByTime}. Late arrivals will lose their slot and be moved to the end of the queue. ⚠️',
+    },
+    ml: {
+      title: 'അപ്പോയ്ൻ്റ്മെന്റ് ബുക്ക് ചെയ്തു ✅',
+      body: 'Dr. {doctor}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് വിജയകരമായി ബുക്ക് ചെയ്തിരിക്കുന്നു. ടോക്കൺ: {token}. പ്രത്യേകം ശ്രദ്ധിക്കുക: നിങ്ങൾ {arriveByTime}-ന് മുൻപായി ക്ലിനിക്കിൽ റിപ്പോർട്ട് ചെയ്യേണ്ടതാണ്. വൈകി വന്നാൽ നിങ്ങളുടെ ഊഴം നഷ്ടപ്പെടുകയും, ക്യൂവിൽ ഏറ്റവും പുറകിലാകുകയും ചെയ്യും. ⚠️',
+    }
+  },
+  next_is_you: {
+    en: {
+      title: 'You are next!',
+      body: 'Please wait right outside the doctor\'s room. Your turn is about to begin.',
+    },
+    ml: {
+      title: 'അടുത്തത് നിങ്ങളാണ്!',
+      body: 'ദയവായി ഡോക്ടറുടെ മുറിയുടെ തൊട്ടടുത്ത് നിൽക്കുക. നിങ്ങളുടെ ഊഴം ഉടൻ ആരംഭിക്കും.',
+    }
+  },
+  queue_status_position: {
+    en: {
+      title: 'Queue Update: #{position}',
+      body: 'There are {count} people ahead of you.',
+    },
+    ml: {
+      title: 'ക്യൂ നിലവിവരം: #{position}',
+      body: 'നിങ്ങളുടെ മുൻപിൽ {count} പേർ കൂടിയുണ്ട്.',
+    }
+  },
+  appointment_cancelled: {
+    en: {
+      title: 'Appointment Cancelled',
+      body: 'Your appointment with Dr. {doctor} has been cancelled. Please contact the clinic directly to reschedule.',
+    },
+    ml: {
+      title: 'അപ്പോയ്ൻ്റ്മെന്റ് റദ്ദാക്കി',
+      body: 'Dr. {doctor}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് റദ്ദാക്കിയിരിക്കുന്നു. പുതിയ സമയം ബുക്ക് ചെയ്യാൻ ദയവായി ക്ലിനിക്കുമായി ബന്ധപ്പെടുക.',
+    }
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GA4 Measurement Protocol — Zero-Cost Efficiency Tracking
 // Fires server-side events to GA4 without any Firestore writes.
@@ -146,6 +253,19 @@ export class NotificationService {
       }));
     } catch (error) {
       console.error('[NotificationService] Failed to send admin alert:', error);
+    }
+  }
+
+  private async getUserLanguage(userId: string): Promise<'en' | 'ml'> {
+    try {
+      // Use findByPatientId if userId looks like a patient ID, else findById
+      let user = userId.startsWith('p-') 
+        ? await this.userRepo.findByPatientId(userId, 'SYSTEM')
+        : await this.userRepo.findById(userId, 'SYSTEM');
+        
+      return user?.language || 'ml';
+    } catch {
+      return 'ml';
     }
   }
 
@@ -307,15 +427,21 @@ export class NotificationService {
 
     // 1. PWA Push
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, clinicId, {
-        title: 'നിങ്ങളെ വിളിക്കുന്നു (Token Called)',
-        body: `ടോക്കൺ ${tokenNumber} വിളിച്ചിരിക്കുന്നു. ഡോക്ടറുടെ അടുത്തേക്ക് ദയവായി വരൂ. 🩺`,
-        data: {
-          appointmentId: appointmentId || '',
-          type: 'token_called',
-          clinicId,
-        }
-      }).catch(err => console.error('[FCM] Token called push failed:', err));
+      this.getUserLanguage(patientId).then(lang => {
+        const template = PWA_TEMPLATES.token_called[lang];
+        const title = template.title;
+        const body = template.body.replace('{token}', tokenNumber);
+
+        this.fcmService!.sendToUser(patientId, clinicId, {
+          title,
+          body,
+          data: {
+            appointmentId: appointmentId || '',
+            type: 'token_called',
+            clinicId,
+          }
+        }).catch(err => console.error('[FCM] Token called push failed:', err));
+      });
     }
 
     // 2. WhatsApp
@@ -456,15 +582,21 @@ export class NotificationService {
     }
 
     if (config?.pwaEnabled && appointment.patientId && this.fcmService) {
-      this.fcmService.sendToUser(appointment.patientId, clinicId, {
-        title: `Dr. ${doctorName} has started consultations`,
-        body: `Your token: ${appointment.tokenNumber || ''}. Clinic: ${clinicName}.`,
-        data: {
-          appointmentId: appointment.id,
-          type: 'consultation_started',
-          clinicId,
-        },
-      }).catch(err => console.error('[FCM] Push failed:', err));
+      this.getUserLanguage(appointment.patientId).then(lang => {
+        const template = PWA_TEMPLATES.consultation_started[lang];
+        const title = template.title.replace('{doctor}', doctorName);
+        const body = template.body.replace('{doctor}', doctorName).replace('{token}', appointment.tokenNumber || '');
+
+        this.fcmService!.sendToUser(appointment.patientId, clinicId, {
+          title,
+          body,
+          data: {
+            appointmentId: appointment.id,
+            type: 'consultation_started',
+            clinicId,
+          },
+        }).catch(err => console.error('[FCM] Push failed:', err));
+      });
     }
 
     if (appointment.communicationPhone) {
@@ -508,10 +640,11 @@ export class NotificationService {
     clinicId: string;
     communicationPhone?: string;
     patientName?: string;
+    arriveByTime?: string;
   }): Promise<void> {
     const { 
       patientId, appointmentId, communicationPhone, patientName, 
-      doctorName, clinicName, newDate, newTime, clinicId 
+      doctorName, clinicName, newDate, newTime, clinicId, arriveByTime 
     } = params;
 
     const malayalamDateTime = getMalayalamFriendlyDateTime(newDate, newTime);
@@ -524,11 +657,20 @@ export class NotificationService {
 
     // 2. PWA Push
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, clinicId, {
-        title: 'അപ്പോയ്ൻ്റ്മെന്റ് സമയം മാറ്റി (Rescheduled)',
-        body: `Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് സമയം ${malayalamDateTime}-ലേക്ക് മാറ്റിയിരിക്കുന്നു.`,
-        data: { appointmentId, type: 'appointment_rescheduled', clinicId }
-      }).catch(err => console.error('[FCM] Reschedule push failed:', err));
+      this.getUserLanguage(patientId).then(lang => {
+        const template = PWA_TEMPLATES.appointment_rescheduled[lang];
+        const title = template.title;
+        const body = template.body
+          .replace('{doctor}', doctorName)
+          .replace('{date}', newDate)
+          .replace('{arriveByTime}', arriveByTime || '--:--');
+        
+        this.fcmService!.sendToUser(patientId, clinicId, {
+          title,
+          body,
+          data: { appointmentId, type: 'appointment_rescheduled', clinicId }
+        }).catch(err => console.error('[FCM] Reschedule push failed:', err));
+      });
     }
   }
 
@@ -553,9 +695,14 @@ export class NotificationService {
 
     await Promise.allSettled(activeAppointments.map(async a => {
       if (this.fcmService && a.patientId) {
+        const lang = await this.getUserLanguage(a.patientId);
+        const template = PWA_TEMPLATES.doctor_break[lang];
+        const title = template.title;
+        const body = template.body.replace('{doctor}', doctor.name).replace('{duration}', String(durationMinutes));
+
         this.fcmService.sendToUser(a.patientId, clinicId, {
-          title: 'ഡോക്ടർ ചെറിയ ബ്രേക്കിലാണ് (Short Break)',
-          body: `ഡോക്ടർ ${doctor.name} ${durationMinutes} മിനിറ്റ് ബ്രേക്കിലാണ്. നിങ്ങളുടെ ഊഴം അല്പം വൈകാൻ സാധ്യതയുണ്ട്. ⏳`,
+          title,
+          body,
           data: { appointmentId: a.id, type: 'doctor_break', clinicId }
         });
       }
@@ -629,11 +776,22 @@ export class NotificationService {
     }
 
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, clinicId, {
-        title,
-        body,
-        data: { appointmentId: appointment.id, type: 'appointment_reminder', window }
-      }).catch(err => console.error('[FCM] Reminder push failed:', err));
+      this.getUserLanguage(patientId).then(lang => {
+        const template = PWA_TEMPLATES.appointment_reminder[window][lang];
+        const title = template.title;
+        let body = template.body.replace('{doctor}', appointment.doctorName);
+        if (window === '2_days') {
+          body = body.replace('{date}', appointment.date);
+        } else {
+          body = body.replace('{arriveByTime}', appointment.arriveByTime || '--:--');
+        }
+
+        this.fcmService!.sendToUser(patientId, clinicId, {
+          title,
+          body,
+          data: { appointmentId: appointment.id, type: 'appointment_reminder', window }
+        }).catch(err => console.error('[FCM] Reminder push failed:', err));
+      });
     }
   }
 
@@ -656,11 +814,17 @@ export class NotificationService {
 
     // 2. PWA Push
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, clinicId, {
-        title: 'നിങ്ങളുടെ ഊഴം ഉടനെത്തും!',
-        body: `മുൻപിൽ ഇനി ${peopleAhead} പേർ കൂടി മാത്രം. ദയവായി തയ്യാറായിരിക്കുക. 🩺`,
-        data: { appointmentId, type: 'queue_update', clinicId, peopleAhead: String(peopleAhead) }
-      }).catch(err => console.error('[FCM] Queue position push failed:', err));
+      this.getUserLanguage(patientId).then(lang => {
+        const template = PWA_TEMPLATES.queue_update[lang];
+        const title = template.title;
+        const body = template.body.replace('{count}', String(peopleAhead));
+
+        this.fcmService!.sendToUser(patientId, clinicId, {
+          title,
+          body,
+          data: { appointmentId, type: 'queue_update', clinicId, peopleAhead: String(peopleAhead) }
+        }).catch(err => console.error('[FCM] Queue position push failed:', err));
+      });
     }
   }
 
@@ -673,17 +837,27 @@ export class NotificationService {
     time: string;
     clinicId: string;
     tokenNumber?: string;
+    arriveByTime?: string;
   }): Promise<void> {
-    const { patientId, appointmentId, doctorName, clinicName, date, time, clinicId, tokenNumber } = params;
+    const { patientId, appointmentId, doctorName, clinicName, date, time, clinicId, tokenNumber, arriveByTime } = params;
 
     const malayalamDateTime = getMalayalamFriendlyDateTime(date, time);
 
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, clinicId, {
-        title: 'അപ്പോയ്ൻ്റ്മെന്റ് ബുക്ക് ചെയ്തു ✅',
-        body: `Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് (${malayalamDateTime}) വിജയകരമായി ബുക്ക് ചെയ്തിരിക്കുന്നു. ടോക്കൺ: ${tokenNumber || '--'}`,
-        data: { appointmentId, type: 'appointment_booked', clinicId }
-      }).catch(err => console.error('[FCM] Booking push failed:', err));
+      this.getUserLanguage(patientId).then(lang => {
+        const template = PWA_TEMPLATES.appointment_booked[lang];
+        const title = template.title;
+        const body = template.body
+          .replace('{doctor}', doctorName)
+          .replace('{token}', tokenNumber || '--')
+          .replace('{arriveByTime}', arriveByTime || '--:--');
+
+        this.fcmService!.sendToUser(patientId, clinicId, {
+          title,
+          body,
+          data: { appointmentId, type: 'appointment_booked', clinicId }
+        }).catch(err => console.error('[FCM] Booking push failed:', err));
+      });
     }
   }
 
@@ -712,19 +886,28 @@ export class NotificationService {
       const apt = nextFive[i];
       const position = i + 1;
 
-      // WhatsApp for #1 and #2
-      if (position <= 2 && apt.communicationPhone) {
-        const message = `ഹലോ ${apt.patientName}, ${clinicName}-ൽ നിങ്ങളുടെ മുൻപിൽ ഇനി ${position} പേർ കൂടി മാത്രമേ ഉള്ളൂ. ദയവായി തയ്യാറായിരിക്കുക.`;
+      // 🚨 STRATEGY: Only notify for Position #4 (Reach Clinic) and Position #1 (At Door)
+      // Ignore positions 2, 3, 5 to prevent notification fatigue.
+      if (position !== 1 && position !== 4) continue;
+
+      // WhatsApp for #1
+      if (position === 1 && apt.communicationPhone) {
+        const message = `ഹലോ ${apt.patientName}, അടുത്ത ഊഴം നിങ്ങളുടേതാണ്. ദയവായി ഡോക്ടറുടെ മുറിയുടെ തൊട്ടടുത്ത് നിൽക്കുക. 🏥`;
         await this.sendWhatsAppMessage({ to: apt.communicationPhone, message });
       }
 
-      // PWA Push for all 5 (Zomato-style tracking)
+      // PWA Push for #1 and #4
       if (apt.patientId && this.fcmService) {
+        const lang = await this.getUserLanguage(apt.patientId);
+        const templateKey = position === 1 ? 'next_is_you' : 'queue_update';
+        const template = PWA_TEMPLATES[templateKey][lang];
+        
+        const title = template.title;
+        const body = template.body;
+
         this.fcmService.sendToUser(apt.patientId, clinicId, {
-          title: position === 1 ? 'അടുത്തത് നിങ്ങളാണ്!' : `ക്യൂ നിലവിവരം: #${position}`,
-          body: position === 1 
-            ? 'ദയവായി ഡോക്ടറുടെ മുറിയുടെ അടുത്തേക്ക് വരൂ.' 
-            : `നിങ്ങളുടെ മുൻപിൽ ${position - 1} പേർ കൂടിയുണ്ട്.`,
+          title,
+          body,
           data: { appointmentId: apt.id, type: 'queue_update', position: String(position) }
         }).catch(err => console.error('[FCM] Live tracking push failed:', err));
       }
@@ -759,15 +942,24 @@ export class NotificationService {
  
     // 2. PWA / FCM Push Notification
     if (patientId && this.fcmService) {
-      this.fcmService.sendToUser(patientId, clinicId, {
-        title: 'അപ്പോയ്ൻ്റ്മെന്റ് റദ്ദാക്കി (Cancelled)',
-        body: `Dr. ${doctorName}-നോടൊത്തുള്ള നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് (${date}) റദ്ദാക്കി. കാരണം: ${displayReason}.`,
-        data: {
-          appointmentId,
-          type: 'appointment_cancelled',
-          reason: displayReason
-        }
-      }).catch(err => console.error('[FCM] Cancellation push failed:', err));
+      this.getUserLanguage(patientId).then(lang => {
+        const template = PWA_TEMPLATES.appointment_cancelled[lang];
+        const title = template.title;
+        const body = template.body
+          .replace('{doctor}', doctorName)
+          .replace('{date}', date)
+          .replace('{reason}', displayReason);
+
+        this.fcmService!.sendToUser(patientId, clinicId, {
+          title,
+          body,
+          data: {
+            appointmentId,
+            type: 'appointment_cancelled',
+            reason: displayReason
+          }
+        }).catch(err => console.error('[FCM] Cancellation push failed:', err));
+      });
     }
   }
 
