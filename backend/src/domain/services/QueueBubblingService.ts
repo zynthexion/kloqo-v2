@@ -7,7 +7,7 @@
 // ║      buffered patients from being displaced.                             ║
 // ║    • Vacuum Sweep: promotes walk-in tokens into gaps created by          ║
 // ║      break cancellations or patient skips/cancellations.                 ║
-// ║    • Gap Scan: correctly scanned from minOccupiedIndex to avoid          ║
+// ║    • Gap Scan: correctly scanned from sessionIndex floor to avoid         ║
 // ║      phantom slot-0 collisions.                                          ║
 // ║    • Buffer Guard: walk-in isInBuffer does NOT self-block promotion.     ║
 // ║                                                                          ║
@@ -132,13 +132,15 @@ export class QueueBubblingService {
       );
       const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
       const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
-      // Start from min occupied to avoid phantom gaps below the session's slot range (e.g. 0..999)
-      const minOccupiedIndex = occupiedIndices.size > 0 ? Math.min(...occupiedIndices) : 0;
+      
+      // ABSOLUTE FLOOR: Each session starts at sessionIndex * 1000.
+      // We must start scanning from this absolute floor to find gaps at the beginning of the session.
+      const scanFloor = sessionIndex * 1000;
 
-      if (maxOccupiedIndex <= 0) return;
+      if (maxOccupiedIndex <= scanFloor) return;
 
       const gaps: number[] = [];
-      for (let i = minOccupiedIndex; i <= maxOccupiedIndex; i++) {
+      for (let i = scanFloor; i <= maxOccupiedIndex; i++) {
         if (!occupiedIndices.has(i)) {
           gaps.push(i);
         }
