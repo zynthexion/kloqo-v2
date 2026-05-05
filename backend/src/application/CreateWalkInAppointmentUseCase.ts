@@ -1,3 +1,13 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Create Walk-In Appointment Use Case.              ║
+// ║  It coordinates token generation and slot booking transactions.           ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { Appointment, compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
 import {
   IAppointmentRepository,
@@ -394,6 +404,8 @@ export class CreateWalkInAppointmentUseCase {
       slotIndex: targetSlot.index,
       sessionIndex: activeSessionIndex,
       arriveByTime: displayTime,
+      originalTime: displayTime,
+      originalArriveByTime: displayTime,
       isPriority: dto.isPriority,
       createdAt: now,
       updatedAt: now

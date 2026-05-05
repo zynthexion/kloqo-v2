@@ -140,6 +140,7 @@ import { ImpersonateClinicUseCase } from '../../../application/ImpersonateClinic
 import { GetInvestorMetricsUseCase } from '../../../application/GetInvestorMetricsUseCase';
 import { ProcessGracePeriodsUseCase } from '../../../application/ProcessGracePeriodsUseCase';
 import { EndSessionCleanupUseCase } from '../../../application/EndSessionCleanupUseCase';
+import { PurgeStaleGhostsUseCase } from '../../../application/PurgeStaleGhostsUseCase';
 
 // ── Interfaces: Controllers ────────────────────────────────────────────────
 import { AppointmentController } from '../../../interfaces/AppointmentController';
@@ -266,7 +267,7 @@ const updateDoctorAvailabilityUseCase = new UpdateDoctorAvailabilityUseCase(doct
 const updateDoctorLeaveUseCase = new UpdateDoctorLeaveUseCase(appointmentRepo, doctorRepo, activityRepo);
 const markDoctorLeaveUseCase = new MarkDoctorLeaveUseCase(doctorRepo, appointmentRepo, notificationService, activityRepo);
 const scheduleBreakUseCase = new ScheduleBreakUseCase(appointmentRepo, doctorRepo, clinicRepo, activityRepo, notificationService);
-const cancelBreakUseCase = new CancelBreakUseCase(appointmentRepo, doctorRepo, clinicRepo, activityRepo);
+const cancelBreakUseCase = new CancelBreakUseCase(appointmentRepo, doctorRepo, clinicRepo, activityRepo, queueBubblingService);
 const getDoctorActivitiesUseCase = new GetDoctorActivitiesUseCase(activityRepo);
 const editBreakUseCase = new EditBreakUseCase(appointmentRepo, doctorRepo, clinicRepo, activityRepo, notificationService);
 const updateDoctorAccessUseCase = new UpdateDoctorAccessUseCase(doctorRepo, userRepo);
@@ -318,6 +319,7 @@ const processBatchNotificationsUseCase = new ProcessBatchNotificationsUseCase(ba
 const getInvestorMetricsUseCase = new GetInvestorMetricsUseCase(subscriptionRepo, appointmentRepo);
 const processGracePeriodsUseCase = new ProcessGracePeriodsUseCase(appointmentRepo, clinicRepo, doctorRepo, queueBubblingService);
 const endSessionCleanupUseCase = new EndSessionCleanupUseCase(appointmentRepo, doctorRepo);
+const purgeStaleGhostsUseCase = new PurgeStaleGhostsUseCase(appointmentRepo);
 
 // Settings
 const getGlobalSettingsUseCase = new GetGlobalSettingsUseCase(globalSettingsRepo);
@@ -497,5 +499,6 @@ export const container = {
   processGracePeriodsUseCase,
   endSessionCleanupUseCase,
   notificationService,
+  purgeStaleGhostsUseCase,
   userRepo,
 };

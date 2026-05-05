@@ -696,9 +696,23 @@ export class NotificationService {
     await Promise.allSettled(activeAppointments.map(async a => {
       if (this.fcmService && a.patientId) {
         const lang = await this.getUserLanguage(a.patientId);
-        const template = PWA_TEMPLATES.doctor_break[lang];
-        const title = template.title;
-        const body = template.body.replace('{doctor}', doctor.name).replace('{duration}', String(durationMinutes));
+        
+        let title = '';
+        let body = '';
+
+        if (a.status === 'Confirmed') {
+          // 🏥 On-site / Buffer patients
+          title = lang === 'en' ? 'Doctor is on a short break' : 'ഡോക്ടർ ചെറിയ ബ്രേക്കിലാണ്';
+          body = lang === 'en' 
+            ? 'We will resume shortly. Please wait outside the doctor\'s room. Check queue for updates.'
+            : 'കൺസൾട്ടേഷൻ ഉടൻ പുനരാരംഭിക്കും. ദയവായി ഡോക്ടറുടെ മുറിയുടെ അടുത്ത് തന്നെ നിൽക്കുക.';
+        } else {
+          // 🏠 At-home / Pending patients
+          title = lang === 'en' ? 'Doctor break: Arrival time updated' : 'ഡോക്ടർ ബ്രേക്ക്: സമയം മാറ്റി';
+          body = lang === 'en'
+            ? `Dr. ${doctor.name} is on a ${durationMinutes} min break. Your arrival time is pushed. Check app before leaving.`
+            : `ഡോക്ടർ ${durationMinutes} മിനിറ്റ് ബ്രേക്കിലാണ്. നിങ്ങളുടെ റിപ്പോർട്ടിംഗ് സമയം മാറ്റിയിട്ടുണ്ട്. ആപ്പ് പരിശോധിക്കുക.`;
+        }
 
         this.fcmService.sendToUser(a.patientId, clinicId, {
           title,

@@ -1,3 +1,24 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Gravity Anchor Queue Bubbling Engine ("Vacuum"). ║
+// ║  It encodes complex, validated FIFO fairness logic including:            ║
+// ║    • Dual-Phase Boundary Lock: protects in-consultation and              ║
+// ║      buffered patients from being displaced.                             ║
+// ║    • Vacuum Sweep: promotes walk-in tokens into gaps created by          ║
+// ║      break cancellations or patient skips/cancellations.                 ║
+// ║    • Gap Scan: correctly scanned from minOccupiedIndex to avoid          ║
+// ║      phantom slot-0 collisions.                                          ║
+// ║    • Buffer Guard: walk-in isInBuffer does NOT self-block promotion.     ║
+// ║                                                                          ║
+// ║  ✅ This logic has been verified against test snapshots in:              ║
+// ║     backend/test_results/                                                ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ║     Any change requires re-running the full snapshot regression suite.  ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { addMinutes, format } from 'date-fns';
 import { Appointment, Doctor } from '../../../../packages/shared/src/index';
 import { IAppointmentRepository, IDoctorRepository, ITransaction } from '../../domain/repositories';
@@ -90,7 +111,11 @@ export class QueueBubblingService {
           )
         : -1;
 
-      const bufferedAppts = sessionAppointments.filter(a => (a as any).isInBuffer === true);
+      // Buffer threshold: only count ADVANCE-BOOKED patients in the buffer zone.
+      // Walk-ins with isInBuffer should NOT block themselves from being promoted.
+      const bufferedAppts = sessionAppointments.filter(a =>
+        (a as any).isInBuffer === true && a.bookedVia !== 'Walk-in'
+      );
       const bufferThreshold = bufferedAppts.length > 0
         ? Math.max(...bufferedAppts.map(a => a.slotIndex!))
         : -1;
@@ -107,11 +132,13 @@ export class QueueBubblingService {
       );
       const occupiedIndices = new Set(activeAppts.map(a => a.slotIndex!));
       const maxOccupiedIndex = occupiedIndices.size > 0 ? Math.max(...occupiedIndices) : -1;
+      // Start from min occupied to avoid phantom gaps below the session's slot range (e.g. 0..999)
+      const minOccupiedIndex = occupiedIndices.size > 0 ? Math.min(...occupiedIndices) : 0;
 
       if (maxOccupiedIndex <= 0) return;
 
       const gaps: number[] = [];
-      for (let i = 0; i <= maxOccupiedIndex; i++) {
+      for (let i = minOccupiedIndex; i <= maxOccupiedIndex; i++) {
         if (!occupiedIndices.has(i)) {
           gaps.push(i);
         }

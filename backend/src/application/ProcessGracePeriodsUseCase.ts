@@ -1,3 +1,13 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Process Grace Periods Use Case.                   ║
+// ║  It is part of the fairness chain and uses Queue Bubbling.               ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { format, isAfter } from 'date-fns';
 import { Appointment, Doctor } from '../../../packages/shared/src/index';
 import { IAppointmentRepository, IClinicRepository, IDoctorRepository } from '../domain/repositories';

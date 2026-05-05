@@ -64,6 +64,7 @@ export interface IAppointmentRepository {
    */
   updateBookedCount(clinicId: string, doctorId: string, date: string, sessionIndex: number, delta: 1 | -1, transaction: ITransaction): Promise<void>;
   findByIdGlobal(id: string, transaction?: ITransaction): Promise<Appointment | null>;
+  purgeStaleGhosts(threshold: Date): Promise<number>;
 }
 
 export interface IDoctorRepository {

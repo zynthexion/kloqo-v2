@@ -1,3 +1,13 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Delay Calculator Service.                       ║
+// ║  It provides real-time consultation velocity metrics for bubbling.       ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { differenceInMinutes, isAfter } from 'date-fns';
 import { Appointment, Doctor } from '../../../../packages/shared/src/index';
 import { SlotCalculator } from './SlotCalculator';

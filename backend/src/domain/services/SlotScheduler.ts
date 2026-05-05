@@ -1,3 +1,14 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Gravity Anchor Slot Scheduler.                  ║
+// ║  It orchestrates the reactive display-time calculation for shifted       ║
+// ║  appointments. It MUST remain pure and side-effect free.                 ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { addMinutes, isAfter, isBefore, subMinutes } from 'date-fns';
 
 export type SchedulerSlot = {
@@ -70,7 +81,11 @@ export function computeWalkInSchedule({
       ? (slots[1].time.getTime() - slots[0].time.getTime()) / 60000
       : 15;
 
-    for (let i = lastSlot.index + 1; i <= maxOccupiedIndex + 10; i++) {
+    // Ensure we have at least enough slots for all appointments + walk-ins + a safe buffer
+    const minSlotsNeeded = advanceAppointments.length + walkInCandidates.length + 10;
+    const finalMaxIndex = Math.max(maxOccupiedIndex + 10, lastSlot.index + minSlotsNeeded);
+
+    for (let i = lastSlot.index + 1; i <= finalMaxIndex; i++) {
         orderedSlots.push({
             index: i,
             time: addMinutes(lastSlot.time, (i - lastSlot.index) * avgDuration),
@@ -97,7 +112,15 @@ export function computeWalkInSchedule({
   const occupancy: (Occupant | null)[] = new Array(positionCount).fill(null);
   const overflowAdvance: { id: string; sourcePosition: number }[] = [];
 
-  advanceAppointments.forEach(entry => {
+  const sortedAdvance = [...advanceAppointments].sort((a, b) => {
+    const aIsBreak = a.id.startsWith('__break_') || a.id.startsWith('__blocked_');
+    const bIsBreak = b.id.startsWith('__break_') || b.id.startsWith('__blocked_');
+    if (aIsBreak && !bIsBreak) return -1;
+    if (!aIsBreak && bIsBreak) return 1;
+    return 0;
+  });
+
+  sortedAdvance.forEach(entry => {
     const slotIndex = Number(entry.slotIndex);
     const position = indexToPosition.get(slotIndex);
 
@@ -158,6 +181,7 @@ export function computeWalkInSchedule({
 
   const countAdvanceAfter = (anchorPosition: number): number => {
     let count = 0;
+
     for (let pos = anchorPosition + 1; pos < positionCount; pos += 1) {
       const occupant = occupancy[pos];
       if (occupant?.type === 'A' && occupant.id.startsWith('__shiftable_')) {
@@ -182,7 +206,8 @@ export function computeWalkInSchedule({
 
   const findLastAdvanceAfter = (anchorPosition: number): number => {
     for (let pos = positionCount - 1; pos > anchorPosition; pos -= 1) {
-      if (occupancy[pos]?.type === 'A' && occupancy[pos]?.id.startsWith('__shiftable_')) {
+      const occ = occupancy[pos];
+      if (occ?.type === 'A' && occ.id.startsWith('__shiftable_')) {
         return pos;
       }
     }
@@ -332,12 +357,20 @@ export function computeWalkInSchedule({
 
     let spacingTargetPosition = -1;
     const hasAdvanceAppointments = advanceAfterAnchor > 0;
-    const isSpacingActive = hasAdvanceAppointments && spacing > 0 && advanceAfterAnchor >= spacing;
+    
+    // 🚦 OVERFLOW DETECTION: If we have more patients/breaks than nominal slots, we are in overflow.
+    // In overflow, we disable spacing to prevent aggressive shifting of patients.
+    const nominalSlotCount = slots.length;
+    const totalBlockers = advanceAppointments.length; 
+    const isSessionOverflowed = totalBlockers >= nominalSlotCount;
+
+    const isSpacingActive = hasAdvanceAppointments && spacing > 0 && advanceAfterAnchor >= spacing && !isSessionOverflowed;
 
     if (isSpacingActive) {
       const nthAdvancePosition = findNthAdvanceAfter(anchorPosition, spacing);
       if (nthAdvancePosition !== -1) spacingTargetPosition = nthAdvancePosition + 1;
-    } else if (hasAdvanceAppointments) {
+    } else if (hasAdvanceAppointments && !isSessionOverflowed) {
+      // Clumping only if not overflowed
       const lastAdvancePosition = findLastAdvanceAfter(anchorPosition);
       if (lastAdvancePosition !== -1) spacingTargetPosition = lastAdvancePosition + 1;
     }
@@ -357,7 +390,8 @@ export function computeWalkInSchedule({
       if (targetPosition === -1) targetPosition = findFirstEmptyPosition(effectiveFirstFuturePosition);
       if (targetPosition === -1 && effectiveFirstFuturePosition === 0 && occupancy[0] === null) targetPosition = 0;
 
-      const prepared = makeSpaceForWalkIn(targetPosition === -1 ? effectiveFirstFuturePosition : targetPosition, false);
+      const startAt = targetPosition === -1 ? effectiveFirstFuturePosition : targetPosition;
+      const prepared = makeSpaceForWalkIn(startAt, false);
       if (prepared.position !== -1) {
         prepared.shifts.forEach(shift => applyAssignment(shift.id, shift.position));
         assignedPosition = prepared.position;

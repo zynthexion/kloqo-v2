@@ -1,3 +1,22 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Gravity Anchor Walk-in Placement Engine.         ║
+// ║  It encodes complex, validated scheduling logic including:               ║
+// ║    • Shadow-Gap Guard: prevents walk-ins from grabbing time-slots        ║
+// ║      that appear empty in the DB but are temporally occupied by          ║
+// ║      break-shifted advance patients.                                     ║
+// ║    • Overflow Placement: calculates new walk-in time from the LAST       ║
+// ║      REAL PATIENT's shifted storedTime, not raw session slot times.      ║
+// ║                                                                          ║
+// ║  ✅ This logic has been verified against test snapshots in:              ║
+// ║     backend/test_results/                                                ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ║     Any change requires re-running the full snapshot regression suite.  ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { addMinutes, isAfter } from 'date-fns';
 import type { Appointment } from '../../../../packages/shared/src/index';
 import type { DailySlot } from './SlotCalculator';
@@ -40,11 +59,23 @@ export class WalkInPlacementService {
     const ACTIVE_STATUSES = new Set(['Pending', 'Confirmed', 'Completed', 'InConsultation']);
 
     // Build set of occupied slot indices from active appointments
-    const occupiedSlotIndices = new Set<number>(
-      appointments
-        .filter(a => ACTIVE_STATUSES.has(a.status) && typeof a.slotIndex === 'number')
-        .map(a => a.slotIndex!)
-    );
+    const occupiedSlotIndices = new Set<number>();
+    appointments.forEach(a => {
+      if (ACTIVE_STATUSES.has(a.status)) {
+        if (typeof a.slotIndex === 'number') {
+          occupiedSlotIndices.add(a.slotIndex);
+        } else {
+          // Fallback: Time-based matching for legacy appointments
+          const matchingSlot = sessionSlots.find(s => {
+             const slotTimeStr = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }).format(s.time);
+             return slotTimeStr === a.time;
+          });
+          if (matchingSlot) {
+            occupiedSlotIndices.add(matchingSlot.index);
+          }
+        }
+      }
+    });
 
     // 🔒 CONSULTATION BOUNDARY LOCK
     // When a session is live, no walk-in — including priority (PW-Token) — may be
@@ -89,11 +120,24 @@ export class WalkInPlacementService {
       }
     }
 
+    // 🕐 Build set of occupied TIME strings (from shifted appointments)
+    // This detects shadow-gaps: empty slots whose raw session time collides
+    // with a shifted patient's stored display time after a break is applied.
+    const occupiedTimeStrings = new Set<string>();
+    const istFormatter = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata'
+    });
+    appointments.forEach(a => {
+      if (ACTIVE_STATUSES.has(a.status) && !(a as any).isSystemBlocker && a.time) {
+        occupiedTimeStrings.add(a.time);
+      }
+    });
+
     let targetSlot: DailySlot | null = null;
     if (mode === 'advanced') {
       targetSlot = this._findAdvancedSlot(sessionSlots, occupiedSlotIndices, now, hardFloor);
     } else {
-      targetSlot = this._findClassicSlot(sessionSlots, occupiedSlotIndices, now, walkInSpacing, hardFloor);
+      targetSlot = this._findClassicSlot(sessionSlots, occupiedSlotIndices, occupiedTimeStrings, istFormatter, now, walkInSpacing, hardFloor);
     }
 
     if (targetSlot) return targetSlot;
@@ -105,29 +149,55 @@ export class WalkInPlacementService {
 
     // 🚨 OVERFLOW LOGIC: Force Book into a virtual slot at the end
     console.warn(`[WalkInPlacement] 🚨 Session full. Triggering Overflow Force-Booking.`);
-    
-    // Find the absolute last occupied slot index in this session
+
     const lastSessionSlot = sessionSlots[sessionSlots.length - 1];
-    const maxOccupiedIndex = appointments.reduce((max, a) => 
-      (a.slotIndex !== undefined && a.slotIndex > max) ? a.slotIndex : max, 
-      lastSessionSlot?.index || 0
+
+    // Find the last REAL appointment (not system blocker) by slotIndex
+    const realAppointments = appointments.filter(a =>
+      ACTIVE_STATUSES.has(a.status) && !(a as any).isSystemBlocker
+    );
+    const lastRealAppt = realAppointments.reduce<typeof appointments[0] | null>((max, a) =>
+      a.slotIndex !== undefined && (max === null || a.slotIndex > max.slotIndex!) ? a : max,
+      null
     );
 
+    const maxOccupiedIndex = lastRealAppt?.slotIndex ?? lastSessionSlot?.index ?? 0;
     const newIndex = maxOccupiedIndex + 1;
-    const offsetFromLastDefined = newIndex - (lastSessionSlot?.index || 0);
-    
-    // Ensure the force-booked time is at least 'now' plus one consulting interval
-    const baseTime = lastSessionSlot?.time && isAfter(lastSessionSlot.time, now) 
-      ? lastSessionSlot.time 
-      : now;
 
-    const newTime = addMinutes(baseTime, offsetFromLastDefined * avgConsultingTime);
+    // 🕐 Use last real appointment's STORED time as base (reflects break shifts)
+    // Fallback to raw session slot time if unavailable
+    let baseTime: Date;
+    if (lastRealAppt?.time && sessionSlots.length > 0) {
+      const parsed = this._parseTimeToDate(lastRealAppt.time, sessionSlots[0].time);
+      baseTime = isAfter(parsed, now) ? parsed : now;
+    } else {
+      baseTime = lastSessionSlot?.time && isAfter(lastSessionSlot.time, now)
+        ? lastSessionSlot.time
+        : now;
+    }
+
+    const newTime = addMinutes(baseTime, avgConsultingTime);
 
     return {
       index: newIndex,
       time: newTime,
       sessionIndex: lastSessionSlot?.sessionIndex ?? 0
     };
+  }
+
+  /**
+   * Parses an "HH:mm" IST time string into a UTC Date using a reference Date
+   * (from the session slot) to determine the calendar date in IST.
+   */
+  private static _parseTimeToDate(timeStr: string, referenceUtcDate: Date): Date {
+    const [h, m] = timeStr.split(':').map(Number);
+    const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    // Get the IST calendar date from the reference UTC date
+    const istRef = new Date(referenceUtcDate.getTime() + IST_OFFSET_MS);
+    // Build a UTC timestamp representing this IST time on the IST date
+    const istAsUtc = Date.UTC(istRef.getUTCFullYear(), istRef.getUTCMonth(), istRef.getUTCDate(), h, m, 0, 0);
+    // Subtract IST offset to get real UTC
+    return new Date(istAsUtc - IST_OFFSET_MS);
   }
 
   // ── Advanced Mode: Smart Bubble → Buffer Slot ─────────────────────────────
@@ -174,6 +244,8 @@ export class WalkInPlacementService {
   private static _findClassicSlot(
     sessionSlots: DailySlot[],
     occupiedSlotIndices: Set<number>,
+    occupiedTimeStrings: Set<string>,
+    istFormatter: Intl.DateTimeFormat,
     now: Date,
     walkInSpacing: number,
     hardFloor: number
@@ -182,14 +254,13 @@ export class WalkInPlacementService {
      * PURE GREED STRATEGY:
      * Scan every slot chronologically after 'now' and above hardFloor.
      * Return the FIRST slot that is EITHER:
-     *  1. Completely vacant (unbooked gap).
+     *  1. Completely vacant (unbooked gap) AND not time-shadowed by a shifted patient.
      *  2. OR a designated Zipper position (rhythmic fallback).
-     * 
+     *
      * FIFO integrity is preserved emergently by QueueBubblingService (The Vacuum).
      */
     const zipperPositions = new Set<number>();
     if (walkInSpacing > 0) {
-      // spacing=4 means every 5th slot is a zipper (indices 4, 9, 14...)
       const modulus = walkInSpacing + 1;
       for (let i = walkInSpacing; i < sessionSlots.length + 100; i += modulus) {
         zipperPositions.add(i);
@@ -197,19 +268,18 @@ export class WalkInPlacementService {
     }
 
     const targetSlot = sessionSlots.find(slot => {
-      // Must be in the future
       if (!isAfter(slot.time, now)) return false;
-
-      // 🔒 Must be above the consultation/door boundary
       if (slot.index <= hardFloor) return false;
-
-      // Must not be occupied by an active appointment
       if (occupiedSlotIndices.has(slot.index)) return false;
 
-      // Rule A: It's a reserved Zipper spot
-      if (zipperPositions.has(slot.index)) return true;
+      // 🚫 SHADOW-GAP GUARD: Reject slots whose raw session time is already
+      // occupied by a shifted appointment's stored display time.
+      // e.g. after a 1hr break, slot 1009 (raw 9:30 PM) conflicts with
+      // Anju who shifted to 9:30 PM — even though slot 1009 has no DB doc.
+      const rawSlotTimeStr = istFormatter.format(slot.time);
+      if (occupiedTimeStrings.has(rawSlotTimeStr)) return false;
 
-      // Rule B: It's an unbooked empty gap (Greedy Front-Fill)
+      if (zipperPositions.has(slot.index)) return true;
       return true;
     });
 

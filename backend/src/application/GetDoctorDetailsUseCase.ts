@@ -1,5 +1,12 @@
 import { IDoctorRepository, IClinicRepository, IDepartmentRepository, IAppointmentRepository, IUserRepository } from '../domain/repositories';
 import { KLOQO_ROLES } from '@kloqo/shared';
+import { 
+    getClinicNow, 
+    getClinicDateString, 
+    getClinicISODateString, 
+    parseClinicDate, 
+    parseClinicTime 
+} from '../domain/services/DateUtils';
 
 // Reusing firebase-admin since we have complex querying for appointments
 export class GetDoctorDetailsUseCase {
@@ -101,6 +108,39 @@ export class GetDoctorDetailsUseCase {
       }
     } catch (e) {
       console.error('Error calculating average consultation time', e);
+    }
+
+    // 3. FILTER BREAK PERIODS (Rule: Don't send past breaks to keep UI clean)
+    if (doctor.breakPeriods) {
+        const now = getClinicNow();
+        const todayStrLegacy = getClinicDateString(now);
+        const todayStrIso = getClinicISODateString(now);
+        
+        const filteredBreaks: Record<string, any[]> = {};
+        
+        Object.entries(doctor.breakPeriods).forEach(([dateKey, breaks]) => {
+            const breakDate = parseClinicDate(dateKey);
+            
+            // If the date is before today, definitely filter out
+            if (breakDate.getTime() < parseClinicDate(todayStrIso).getTime()) {
+                return;
+            }
+            
+            // If it's today, we might want to filter out breaks that are already finished
+            if (dateKey === todayStrLegacy || dateKey === todayStrIso) {
+                const activeBreaks = (breaks as any[]).filter(b => {
+                    const bEnd = parseClinicTime(b.endTimeFormatted || b.endTime, breakDate);
+                    // Keep if break ends after 'now' (with 30m grace period for visibility)
+                    return bEnd.getTime() >= (now.getTime() - 30 * 60 * 1000);
+                });
+                if (activeBreaks.length > 0) filteredBreaks[dateKey] = activeBreaks;
+            } else {
+                // Future dates: Keep everything
+                filteredBreaks[dateKey] = breaks as any[];
+            }
+        });
+        
+        doctor.breakPeriods = filteredBreaks;
     }
 
     return {

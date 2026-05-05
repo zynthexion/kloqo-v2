@@ -1,3 +1,13 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Book Advanced Appointment Use Case.              ║
+// ║  It manages the slot-lock and token strategy coordination.               ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { 
   IAppointmentRepository, 
   IDoctorRepository, 
@@ -183,6 +193,8 @@ export class BookAdvancedAppointmentUseCase {
           date: firestoreDateStr,
           time: getClinicTimeString(appointmentTime),
           arriveByTime: getClinicTimeString(arriveByTime),
+          originalTime: getClinicTimeString(appointmentTime),
+          originalArriveByTime: getClinicTimeString(arriveByTime),
           slotIndex,
           sessionIndex,
           status: 'Pending',

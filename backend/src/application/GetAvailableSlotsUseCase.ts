@@ -6,6 +6,9 @@ import {
   parseClinicDate, 
   getClinicDateString,
   getClinicISOString,
+  getClinicISODateString,
+  getClinicTimeString,
+  parseClinicTime,
   addDays,
   isSameDay, 
   isAfter,
@@ -110,6 +113,18 @@ export class GetAvailableSlotsUseCase {
       firestoreDateStr
     );
 
+    // ── 3.5 Generate raw slots via SlotCalculator ──────────────────────────────
+    const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);
+    if (allSlots.length === 0) {
+      return {
+        slots: [],
+        isSessionActive: false,
+        activeSessionIndex: null,
+        distributionType: (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced',
+        consultationCount: 0
+      };
+    }
+
     // ── 4. Build booked slot index map ────────────────────────────────────────
     //    Any appointment in an active status occupies a slot.
     const bookedMap = new Map<number, string>();
@@ -122,20 +137,69 @@ export class GetAvailableSlotsUseCase {
     });
 
     // ── 5. Build break slot index set ─────────────────────────────────────────
-    //    Breaks are modelled as appointments with bookedVia === 'BreakBlock'
-    //    (or cancelledByBreak === true on the blocked patient appointment).
-    //    We expose the raw reason label only to staff consumers.
+    //    Source of Truth 1: doctor.breakPeriods (The "Policy")
+    //    Source of Truth 2: appointments (The "Execution" - Ghosts & Blocks)
     const breakSlotIndices = new Set<number>();
+    
+    // Process breakPeriods directly from doctor document
+    const isoDateStr = getClinicISODateString(requestedDate);
+    const dayBreaks = [
+        ...(doctor.breakPeriods?.[firestoreDateStr] || []),
+        ...(doctor.breakPeriods?.[isoDateStr] || [])
+    ];
+
+    // Deduplicate breaks by ID
+    const breakMap = new Map<string, any>();
+    dayBreaks.forEach(b => breakMap.set(b.id, b));
+    const uniqueDayBreaks = Array.from(breakMap.values());
+
+    console.log(`[DEBUG] Found ${uniqueDayBreaks.length} unique breaks for ${firestoreDateStr} / ${isoDateStr}`);
+
+    if (uniqueDayBreaks.length > 0) {
+      uniqueDayBreaks.forEach((b: any) => {
+        const bStart = parseClinicTime(b.startTimeFormatted || b.startTime, requestedDate);
+        const bEnd = parseClinicTime(b.endTimeFormatted || b.endTime, requestedDate);
+
+        console.log(`[DEBUG] Processing Break: ${b.id} | Range: ${getClinicTimeString(bStart)} - ${getClinicTimeString(bEnd)} | Session: ${b.sessionIndex}`);
+
+        allSlots.forEach((slot) => {
+          const slotTime = slot.time;
+          // IMPORTANT: Check if the slot falls within the break window
+          if (slot.sessionIndex === b.sessionIndex && slotTime >= bStart && slotTime < bEnd) {
+            console.log(`[DEBUG] -> BLOCKED Slot ${slot.index} at ${getClinicTimeString(slot.time)} (Session ${slot.sessionIndex})`);
+            breakSlotIndices.add(slot.index);
+          }
+        });
+      });
+    }
+
+    // Also process appointments (Ghosts and Blocked entries)
     appointments.forEach(a => {
-      if (
-        a.bookedVia === 'BreakBlock' 
-        || (a as any).cancelledByBreak === true
-        || a.status === 'Blocked'
-      ) {
+      const isBreakBlock = a.bookedVia === 'BreakBlock' || (a as any).cancelledByBreak === true || a.status === 'Blocked' || a.isSystemBlocker;
+      
+      if (isBreakBlock) {
+        console.log(`[DEBUG] Found Ghost/Blocker: ${a.id} | Time: ${a.time} | SessionIndex: ${a.sessionIndex} | SlotIndex: ${a.slotIndex}`);
         if (typeof a.slotIndex === 'number') {
           breakSlotIndices.add(a.slotIndex);
-          // Remove from booked map — breaks are handled separately for label clarity
-          bookedMap.delete(a.slotIndex);
+          console.log(`[DEBUG] -> BLOCKED Slot via Index: ${a.slotIndex}`);
+        } else {
+          // Fallback: Time-based matching if slotIndex is missing
+          const matchingSlot = allSlots.find(s => getClinicTimeString(s.time) === a.time && s.sessionIndex === a.sessionIndex);
+          if (matchingSlot) {
+            breakSlotIndices.add(matchingSlot.index);
+            console.log(`[DEBUG] -> BLOCKED Slot via Fallback Time Match: ${matchingSlot.index} (${a.time})`);
+          } else {
+            console.warn(`[DEBUG] -> FAILED to block slot for ghost ${a.id} (No slotIndex and no time match found)`);
+          }
+        }
+      } else if (['Pending', 'Confirmed', 'Completed', 'Attended', 'InConsultation'].includes(a.status)) {
+        // Double check bookedMap for items missing slotIndex
+        if (typeof a.slotIndex !== 'number') {
+          const matchingSlot = allSlots.find(s => getClinicTimeString(s.time) === a.time && s.sessionIndex === a.sessionIndex);
+          if (matchingSlot) {
+            bookedMap.set(matchingSlot.index, a.tokenNumber ?? 'BOOKED');
+             console.log(`[DEBUG] -> BOOKED Slot via Fallback Time Match: ${matchingSlot.index} (${a.time})`);
+          }
         }
       }
     });
@@ -154,18 +218,6 @@ export class GetAvailableSlotsUseCase {
       }
     }
 
-    // ── 6. Generate raw slots via SlotCalculator ──────────────────────────────
-    const allSlots = SlotCalculator.generateSlots(doctor, requestedDate);
-    if (allSlots.length === 0) {
-      return {
-        slots: [],
-        isSessionActive: false,
-        activeSessionIndex: null,
-        distributionType: (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced',
-        consultationCount: 0
-      };
-    }
-
     // ── 7. Decorate via BookingSessionEngine — single source of truth ─────────
     const reserveRatio = doctor.walkInReserveRatio ?? clinic.walkInReserveRatio ?? 0.15;
     const distributionType = (doctor.tokenDistribution || clinic.tokenDistribution || 'advanced') as 'classic' | 'advanced';
@@ -180,6 +232,11 @@ export class GetAvailableSlotsUseCase {
       distributionType,
       doctor.walkInTokenAllotment || 5
     );
+
+    console.log(`[DEBUG] Final Decorated Slots (Total: ${decoratedSlots.length}):`);
+    decoratedSlots.forEach(s => {
+      console.log(`[DEBUG] Slot ${s.slotIndex} | Time: ${s.time} | Status: ${s.status} | Available: ${s.isAvailable}`);
+    });
 
     // ── 7.5. Calculate Active Session Flag (for Today only) ──────────────────
     let isSessionActive = false;
@@ -215,6 +272,7 @@ export class GetAvailableSlotsUseCase {
          if (slot.status === 'available' && slot.isAvailable && !sessionMap.has(slot.sessionIndex)) {
              filteredSlots.push(slot);
              sessionMap.add(slot.sessionIndex);
+             console.log(`[DEBUG] Staff View: Next Available for Session ${slot.sessionIndex} is ${getClinicTimeString(new Date(slot.time))}`);
          }
       }
       return {

@@ -282,7 +282,10 @@ export class DoctorController {
   async scheduleBreak(req: any, res: Response) {
     try {
       const user = req.user;
-      const { doctorId, clinicId, date, startTime, endTime, sessionIndex, reason, isDryRun = false } = req.body;
+      const { 
+        doctorId, clinicId, date, startTime, endTime, 
+        sessionIndex, reason, isDryRun = false, replaceBreakId 
+      } = req.body;
 
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
       this.validateClinicAccess(req, clinicId);
@@ -296,6 +299,7 @@ export class DoctorController {
         sessionIndex,
         reason,
         isDryRun,
+        replaceBreakId,
         performedBy: {
           id:   user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
@@ -349,25 +353,34 @@ export class DoctorController {
   async editBreak(req: any, res: Response) {
     try {
       const user = req.user;
-      const { doctorId, clinicId, date, breakId, startTime, endTime } = req.body;
+      const { doctorId, clinicId, date, breakId, startTime, endTime, sessionIndex, reason } = req.body;
 
       if (!clinicId) return res.status(400).json({ error: 'clinicId is required' });
       this.validateClinicAccess(req, clinicId);
 
-      await this.editBreakUseCase.execute({ 
+      const result = await this.scheduleBreakUseCase.execute({ 
         doctorId, 
         clinicId, 
         date, 
-        breakId, 
         startTime, 
         endTime, 
+        sessionIndex,
+        reason,
+        replaceBreakId: breakId, // Unified edit logic
         performedBy: {
           id: user.id || user.uid || 'unknown',
           name: user.name || user.email || 'Staff',
           role: (user.roles && user.roles[0]) || user.role || 'staff' as KloqoRole
         }
       });
-      res.status(204).send();
+      
+      res.status(200).json({
+        committed:     true,
+        breakPeriod:   result.breakPeriod,
+        shiftedCount:  result.shiftedCount,
+        ghostsCreated: result.ghostsCreated,
+        delayMinutes:  result.delayMinutes
+      });
     } catch (error: any) {
       if (error.status === 403) return res.status(403).json({ error: error.message });
       res.status(400).json({ error: error.message });

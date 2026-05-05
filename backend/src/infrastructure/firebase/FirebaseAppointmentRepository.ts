@@ -593,4 +593,26 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
   }
+
+  async purgeStaleGhosts(threshold: Date): Promise<number> {
+    console.log(`[REPOSITORY] Purging ghosts created before ${threshold.toISOString()}`);
+    
+    // 1. Query for ghosts created before threshold
+    const snapshot = await this.collection
+      .where('bookedVia', '==', 'BreakBlock')
+      .where('createdAt', '<', threshold)
+      .limit(500) // Safe batch limit
+      .get();
+
+    if (snapshot.empty) return 0;
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+    console.log(`[REPOSITORY] Successfully purged ${snapshot.size} ghosts.`);
+    return snapshot.size;
+  }
 }

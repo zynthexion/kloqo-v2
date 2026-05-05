@@ -1,3 +1,13 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Gravity Anchor Booking Session Engine.           ║
+// ║  It handles session detection and gap-fallback logic for walk-ins.       ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { addMinutes, differenceInMinutes, isAfter, isBefore, subMinutes } from 'date-fns';
 import { getClinicISOString } from './DateUtils';
 import type { Doctor, Appointment } from '../../../../packages/shared/src/index';
@@ -107,10 +117,13 @@ export class BookingSessionEngine {
     });
 
     const sessionRanges = Array.from(sessionMap.values()).sort((a, b) => a.idx - b.idx);
+    console.log(`[DEBUG] findActiveSession: Now=${now.toISOString()} | Sessions Count=${sessionRanges.length} | Mode=${tokenDistribution}`);
 
     for (let i = 0; i < sessionRanges.length; i++) {
       const session     = sessionRanges[i];
       const nextSession = sessionRanges[i + 1];
+      
+      console.log(`[DEBUG] Checking Session ${session.idx}: Start=${session.start.toISOString()} | End=${session.end.toISOString()}`);
 
       if (isClassic) {
         // ── Rule: For Session 0, it is always open while `now < session.end` ──
@@ -175,11 +188,31 @@ export class BookingSessionEngine {
       } else {
         // ── Advanced distribution: strict 30-minute pre-start window ─────────
         const windowStart = subMinutes(session.start, 30);
-        if (!isAfter(now, session.end) && !isBefore(now, windowStart)) {
-          return session.idx;
+        const isPastEnd = isAfter(now, session.end);
+        const isBeforeWindow = isBefore(now, windowStart);
+
+        console.log(`[DEBUG] Session ${session.idx} (Advanced): WindowStart=${windowStart.toISOString()} | isPastEnd=${isPastEnd} | isBeforeWindow=${isBeforeWindow}`);
+
+        if (!isPastEnd && !isBeforeWindow) {
+           console.log(`[DEBUG] -> Session ${session.idx} is ACTIVE`);
+           return session.idx;
         }
       }
     }
+
+    // ── 5. FINAL FALLBACK: Gap-Aware Selection ──────────────────────────────
+    // If we are between sessions (e.g., Session 0 finished but Session 1 hasn't 
+    // reached its 30m pre-start window), we should return the next session 
+    // so the patient can still book/preview.
+    for (let i = 0; i < sessionRanges.length; i++) {
+        const session = sessionRanges[i];
+        if (isBefore(now, session.start)) {
+            console.log(`[DEBUG] findActiveSession -> GAP FALLBACK: Selecting upcoming Session ${session.idx}`);
+            return session.idx;
+        }
+    }
+
+    console.log(`[DEBUG] findActiveSession -> No active or upcoming session found`);
 
     return null; // No active session found
   }

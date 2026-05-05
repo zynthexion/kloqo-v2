@@ -1,3 +1,17 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Gravity Anchor Slot Calculator.                  ║
+// ║  It is the FOUNDATION of the 1000-based indexing system.                 ║
+// ║  Modifying this file without absolute precision will cause:              ║
+// ║    • Total session index mismatch.                                      ║
+// ║    • Database lock collisions across all clinics.                        ║
+// ║    • Corrupted appointment-to-time mapping.                              ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
 import { addMinutes, isAfter, isBefore, subMinutes, format } from 'date-fns';
 import { Appointment, Doctor, Clinic } from '../../../../packages/shared/src/index';
 import { parseClinicTime, getClinicISODateString, getClinicDateString } from './DateUtils';

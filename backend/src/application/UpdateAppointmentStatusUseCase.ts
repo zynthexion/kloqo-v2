@@ -1,3 +1,12 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║                    ⚠️  AI GUARD — DO NOT EDIT                           ║
+// ║                                                                          ║
+// ║  This file contains the Update Appointment Status Use Case.              ║
+// ║  It triggers critical queue bubbling on skip/cancel events.               ║
+// ║                                                                          ║
+// ║  🚫 AI models MUST NOT modify this file without explicit written         ║
+// ║     permission from the project owner (Jino Devasia).                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
 import { IAppointmentRepository, IDoctorRepository, IClinicRepository, IConsultationCounterRepository } from '../domain/repositories';
 import { TokenStrategyFactory } from '../domain/services/token/TokenStrategyFactory';
 import { Appointment, compareAppointments, compareAppointmentsClassic } from '../../../packages/shared/src/index';
@@ -20,9 +29,9 @@ export class UpdateAppointmentStatusUseCase {
     private tokenStrategyFactory: TokenStrategyFactory,
     private sseService: SSEService,
     private bubblingService?: QueueBubblingService
-  ) {}
-  async execute(params: { 
-    appointmentId: string; 
+  ) { }
+  async execute(params: {
+    appointmentId: string;
     status: Appointment['status'];
     clinicId: string;
     nurseId?: string;
@@ -102,7 +111,7 @@ export class UpdateAppointmentStatusUseCase {
     } else if (status === 'Cancelled') {
       (appointment as any).cancelledAt = new Date();
     }
-    
+
     // Clear buffer and lock flags if moving out of active states
     if (['Skipped', 'No-show', 'Cancelled', 'Pending', 'InConsultation'].includes(status)) {
       appointment.isInBuffer = false;
@@ -124,19 +133,19 @@ export class UpdateAppointmentStatusUseCase {
           appointment.date,
           txn
         );
-        
+
         // 🧼 MANDATORY DOWNGRADE FOR LATE REJOIN
         // Any patient rejoining from Skipped/No-show loses their original slot 
         // and is treated as a Walk-in at the end of the queue.
         appointment.bookedVia = 'Walk-in';
         const doctor = await this.doctorRepo.findById(appointment.doctorId, appointment.clinicId, txn);
         const effectiveDistribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
-        
+
         if (doctor) {
           const allSlots = require('../domain/services/SlotCalculator').SlotCalculator.generateSlots(doctor, parseClinicDate(appointment.date));
           const sessionSlots = allSlots.filter((s: any) => s.sessionIndex === appointment.sessionIndex);
           const sessionAppts = allAppointments.filter(a => a.sessionIndex === appointment.sessionIndex);
-          
+
           const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
             sessionSlots,
             sessionAppts,
@@ -147,7 +156,7 @@ export class UpdateAppointmentStatusUseCase {
             doctor.averageConsultingTime,
             true // allowOverflow: Always allow rejoining patients to find a spot
           );
-          
+
           if (newSlot) {
             const lastDefinedSlot = sessionSlots[sessionSlots.length - 1];
             if (newSlot.index > (lastDefinedSlot?.index || 0)) {
@@ -174,7 +183,7 @@ export class UpdateAppointmentStatusUseCase {
           );
           appointment.tokenNumber = tokenNumber;
           appointment.numericToken = numericToken;
-          
+
           // Ensure classic token is also updated if in classic mode
           if (effectiveDistribution === 'classic') {
             appointment.classicTokenNumber = tokenNumber;
@@ -192,7 +201,7 @@ export class UpdateAppointmentStatusUseCase {
           appointment.date,
           txn
         );
-        
+
         // 1. Clear any existing locks for this session to prevent multiple locks
         const lockedAppts = allAppointments.filter(a => a.isNextLocked && a.sessionIndex === appointment.sessionIndex);
         for (const locked of lockedAppts) {
@@ -206,29 +215,29 @@ export class UpdateAppointmentStatusUseCase {
         const distribution = doctor?.tokenDistribution || clinic?.tokenDistribution || 'advanced';
 
         const confirmedAppts = allAppointments
-          .filter(a => 
-            a.id !== appointment.id && 
-            a.status === 'Confirmed' && 
+          .filter(a =>
+            a.id !== appointment.id &&
+            a.status === 'Confirmed' &&
             a.sessionIndex === appointment.sessionIndex
           )
           .sort(distribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
-        
+
         console.log(`[NextLock] Mode: ${distribution}. Next: ${confirmedAppts[0]?.tokenNumber}(Slot:${confirmedAppts[0]?.slotIndex})`);
 
         if (confirmedAppts.length > 0) {
           const nextPatient = confirmedAppts[0];
-          await this.appointmentRepo.update(nextPatient.id, appointment.clinicId, { 
-            isNextLocked: true, 
-            lockedAt: new Date() 
+          await this.appointmentRepo.update(nextPatient.id, appointment.clinicId, {
+            isNextLocked: true,
+            lockedAt: new Date()
           }, txn);
-          
+
           // 📢 Emit SSE for the newly locked patient so the UI updates immediately
           this.sseService.emit('appointment_status_changed', appointment.clinicId, {
             appointmentId: nextPatient.id,
             newStatus: nextPatient.status,
             isNextLocked: true
           });
-          
+
           console.log(`[QueueLock] 🔒 Locked ${nextPatient.tokenNumber} as NEXT patient.`);
         }
       }
@@ -264,7 +273,7 @@ export class UpdateAppointmentStatusUseCase {
     });
 
     // ── POST-TRANSACTION SIDE EFFECTS ──
-    
+
     this.sseService.emit('appointment_status_changed', appointment.clinicId, {
       appointmentId: appointment.id,
       patientId: appointment.patientId,
@@ -309,7 +318,7 @@ export class UpdateAppointmentStatusUseCase {
         doctorName: appointment.doctorName,
         clinicName,
         oldDate: appointment.date,
-        oldTime: '', 
+        oldTime: '',
         newDate: appointment.date,
         newTime: appointment.time,
         clinicId: appointment.clinicId,
@@ -332,7 +341,7 @@ export class UpdateAppointmentStatusUseCase {
         doctorId: appointment.doctorId,
         clinicId: appointment.clinicId,
         date: appointment.date,
-        }).catch(err => console.warn('[UpdateStatus] QueueBubbling failed:', err.message));
+      }).catch(err => console.warn('[UpdateStatus] QueueBubbling failed:', err.message));
     }
 
     return appointment;
@@ -342,7 +351,7 @@ export class UpdateAppointmentStatusUseCase {
     const now = getClinicNow();
     const today = getClinicISODateString(now);
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
-    
+
     const doctorAppointments = appointments.filter(
       apt => apt.doctorId === doctorId && apt.status === 'Confirmed'
     );
@@ -362,7 +371,7 @@ export class UpdateAppointmentStatusUseCase {
     for (const appt of doctorAppointments) {
       const shouldBeBuffered = top2Ids.includes(appt.id);
       const isFirst = sorted.length > 0 && sorted[0].id === appt.id;
-      
+
       // Lock logic: Always lock the first confirmed person so they are "At Door"
       const shouldBeLocked = isFirst;
 
@@ -399,7 +408,7 @@ export class UpdateAppointmentStatusUseCase {
           ...updates,
           updatedAt: now
         });
-        
+
         // 📢 REAL-TIME UI SYNC: Notify all apps of buffer/lock changes
         this.sseService.emit('appointment_status_changed', clinicId, {
           appointmentId: appt.id,

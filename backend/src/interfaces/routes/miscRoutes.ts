@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { prescriptionController, appointmentController, doctorController,
         notificationController, analyticsController, webhookController, whatsappWebhookController,
         paymentController, storageController, sseController, fcmService,
-        processGracePeriodsUseCase, endSessionCleanupUseCase, clinicRepo, notificationService } = container;
+        processGracePeriodsUseCase, endSessionCleanupUseCase, purgeStaleGhostsUseCase, clinicRepo, notificationService } = container;
 
 // ── Breaks ────────────────────────────────────────────────────────────────
 router.post('/breaks/schedule', auth, (req, res) => doctorController.scheduleBreak(req, res));
@@ -152,6 +152,18 @@ router.post('/notifications/cron/end-session-cleanup/global', cronAuthMiddleware
     res.status(200).json({ processed: activeClinics.length, failed: failedSweeps.length });
   } catch (err: any) {
     console.error('[Cron/Global Nightly Cleanup Failed]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Frequency: Nightly at 2:00 AM.
+// Cleans up system-generated break blocks older than 48 hours.
+router.post('/cron/purge-ghosts', cronAuthMiddleware, async (_req: any, res: Response) => {
+  try {
+    const result = await purgeStaleGhostsUseCase.execute();
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[Cron/PurgeGhosts]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

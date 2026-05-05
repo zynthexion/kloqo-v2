@@ -7,7 +7,7 @@ import {
 import { SlotCalculator } from '../domain/services/SlotCalculator';
 import { BookingSessionEngine } from '../domain/services/BookingSessionEngine';
 import { computeWalkInSchedule, SchedulerAdvance, SchedulerWalkInCandidate } from '../domain/services/SlotScheduler';
-import { getClinicTimeString } from '../domain/services/DateUtils';
+import { getClinicTimeString, parseClinicDate } from '../domain/services/DateUtils';
 
 export interface WalkInPreviewDTO {
   clinicId: string;
@@ -35,7 +35,8 @@ export class GetWalkInPreviewUseCase {
 
     const now = new Date();
     const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.clinicId, dto.date);
-    const slots = SlotCalculator.generateSlots(doctor, now);
+    const requestedDate = parseClinicDate(dto.date);
+    const slots = SlotCalculator.generateSlots(doctor, requestedDate);
     const tokenDistribution = (doctor as any).tokenDistribution || (clinic as any).tokenDistribution || 'advanced';
     
     const activeSessionIndex = BookingSessionEngine.findActiveSession(
@@ -45,6 +46,8 @@ export class GetWalkInPreviewUseCase {
       now,
       tokenDistribution as 'classic' | 'advanced'
     );
+
+    console.log(`[DEBUG] GetWalkInPreview: activeSessionIndex=${activeSessionIndex} | Slots Count=${slots.length}`);
 
     if (activeSessionIndex === null) {
       console.warn(`[WalkInPreview] No active session found for doctor ${dto.doctorId} at ${now.toISOString()}`);
@@ -73,7 +76,22 @@ export class GetWalkInPreviewUseCase {
 
     const advanceApps: SchedulerAdvance[] = allAppointments
       .filter(a => a.bookedVia !== 'Walk-in' && a.status !== 'Cancelled')
-      .map(a => ({ id: `__shiftable_${a.id}`, slotIndex: a.slotIndex! }));
+      .map(a => {
+        const isBlocker = a.isSystemBlocker || a.bookedVia === 'BreakBlock';
+        const prefix = isBlocker ? '__break_' : '__shiftable_';
+        
+        let targetSlotIndex = a.slotIndex;
+        if (typeof targetSlotIndex !== 'number') {
+           const matchingSlot = sessionSlots.find(s => getClinicTimeString(s.time) === a.time);
+           if (matchingSlot) targetSlotIndex = matchingSlot.index;
+        }
+
+        return { 
+          id: `${prefix}${a.id}`, 
+          slotIndex: targetSlotIndex! 
+        };
+      })
+      .filter(a => typeof a.slotIndex === 'number'); // Ensure we only send valid indices
 
     console.log(`[WalkInPreview] Input Summary:`, {
       totalSlots: sessionSlots.length,

@@ -27,3 +27,5 @@ export {
     isSameDay 
 };
 
+// Explicitly re-export specific shared-core utilities if needed for name resolution
+export { getClinicISODateString } from '@kloqo/shared-core';
