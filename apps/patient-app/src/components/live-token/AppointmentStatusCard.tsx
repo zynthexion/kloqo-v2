@@ -122,17 +122,38 @@ export const AppointmentStatusCard = () => {
                                     </span>
                                 </div>
                                 
-                                {quadrant === 'OUT_CLINIC' && (
+                                 {quadrant === 'OUT_CLINIC' && (
                                     <motion.div 
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2"
+                                        className="space-y-4"
                                     >
-                                        <p className="text-[10px] font-bold text-slate-300 leading-relaxed">
-                                            {language === 'ml' 
-                                                ? 'നിങ്ങളുടെ സ്ഥാനം സുരക്ഷിതമാണ്. അടുത്തുള്ള ചായക്കടയിലോ മറ്റോ പോകണമെന്നുണ്ടെങ്കിൽ പോകാവുന്നതാണ്. തിരക്ക് തുടങ്ങുമ്പോൾ ഞങ്ങൾ അറിയിക്കാം.'
-                                                : 'Your spot is safely locked. Feel free to step out for a tea. We will notify you before consultations resume.'}
-                                        </p>
+                                        {doctorStatusInfo?.isBreak && (
+                                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center gap-4">
+                                                <div className="relative">
+                                                    <div className="absolute inset-0 bg-amber-500/20 blur-lg rounded-full animate-pulse"></div>
+                                                    <Hourglass className="w-6 h-6 text-amber-500 relative z-10 animate-spin-slow" />
+                                                </div>
+                                                <div className="flex-grow">
+                                                    <p className="text-xs font-black text-amber-500 uppercase tracking-widest mb-1">
+                                                        {language === 'ml' ? 'ഡോക്ടർ ബ്രേക്കിലാണ്' : 'Doctor on Break'}
+                                                    </p>
+                                                    <p className="text-[10px] font-bold text-amber-400/80 leading-tight">
+                                                        {language === 'ml'
+                                                            ? 'കൺസൾട്ടേഷൻ ഉടൻ പുനരാരംഭിക്കും. ദയവായി മുറിയുടെ അടുത്ത് തന്നെ നിൽക്കുക.'
+                                                            : 'Consultations will resume shortly. Please wait near the doctor\'s room.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="p-3 bg-white/5 border border-white/10 rounded-xl space-y-2">
+                                            <p className="text-[10px] font-bold text-slate-300 leading-relaxed">
+                                                {language === 'ml' 
+                                                    ? 'നിങ്ങളുടെ സ്ഥാനം സുരക്ഷിതമാണ്. അടുത്തുള്ള ചായക്കടയിലോ മറ്റോ പോകണമെന്നുണ്ടെങ്കിൽ പോകാവുന്നതാണ്. തിരക്ക് തുടങ്ങുമ്പോൾ ഞങ്ങൾ അറിയിക്കാം.'
+                                                    : 'Your spot is safely locked. Feel free to step out for a tea. We will notify you before consultations resume.'}
+                                            </p>
+                                        </div>
                                     </motion.div>
                                 )}
                             </div>

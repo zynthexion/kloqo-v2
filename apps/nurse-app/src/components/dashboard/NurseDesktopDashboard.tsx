@@ -24,7 +24,8 @@ import {
   Hash,
   Loader2,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, addDays, isSameDay, subMinutes } from 'date-fns';
@@ -191,6 +192,10 @@ export function NurseDesktopDashboard() {
     filteredAppointments.filter(a => ['Skipped', 'No-show'].includes(a.status)),
     [filteredAppointments]
   );
+  const overflowAppointments = useMemo(() => 
+    filteredAppointments.filter(a => a.isOverflow),
+    [filteredAppointments]
+  );
 
   const handleUpdateStatus = async (id: string, status: string) => {
     await updateAppointmentStatus(id, status);
@@ -208,6 +213,37 @@ export function NurseDesktopDashboard() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <NurseDesktopHeader />
+
+      {/* ⚠️ OVERFLOW ALERT BANNER */}
+      {overflowAppointments.length > 0 && (
+        <div className="px-8 pt-4">
+          <div className="bg-rose-50 border border-rose-200 rounded-[1.5rem] p-4 flex items-center justify-between shadow-sm animate-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-rose-200">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-rose-900 font-black text-lg leading-tight">Session Overflow Detected</h3>
+                <p className="text-rose-600 text-xs font-bold">
+                  {overflowAppointments.length} patients pushed past the original session end time. <b>Action Required:</b> Contact and reschedule.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="bg-white border-rose-200 text-rose-600 hover:bg-rose-50 font-black rounded-xl h-12 px-6"
+                onClick={() => {
+                   setActiveTab('pending'); // Usually they are in pending if they haven't arrived
+                   setSearchTerm(''); // Clear search to see them
+                }}
+              >
+                View Patients
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 grid grid-cols-12 gap-8 p-8 min-h-0 overflow-hidden">
         {/* Left/Main Column: Queue List */}

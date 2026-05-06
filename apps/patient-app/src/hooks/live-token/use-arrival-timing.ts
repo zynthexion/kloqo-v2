@@ -87,7 +87,14 @@ export function useArrivalTiming({
         const isOut = yourAppointmentDoctor?.consultationStatus === 'Out' || yourAppointmentDoctor?.consultationStatus === 'Break';
         if (!isOut) return '';
 
+        const isAtClinic = yourAppointment?.status === 'Confirmed' || yourAppointment?.status === 'InConsultation';
+
         if (breakMinutes > 0) {
+            // Rule: For patients at the clinic, hide absolute time to prevent frustration.
+            if (isAtClinic) {
+                return language === 'ml' ? 'ഡോക്ടർ ബ്രേക്കിലാണ്' : 'Doctor on break';
+            }
+
             if (sessionStartTimeDisplay) {
                 return language === 'ml' 
                     ? `ഡോക്ടർ ${sessionStartTimeDisplay}ന് തുടങ്ങും` 
@@ -97,7 +104,7 @@ export function useArrivalTiming({
         }
 
         return language === 'ml' ? 'ഉടൻ തുടങ്ങും' : 'Starting soon';
-    }, [yourAppointmentDoctor?.consultationStatus, breakMinutes, sessionStartTimeDisplay, language]);
+    }, [yourAppointmentDoctor?.consultationStatus, breakMinutes, sessionStartTimeDisplay, language, yourAppointment?.status]);
 
     // 3. Arrive By Time Calculation
     const originalReportByTime = useMemo(() => {

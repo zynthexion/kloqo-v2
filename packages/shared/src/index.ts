@@ -239,6 +239,15 @@ export interface Appointment {
   whatsappReminder5PMSent?: boolean;
   whatsappReminder7AMSent?: boolean;
   /**
+   * True if a doctor break pushed this appointment past the session's original closing time
+   * and the doctor opted for a "Hard Stop" (no extension).
+   */
+  isOverflow?: boolean;
+  /** The original scheduled time before any break-induced shifts (The Gravity Anchor). */
+  originalTime?: string;
+  /** The original target arrival time (The Gravity Anchor). */
+  originalArriveByTime?: string;
+  /**
    * ANALYTICS GUARDRAIL: Set to `true` only on ghost "dummy-break-patient" records
    * inserted by ScheduleBreakUseCase to hard-block slots from the booking engine.
    * Every analytics query MUST filter these out: `.filter(a => !a.isSystemBlocker)`

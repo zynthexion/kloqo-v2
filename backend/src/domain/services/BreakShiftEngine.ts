@@ -34,6 +34,7 @@ export interface ShiftSimulationResult {
     updates: Partial<Appointment>[];
     newGhosts: Partial<Appointment>[];
     extensionUpdates: Record<number, number>; // sessionIndex -> extensionMinutes
+    lockedIds: string[];
 }
 
 export class BreakShiftEngine {
@@ -49,25 +50,57 @@ export class BreakShiftEngine {
         date: string,
         allAppointments: Appointment[],
         activeBreaks: BreakPeriod[],
-        mode: 'FULL_COMPENSATION' | 'GAP_ABSORPTION' = 'GAP_ABSORPTION'
+        mode: 'FULL_COMPENSATION' | 'GAP_ABSORPTION' = 'GAP_ABSORPTION',
+        isCancellation: boolean = false,
+        clinicCurrentTime?: Date
     ): ShiftSimulationResult {
         const slotDuration = doctor.averageConsultingTime || 15;
         const updates: Partial<Appointment>[] = [];
         const newGhosts: Partial<Appointment>[] = [];
         const extensionUpdates: Record<number, number> = {};
+        const lockedIds: string[] = [];
+
+        const SNAP_BACK_WINDOW = 90; // Minutes: The "No-Stress Buffer"
 
         // 1. FILTER: The History Lock
         const futureAppointments = allAppointments.filter(a => 
             !a.isSystemBlocker && 
-            ['Pending', 'Confirmed'].includes(a.status)
+            ['Pending', 'Confirmed', 'Arrived'].includes(a.status)
         );
 
-        // 2. RESET: Back to Gravity
-        const workingAppts = futureAppointments.map(a => ({
-            ...a,
-            time: a.originalTime || a.time,
-            arriveByTime: a.originalArriveByTime || a.arriveByTime
-        }));
+        // 2. RESET: Back to Gravity (with Temporal Elasticity for cancellations)
+        const workingAppts = futureAppointments.map(a => {
+            const originalTime = a.originalTime || a.time;
+            const originalArriveByTime = a.originalArriveByTime || a.arriveByTime;
+
+            // 🛡️ FAIRNESS HANDOVER: Proximity Lock
+            // If we are cancelling a break, check if the snap-back is too close to "Now".
+            // CRITICAL: Only lock 'Advanced Booking' (people at home). 
+            // Walk-ins who are in the clinic SHOULD snap back to fill gaps!
+            if (isCancellation && clinicCurrentTime && a.bookedVia === 'Advanced Booking') {
+                const baseDate = parseClinicDate(date);
+                const targetSnapBackTime = parseClinicTime(originalTime, baseDate);
+                const proximityMinutes = differenceInMinutes(targetSnapBackTime, clinicCurrentTime);
+
+                // If the patient was supposed to be here within the next 90 mins, 
+                // LOCK them to their current shifted time to prevent panic.
+                if (proximityMinutes < SNAP_BACK_WINDOW) {
+                    console.log(`[BreakShiftEngine] 🔒 Proximity Lock: Keeping ${a.tokenNumber} at ${a.time} (original ${originalTime} is only ${proximityMinutes}m away)`);
+                    lockedIds.push(a.id);
+                    return {
+                        ...a,
+                        time: a.time, // Keep current shifted time
+                        arriveByTime: a.arriveByTime
+                    };
+                }
+            }
+
+            return {
+                ...a,
+                time: originalTime,
+                arriveByTime: originalArriveByTime
+            };
+        });
 
         // 3. PREPARE SESSIONS (Respect overrides)
         const dateStrIso = getClinicISODateString(parseClinicDate(date));
@@ -138,7 +171,11 @@ export class BreakShiftEngine {
             // Step B: Simulate Patient Ripple
             // "Gap Absorption" Logic: Patients only move if currentFreeTime > their original time.
             sessionAppts.forEach(appt => {
-                const origTime = parseClinicTime(appt.originalTime || appt.time, parseClinicDate(date));
+                const isLocked = lockedIds.includes(appt.id);
+                // If locked, we anchor to its CURRENT (shifted) time.
+                // Otherwise, we anchor back to its original time (Snap-back).
+                const anchorTime = isLocked ? appt.time : (appt.originalTime || appt.time);
+                const origTime = parseClinicTime(anchorTime, parseClinicDate(date));
                 
                 // 1. Check if any break overlaps with or precedes this patient
                 sessionBreaks.forEach(brk => {
@@ -171,13 +208,14 @@ export class BreakShiftEngine {
                     // Gap Absorption: Patient starts at MAX(originalTime, currentFreeTime)
                     const actualStart = origTime > currentFreeTime ? origTime : currentFreeTime;
                     
-                    if (actualStart > origTime) {
-                        appt.time = getClinicTimeString(actualStart);
-                        appt.arriveByTime = getClinicTimeString(subMinutes(actualStart, 15));
-                        if (actualStart > sessionEnd) appt.isOverflow = true;
-                    }
+                    appt.time = getClinicTimeString(actualStart);
+                    appt.arriveByTime = getClinicTimeString(subMinutes(actualStart, 15));
+                    if (actualStart > sessionEnd) appt.isOverflow = true;
                     
-                    currentFreeTime = addMinutes(actualStart, slotDuration);
+                    const isLocked = lockedIds.includes(appt.id);
+                    if (!isLocked) {
+                        currentFreeTime = addMinutes(actualStart, slotDuration);
+                    }
                 }
             });
 
@@ -225,7 +263,8 @@ export class BreakShiftEngine {
         return {
             updates,
             newGhosts,
-            extensionUpdates
+            extensionUpdates,
+            lockedIds
         };
     }
 }

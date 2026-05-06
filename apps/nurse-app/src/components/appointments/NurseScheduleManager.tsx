@@ -6,14 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Coffee, Trash2, Clock, Calendar as CalendarIcon, Loader2, AlertTriangle, ChevronRight, CheckCircle2, PlusCircle } from "lucide-react";
+import { Coffee, Trash2, Clock, Calendar as CalendarIcon, Loader2, AlertTriangle, ChevronRight, CheckCircle2, PlusCircle, Pencil } from "lucide-react";
 import { cn, formatTime12Hour } from "@/lib/utils";
 import { format, isSameDay, addDays, subDays } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { apiRequest } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { Doctor, BreakPeriod } from '@kloqo/shared';
-import { getClinicNow } from '@kloqo/shared-core';
+import { getClinicNow, displayTime12h } from '@kloqo/shared-core';
 import { AppointmentDatePicker } from './AppointmentDatePicker';
 
 interface NurseScheduleManagerProps {
@@ -52,7 +52,11 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
       // Fetch latest doctor state for breaks
       const docData = await apiRequest<{ doctor: Doctor }>(`/doctors/${doctor.id}`);
       const breakPeriodsRecord = docData.doctor.breakPeriods as Record<string, BreakPeriod[]> || {};
-      setBreaks(breakPeriodsRecord[dateStr] || []);
+      
+      // Rule 8.1: Try legacy format first for visibility
+      const legacyKey = format(selectedDate, 'd MMMM yyyy');
+      const isoKey = format(selectedDate, 'yyyy-MM-dd');
+      setBreaks(breakPeriodsRecord[legacyKey] || breakPeriodsRecord[isoKey] || []);
 
       // Fetch slots for adding new breaks
       const slotDateStr = format(selectedDate, 'yyyy-MM-dd'); // API prefers ISO format
@@ -83,8 +87,9 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
           doctorId: doctor.id,
           clinicId,
           breakId,
-          date: format(selectedDate, 'yyyy-MM-dd'),
-          shouldOpenSlots: true
+          date: format(selectedDate, 'd MMMM yyyy'),
+          shouldOpenSlots: true,
+          shouldPullForward: true // Align with useScheduleBreak behavior
         })
       });
       toast({ title: 'Break Cancelled', description: 'Action recorded in clinical audit trail.' });
@@ -151,7 +156,7 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
                        <div>
                          <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Time Slot</p>
                          <p className="text-lg md:text-xl font-black text-slate-800 tracking-tight">
-                            {b.startTime} – {b.endTime}
+                            {displayTime12h(b.startTimeFormatted || b.startTime)} – {displayTime12h(b.endTimeFormatted || b.endTime)}
                          </p>
                        </div>
                     </div>
@@ -163,14 +168,25 @@ export function NurseScheduleManager({ doctor, clinicId }: NurseScheduleManagerP
                            <p className="text-xs md:text-sm font-black text-emerald-600 mt-0.5 md:mt-1">+{b.sessionExtension ?? 0} Mins</p>
                         </div>
                       )}
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleDeleteBreak(b.id)} 
-                        disabled={isSubmitting}
-                        className="h-12 w-12 md:h-14 md:w-14 rounded-xl md:rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-300"
-                      >
-                        {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
-                      </Button>
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => {
+                            router.push(`/schedule-break?doctor=${doctor.id}&date=${format(selectedDate, 'yyyy-MM-dd')}&editId=${b.id}`);
+                          }}
+                          className="h-12 w-12 md:h-14 md:w-14 rounded-xl md:rounded-2xl bg-primary/5 text-primary hover:bg-primary hover:text-white transition-all duration-300"
+                        >
+                          <Pencil className="h-5 w-5" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => handleDeleteBreak(b.id)} 
+                          disabled={isSubmitting}
+                          className="h-12 w-12 md:h-14 md:w-14 rounded-xl md:rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-300"
+                        >
+                          {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}

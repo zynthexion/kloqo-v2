@@ -28,6 +28,7 @@ import {
     getClinicNow
 } from '../domain/services/DateUtils';
 import { KloqoRole, KLOQO_ROLES, Appointment } from '../../../packages/shared/src/index';
+import { NotificationService } from '../domain/services/NotificationService';
 import { BreakShiftEngine } from '../domain/services/BreakShiftEngine';
 import { QueueBubblingService } from '../domain/services/QueueBubblingService';
 
@@ -52,7 +53,8 @@ export class CancelBreakUseCase {
         private doctorRepo: IDoctorRepository,
         private clinicRepo: IClinicRepository,
         private activityRepo: IActivityRepository,
-        private queueBubblingService: QueueBubblingService
+        private queueBubblingService: QueueBubblingService,
+        private notificationService?: NotificationService
     ) {}
 
     async execute(request: CancelBreakRequest): Promise<CancelBreakResult> {
@@ -108,8 +110,11 @@ export class CancelBreakUseCase {
         const breakBlockGhosts = allAppointments.filter(a => a.isSystemBlocker && a.bookedVia === 'BreakBlock');
 
         // RE-SIMULATE WITHOUT THE CANCELLED BREAK
+        // 🛡️ FAIRNESS HANDOVER: Pass current time and cancellation flag to enable damping
         const simulation = BreakShiftEngine.simulateDayShifts(
-            doctor, clinic, date, allAppointments, finalBreaks, 'GAP_ABSORPTION'
+            doctor, clinic, date, allAppointments, finalBreaks, 'GAP_ABSORPTION',
+            true, // isCancellation
+            getClinicNow()
         );
 
         await this.appointmentRepo.runTransaction(async (txn: ITransaction) => {
@@ -172,6 +177,19 @@ export class CancelBreakUseCase {
         });
 
         this.doctorRepo.invalidateCache(doctorId, clinicId);
+
+        // 6. SMART NOTIFICATIONS
+        // 🛡️ FAIRNESS HANDOVER: Notify patients with tailored messages
+        if (this.notificationService) {
+            const snappedIds = simulation.updates.map(u => u.id!);
+            this.notificationService.notifyAllPatientsOfBreakCancellation({
+                clinicId,
+                doctorId,
+                date: isoDate,
+                snappedIds,
+                lockedIds: simulation.lockedIds
+            }).catch(err => console.error('[CancelBreak] Notification failed:', err));
+        }
 
         await this.activityRepo.save({
             id: '', type: 'SCHEDULING_CHANGE', action: 'CANCEL_BREAK', doctorId, clinicId, performedBy,

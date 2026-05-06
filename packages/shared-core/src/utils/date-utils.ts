@@ -209,6 +209,16 @@ export function getClinicShortDateString(date: Date = new Date()): string {
 }
 
 export function parseClinicTime(timeStr: string, baseDate: Date): Date {
+    // 0. Handle ISO strings directly
+    if (timeStr.includes('T') && timeStr.includes('Z')) {
+        const d = new Date(timeStr);
+        if (!isNaN(d.getTime())) return d;
+    }
+    if (timeStr.includes('+05:30')) {
+        const d = new Date(timeStr);
+        if (!isNaN(d.getTime())) return d;
+    }
+
     // 1. Resolve exactly which day this is in the target timezone (IST)
     const dateStr = getClinicISODateString(baseDate); 
     

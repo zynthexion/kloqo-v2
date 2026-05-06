@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { Loader2, ArrowRight, CheckCircle2, Coffee } from 'lucide-react';
 import AppFrameLayout from '@/components/layout/AppFrameLayout';
@@ -17,23 +18,24 @@ import { BreakDatePicker } from '@/components/schedule-break/BreakDatePicker';
 import { BreakSlotGrid } from '@/components/schedule-break/BreakSlotGrid';
 import { BreakImpactPreview } from '@/components/schedule-break/BreakImpactPreview';
 import { BreakCompensationToggle } from '@/components/schedule-break/BreakCompensationToggle';
+import { BreakList } from '@/components/schedule-break/BreakList';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
-import { Doctor } from '@kloqo/shared';
+import { Doctor, BreakPeriod } from '@kloqo/shared';
+import { displayTime12h } from '@kloqo/shared-core';
 
-const formatTimeStr = (t: string | null) => {
-  if (!t) return '';
-  const [h, m] = t.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
-};
+// REMOVED local formatTimeStr - using displayTime12h from shared-core (Rule 8.2)
 
 function BreakLayoutContent({
   stage, setStage, selectedDate, setSelectedDate, doctor, availableSessions,
   timeIntervals, endIntervals, sessionIndex, setSessionIndex, startTime,
   setStartTime, endTime, setEndTime, isFullCompensation, setIsFullCompensation,
   previewResult, isLoadingPreview, isConfirming, dates, handlePreview, handleConfirm,
-  onBack, doctors, selectedDoctorId, onDoctorChange
+  onBack, doctors, selectedDoctorId, onDoctorChange, handleCancelBreak,
+  doctorId, clinicId
 }: any) {
+  const dateKey = format(selectedDate, 'd MMMM yyyy');
+  const existingBreaks = doctor?.breakPeriods?.[dateKey] || [];
+
   return (
     <div className="flex flex-col h-full bg-slate-50 font-pt-sans">
       <BreakHeader 
@@ -48,6 +50,11 @@ function BreakLayoutContent({
         <>
           <BreakDatePicker dates={dates} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
           <main className="flex-1 p-4 pt-0 overflow-y-auto">
+            <BreakList 
+              breaks={existingBreaks} 
+              onCancel={handleCancelBreak} 
+              isCancelling={isConfirming} 
+            />
             <BreakSlotGrid 
               doctor={doctor}
               availableSessions={availableSessions}
@@ -70,10 +77,26 @@ function BreakLayoutContent({
                 <div className="flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
                    <span>Fulfillment window</span>
                    <span className="text-amber-600">
-                     {formatTimeStr(startTime)} – {formatTimeStr(endTime)}
+                     {displayTime12h(startTime)} – {displayTime12h(endTime)}
                    </span>
                 </div>
-                <Button onClick={handlePreview} disabled={isLoadingPreview} className="w-full h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-xl shadow-amber-500/20 active:scale-95 flex gap-3">
+                <Button 
+                  onClick={() => {
+                    console.log('🚀 [PREVIEW_IMPACT_CLICK] Payload Check:', {
+                      doctorId,
+                      clinicId,
+                      selectedDate: format(selectedDate, 'yyyy-MM-dd'),
+                      startTime,
+                      endTime,
+                      sessionIndex,
+                      isFullCompensation,
+                      editId: new URLSearchParams(window.location.search).get('editId')
+                    });
+                    handlePreview();
+                  }} 
+                  disabled={isLoadingPreview} 
+                  className="w-full h-16 rounded-[2rem] bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-xl shadow-amber-500/20 active:scale-95 flex gap-3"
+                >
                   {isLoadingPreview ? <Loader2 className="h-6 w-6 animate-spin" /> : <><span>Preview Impact</span><ArrowRight className="h-5 w-5" /></>}
                 </Button>
               </div>
@@ -119,9 +142,23 @@ function BreakLayoutContent({
 
 function Content() {
   const scheduleProps = useScheduleBreak();
-  const { doctorId, router, stage, setStage, clinicId } = scheduleProps;
+  const { doctorId, router, stage, setStage, clinicId, selectedDate } = scheduleProps;
   const { activeRole } = useActiveIdentity();
   const { data: nurseDashData } = useNurseDashboard(clinicId);
+  const searchParams = useSearchParams();
+  const dateKey = format(selectedDate, 'd MMMM yyyy');
+  const selectedDoctor = nurseDashData?.doctors?.find((d: any) => d.id === doctorId);
+
+  // 🛠️ DETAILED BREAK PAGE DEBUG LOG
+  console.log('--- 🛡️ CLOQO V2: BREAK PAGE DEBUG ---');
+  console.log('📍 Identity Context:', { doctorId, clinicId, activeRole });
+  console.log('🔗 URL Params:', Object.fromEntries(searchParams.entries()));
+  console.log('📅 Date Key Being Used:', `"${dateKey}"`);
+  console.log('📑 Stage Context:', { stage });
+  console.log('🏥 Doctor Object from Hook:', scheduleProps.doctor);
+  console.log('🏥 Doctor Break Periods (Hook):', scheduleProps.doctor?.breakPeriods?.[dateKey] || 'None');
+  console.log('🏥 Nurse Dashboard Data (SWR):', nurseDashData);
+  console.log('------------------------------------');
 
   const handleDoctorChange = (id: string) => {
     localStorage.setItem('selectedDoctorId', id);

@@ -4,8 +4,8 @@ import { format, addDays, addMinutes } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';
-import { getClinicTimeString, parseClinicDate, parseClinicTime, getClinicISODateString } from '@kloqo/shared-core';
-import type { Doctor } from '@kloqo/shared';
+import { getClinicTimeString, parseClinicDate, parseClinicTime, getClinicISODateString, getClinicNow } from '@kloqo/shared-core';
+import type { Doctor, BreakPeriod } from '@kloqo/shared';
 
 export type Stage = 'SELECT' | 'PREVIEW' | 'DONE';
 
@@ -34,8 +34,17 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
   const doctorId = searchParams.get('doctor') || (typeof window !== 'undefined' ? localStorage.getItem('selectedDoctorId') : null);
   const clinicId = user?.clinicId;
 
+  const editId = searchParams.get('editId');
+
   const [stage, setStage] = useState<Stage>('SELECT');
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => {
+    const urlDate = searchParams.get('date');
+    if (urlDate) {
+      const parsed = parseClinicDate(urlDate);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return getClinicNow();
+  });
   const [doctor, setDoctor] = useState<Doctor | null>(doctorProp || null);
 
   const [sessionIndex, setSessionIndex] = useState<number | null>(null);
@@ -67,15 +76,33 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     fetchDoctor();
   }, [fetchDoctor]);
 
-  // Reset selections when date changes
+  // Pre-fill Edit Mode
   useEffect(() => {
-    setSessionIndex(null);
-    setStartTime(null);
-    setEndTime(null);
-    setStage('SELECT');
-    setPreviewResult(null);
-    setIsFullCompensation(false);
-  }, [selectedDate]);
+    if (editId && doctor) {
+      const dateKey = format(selectedDate, 'd MMMM yyyy');
+      const isoDateKey = format(selectedDate, 'yyyy-MM-dd');
+      const dayBreaks = (doctor.breakPeriods?.[dateKey] || doctor.breakPeriods?.[isoDateKey] || []) as BreakPeriod[];
+      const b = dayBreaks.find(x => x.id === editId);
+      if (b) {
+        setSessionIndex(b.sessionIndex);
+        setStartTime(b.startTimeFormatted || b.startTime);
+        setEndTime(b.endTimeFormatted || b.endTime);
+        setIsFullCompensation((b.actualShiftMinutes ?? 0) > 0);
+      }
+    }
+  }, [editId, doctor, selectedDate]);
+
+  // Reset selections when date changes (if not in edit mode)
+  useEffect(() => {
+    if (!editId) {
+      setSessionIndex(null);
+      setStartTime(null);
+      setEndTime(null);
+      setStage('SELECT');
+      setPreviewResult(null);
+      setIsFullCompensation(false);
+    }
+  }, [selectedDate, editId]);
 
   const availableSessions = useMemo(() => {
     if (!doctor) return [];
@@ -131,11 +158,12 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
       endTime,
       sessionIndex,
       compensationMode: isFullCompensation ? 'FULL_COMPENSATION' : 'GAP_ABSORPTION',
+      replaceBreakId:   editId || undefined,
       isDryRun:         dry
     };
-  }, [sessionIndex, startTime, endTime, selectedDate, doctorId, clinicId, isFullCompensation]);
+  }, [sessionIndex, startTime, endTime, selectedDate, doctorId, clinicId, isFullCompensation, editId]);
 
-  const handlePreview = async () => {
+  const handlePreview = useCallback(async () => {
     const payload = buildPayload(true);
     if (!payload) return;
     setIsLoadingPreview(true);
@@ -151,9 +179,9 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     } finally {
       setIsLoadingPreview(false);
     }
-  };
+  }, [buildPayload, toast]);
 
-  const handleConfirm = async () => {
+  const handleConfirm = useCallback(async () => {
     const payload = buildPayload(false);
     if (!payload) return;
     setIsConfirming(true);
@@ -163,16 +191,40 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
         body: JSON.stringify(payload),
       });
       setStage('DONE');
-      toast({ title: '✅ Break Scheduled', description: 'Appointments have been shifted.' });
+      toast({ title: editId ? '✅ Break Updated' : '✅ Break Scheduled', description: 'Appointments have been shifted.' });
       setTimeout(() => router.push('/dashboard'), 2000);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Failed to Schedule', description: err.message });
     } finally {
       setIsConfirming(false);
     }
-  };
+  }, [buildPayload, router, toast, editId]);
 
-  return {
+  const handleCancelBreak = useCallback(async (breakId: string) => {
+    if (!doctorId || !clinicId) return;
+    setIsConfirming(true);
+    try {
+      await apiRequest('/breaks/cancel', {
+        method: 'POST',
+        body: JSON.stringify({
+          doctorId,
+          clinicId,
+          date: format(selectedDate, 'd MMMM yyyy'),
+          breakId,
+          shouldOpenSlots: true,
+          shouldPullForward: true
+        }),
+      });
+      toast({ title: '✅ Break Cancelled', description: 'Slots have been reopened.' });
+      fetchDoctor();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Cancellation Failed', description: err.message });
+    } finally {
+      setIsConfirming(false);
+    }
+  }, [doctorId, clinicId, selectedDate, toast, fetchDoctor]);
+
+  return useMemo(() => ({
     router,
     doctorId,
     clinicId,
@@ -196,7 +248,14 @@ export function useScheduleBreak(doctorProp?: Doctor | null) {
     isLoadingPreview,
     isConfirming,
     dates,
+    editId,
     handlePreview,
-    handleConfirm
-  };
+    handleConfirm,
+    handleCancelBreak
+  }), [
+    router, doctorId, clinicId, stage, selectedDate, doctor,
+    availableSessions, timeIntervals, endIntervals, sessionIndex,
+    startTime, endTime, isFullCompensation, previewResult,
+    isLoadingPreview, isConfirming, dates, editId, handlePreview, handleConfirm, handleCancelBreak
+  ]);
 }

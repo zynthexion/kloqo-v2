@@ -724,6 +724,63 @@ export class NotificationService {
   }
 
   /**
+   * notifyAllPatientsOfBreakCancellation
+   * 🛡️ FAIRNESS HANDOVER: Notifies patients after a break is cancelled.
+   * Tailors the message based on whether the patient was SNAPPED back to 
+   * original time or LOCKED to their shifted time (Damping).
+   */
+  async notifyAllPatientsOfBreakCancellation(params: {
+    clinicId: string;
+    doctorId: string;
+    date: string;
+    snappedIds: string[];
+    lockedIds: string[];
+  }): Promise<void> {
+    const { clinicId, doctorId, date, snappedIds, lockedIds } = params;
+
+    const doctor = await this.doctorRepo.findById(doctorId, clinicId);
+    if (!doctor) return;
+
+    const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date);
+    
+    // 1. Process SNAPPED patients (Moved back to original time)
+    const snappedAppts = appointments.filter(a => snappedIds.includes(a.id) && a.patientId);
+    await Promise.allSettled(snappedAppts.map(async a => {
+      if (this.fcmService && a.patientId) {
+        const lang = await this.getUserLanguage(a.patientId);
+        const title = lang === 'en' ? 'Good news: Doctor is back early!' : 'സന്തോഷവാർത്ത: ഡോക്ടർ നേരത്തെ എത്തി!';
+        const body = lang === 'en'
+          ? `Dr. ${doctor.name} resumed early. Your appointment has moved back to ${a.time}.`
+          : `ഡോക്ടർ ${doctor.name} നേരത്തെ കൺസൾട്ടേഷൻ ആരംഭിച്ചു. നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് സമയം ${a.time}-ലേക്ക് മാറിയിട്ടുണ്ട്.`;
+
+        this.fcmService.sendToUser(a.patientId, clinicId, {
+          title,
+          body,
+          data: { appointmentId: a.id, type: 'break_cancelled_snap', clinicId }
+        });
+      }
+    }));
+
+    // 2. Process LOCKED patients (Damped proximity lock)
+    const lockedAppts = appointments.filter(a => lockedIds.includes(a.id) && a.patientId);
+    await Promise.allSettled(lockedAppts.map(async a => {
+      if (this.fcmService && a.patientId) {
+        const lang = await this.getUserLanguage(a.patientId);
+        const title = lang === 'en' ? 'Doctor is back early!' : 'ഡോക്ടർ നേരത്തെ എത്തി!';
+        const body = lang === 'en'
+          ? `Your slot remains at ${a.time}, but if you arrive earlier, we may be able to see you sooner.`
+          : `നിങ്ങളുടെ അപ്പോയ്ൻ്റ്മെന്റ് സമയം ${a.time}-ൽ തന്നെ തുടരും. എങ്കിലും നേരത്തെ എത്താൻ സാധിക്കുമെങ്കിൽ ദയവായി വരുക.`;
+
+        this.fcmService.sendToUser(a.patientId, clinicId, {
+          title,
+          body,
+          data: { appointmentId: a.id, type: 'break_cancelled_lock', clinicId }
+        });
+      }
+    }));
+  }
+
+  /**
    * Universal Reminder Engine
    * Finds appointments in specific time windows and sends PWA/WhatsApp reminders.
    */
