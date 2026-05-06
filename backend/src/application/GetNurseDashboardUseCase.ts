@@ -76,8 +76,9 @@ export class GetNurseDashboardUseCase {
     }
 
     if (this.patientRepo && appointments && appointments.length > 0) {
-      const patientIds = [...new Set(appointments.map(a => a.patientId))];
-      const patients = await this.patientRepo!.findByPatientIds(patientIds, clinicId);
+      // ✅ SAFETY: Filter out undefined/null patientIds to prevent gRPC errors in repository
+      const patientIds = [...new Set(appointments.map(a => a.patientId).filter(id => !!id))];
+      const patients = patientIds.length > 0 ? await this.patientRepo!.findByPatientIds(patientIds, clinicId) : [];
       const patientMap = new Map(patients.map(p => [p.id, p]));
 
       for (const apt of appointments) {

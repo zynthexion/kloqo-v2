@@ -143,7 +143,9 @@ export class FirebasePatientRepository implements IPatientRepository {
   }
 
   async findByPatientIds(ids: string[], clinicId: string): Promise<Patient[]> {
-    if (!ids || ids.length === 0) return [];
+    // ✅ SAFETY: Filter out falsy IDs to prevent Firestore gRPC error
+    const validIds = (ids || []).filter(id => !!id && typeof id === 'string');
+    if (validIds.length === 0) return [];
 
     const CHUNK_SIZE = 30;
     const chunks: string[][] = [];

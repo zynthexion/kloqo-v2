@@ -34,7 +34,8 @@ export class FirebaseDoctorRepository implements IDoctorRepository {
         console.warn(`[SECURITY_ALERT] Potential IDOR attempt (Cache Hit): Clinic ${clinicId} tried to access Doctor ${id}`);
         return null;
       }
-      return cached;
+      // ✅ CLONE: Return a fresh object to prevent cache poisoning via reference mutation
+      return JSON.parse(JSON.stringify(cached));
     }
 
     const doc = await this.collection.doc(id).get();
