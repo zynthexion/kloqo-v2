@@ -267,6 +267,20 @@ export interface Appointment {
   };
 }
 
+export interface PrescriptionStroke {
+  points: number[][];
+  color: string;
+  width: number;
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
+export interface PrescriptionPage {
+  strokes: PrescriptionStroke[];
+  text?: string;
+  backgroundUrl?: string;
+}
+
 export interface ActivityLog {
   id: string;
   type: 'SCHEDULING_CHANGE' | 'SYSTEM' | string;

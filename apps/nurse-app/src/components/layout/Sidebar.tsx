@@ -40,10 +40,9 @@ export function Sidebar() {
   
   const pathname = usePathname();
   const { isSidebarOpen, setIsSidebarOpen, hideSidebar, isDashboard } = useSidebarBehavior(activeRole);
+  const { conflicts } = useConflictTriage();
 
   if (hideSidebar) return null;
-
-  const { conflicts } = useConflictTriage();
 
   const navItems = [
     { href: '/', icon: Home, label: 'Overview' },

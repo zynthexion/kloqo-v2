@@ -85,6 +85,7 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach,
         `/prescriptions/patient/${patientId}?clinicId=${clinicId}`
       );
       setHistory(data || []);
+      console.log(`[PatientHistoryOverlay] Successfully fetched ${data?.length || 0} history records for patient ${patientId}`);
     } catch (e) {
       console.error('Failed to fetch patient history', e);
     } finally {

@@ -164,6 +164,7 @@ import { SettingsController } from '../../../interfaces/SettingsController';
 import { SuperAdminController } from '../../../interfaces/SuperAdminController';
 import { PublicBookingController } from '../../../interfaces/PublicBookingController';
 import { ConflictController } from '../../../interfaces/ConflictController';
+import { UtilityController } from '../../../interfaces/UtilityController';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 1: Repositories & Infrastructure Services
@@ -477,6 +478,8 @@ const conflictController = new ConflictController(
   resolveAppointmentConflictUseCase
 );
 
+const utilityController = new UtilityController();
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Exports — the route files import exactly what they need
 // ═══════════════════════════════════════════════════════════════════════════
@@ -501,6 +504,7 @@ export const container = {
   superAdminController,
   publicBookingController,
   conflictController,
+  utilityController,
 
   // Exposed for middleware factory and inline route handlers
   verifySessionUseCase,

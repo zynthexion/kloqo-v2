@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { prescriptionController, appointmentController, doctorController,
         notificationController, analyticsController, webhookController, whatsappWebhookController,
         paymentController, storageController, sseController, fcmService,
-        processGracePeriodsUseCase, endSessionCleanupUseCase, purgeStaleGhostsUseCase, clinicRepo, notificationService } = container;
+        processGracePeriodsUseCase, endSessionCleanupUseCase, purgeStaleGhostsUseCase, clinicRepo, notificationService, utilityController } = container;
 
 // ── Breaks ────────────────────────────────────────────────────────────────
 router.post('/breaks/schedule', auth, (req, res) => doctorController.scheduleBreak(req, res));
@@ -170,6 +170,9 @@ router.post('/cron/purge-ghosts', cronAuthMiddleware, async (_req: any, res: Res
 
 // ── Error Logging (called by frontends, no auth required) ────────
 router.post('/log-error', (req, res) => analyticsController.logError(req, res));
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+router.get('/utils/proxy-image', (req, res) => utilityController.proxyImage(req, res));
 
 // ── SSE (Server-Sent Events) ─────────────────────────────────────────────
 router.get('/events/clinic/:clinicId', (req, res) => sseController.handleClinicStream(req, res));
