@@ -184,7 +184,7 @@ export class DoctorController {
   async updateAvailability(req: any, res: Response) {
     try {
       const user = req.user;
-      const { availabilitySlots, dateOverrides, forceCancelConflicts = false } = req.body;
+      const { availabilitySlots, dateOverrides, forceCancelConflicts = false, isDryRun = false } = req.body;
       const doctorId = req.params.id || req.body.doctorId;
 
       console.log(`[updateAvailability] Incoming request:`, {
@@ -195,7 +195,8 @@ export class DoctorController {
         hasAvailabilitySlots: !!availabilitySlots,
         hasDateOverrides: !!dateOverrides,
         dateOverrideKeys: dateOverrides ? Object.keys(dateOverrides) : [],
-        forceCancelConflicts
+        forceCancelConflicts,
+        isDryRun
       });
 
       if (!doctorId) {
@@ -230,15 +231,21 @@ export class DoctorController {
 
       console.log(`[updateAvailability] Calling use case with performedBy:`, performedBy);
 
-      await this.updateDoctorAvailabilityUseCase.execute({ 
+      const result = await this.updateDoctorAvailabilityUseCase.execute({ 
         doctorId, 
         availabilitySlots, 
         dateOverrides, 
         forceCancelConflicts,
+        isDryRun,
         performedBy,
         clinicId: doctor.clinicId
       });
-      res.status(204).send();
+      
+      if (isDryRun) {
+        return res.json(result);
+      }
+      
+      res.status(200).json(result);
     } catch (error: any) {
       console.error(`[updateAvailability] ERROR:`, error.message, error.stack);
       res.status(400).json({ error: error.message });

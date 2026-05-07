@@ -253,6 +253,18 @@ export interface Appointment {
    * Every analytics query MUST filter these out: `.filter(a => !a.isSystemBlocker)`
    */
   isSystemBlocker?: boolean;
+  /**
+   * Status of the appointment regarding schedule conflicts (overrides/shifts).
+   * PENDING: Needs nurse attention in the Action Center.
+   * RESOLVED: Conflict handled and patient moved to a new slot.
+   */
+  conflictStatus?: 'PENDING' | 'RESOLVED' | null;
+  /** Historical context for the conflict. */
+  conflictMetadata?: {
+    originalTime: string;
+    originalDate: string;
+    reason: string;
+  };
 }
 
 export interface ActivityLog {

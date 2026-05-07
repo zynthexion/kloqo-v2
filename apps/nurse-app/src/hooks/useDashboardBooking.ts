@@ -57,16 +57,21 @@ export function useDashboardBooking(selectedDoctor: string, clinicId?: string) {
     
     walkIn.setPhoneNumber(appt.communicationPhone || '');
     walkIn.selectPatient(apptPatient, true);
-    fetchSlots(selectedDate);
+    // Pass appt.doctorId explicitly — the selectedDoctor prop may not have
+    // updated yet because setSelectedId() is an async React state update.
+    fetchSlots(selectedDate, appt.doctorId);
   };
 
-  const fetchSlots = async (date: Date) => {
-    if (!selectedDoctor || !clinicId) return;
+  const fetchSlots = async (date: Date, overrideDoctorId?: string) => {
+    // Allow callers (e.g. startReschedule) to pass a doctor ID directly
+    // to avoid depending on the selectedDoctor prop being current (React state lag).
+    const effectiveDoctorId = overrideDoctorId || selectedDoctor;
+    if (!effectiveDoctorId || !clinicId) return;
     setLoadingSlots(true);
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
       const response = await apiRequest<any>(
-        `/appointments/available-slots?doctorId=${selectedDoctor}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
+        `/appointments/available-slots?doctorId=${effectiveDoctorId}&clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}`
       );
       setSlots(response.slots || []);
       setSelectedSlot(null);

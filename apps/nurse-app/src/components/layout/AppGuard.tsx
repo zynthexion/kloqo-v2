@@ -58,7 +58,7 @@ export function AppGuard({ children }: { children: React.ReactNode }) {
 
       // 🏥 CLINICAL BOUNDARY: Dashboard, Walk-in & Patient History
       if (activeRole === 'nurse' || activeRole === 'doctor') {
-        const allowedClinicalPaths = ['/dashboard', '/walk-in', '/appointments', '/patients', '/settings', '/schedule-break', '/schedule-override', '/login', '/'];
+        const allowedClinicalPaths = ['/dashboard', '/walk-in', '/appointments', '/patients', '/settings', '/schedule-break', '/schedule-override', '/action-center', '/login', '/'];
         const isAllowed = allowedClinicalPaths.some(p => pathname === p || (p !== '/' && pathname.startsWith(p)));
         
         if (!isAllowed) {

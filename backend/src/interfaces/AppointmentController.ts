@@ -394,7 +394,7 @@ export class AppointmentController {
       }
       
       const appointments = await this.appointmentRepo.findByDoctorAndDate(doctorId as string, clinicId, date as string);
-      const isTaken = appointments.some(a => a.time === time && a.status !== 'Cancelled');
+      const isTaken = appointments.some(a => a.time === time && a.status !== 'Cancelled' && a.conflictStatus !== 'PENDING');
       res.json({ available: !isTaken });
     } catch (error: any) {
       console.error('[checkSlot error]', error.message);

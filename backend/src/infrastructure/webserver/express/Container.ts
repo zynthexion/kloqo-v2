@@ -141,6 +141,8 @@ import { GetInvestorMetricsUseCase } from '../../../application/GetInvestorMetri
 import { ProcessGracePeriodsUseCase } from '../../../application/ProcessGracePeriodsUseCase';
 import { EndSessionCleanupUseCase } from '../../../application/EndSessionCleanupUseCase';
 import { PurgeStaleGhostsUseCase } from '../../../application/PurgeStaleGhostsUseCase';
+import { GetPendingConflictsUseCase } from '../../../application/GetPendingConflictsUseCase';
+import { ResolveAppointmentConflictUseCase } from '../../../application/ResolveAppointmentConflictUseCase';
 
 // ── Interfaces: Controllers ────────────────────────────────────────────────
 import { AppointmentController } from '../../../interfaces/AppointmentController';
@@ -161,6 +163,7 @@ import { WhatsAppWebhookController } from '../../../interfaces/http/controllers/
 import { SettingsController } from '../../../interfaces/SettingsController';
 import { SuperAdminController } from '../../../interfaces/SuperAdminController';
 import { PublicBookingController } from '../../../interfaces/PublicBookingController';
+import { ConflictController } from '../../../interfaces/ConflictController';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LAYER 1: Repositories & Infrastructure Services
@@ -291,6 +294,10 @@ const getWalkInPreviewUseCase = new GetWalkInPreviewUseCase(appointmentRepo, doc
 const confirmArrivalUseCase = new ConfirmArrivalUseCase(appointmentRepo, clinicRepo, updateAppointmentStatusUseCase);
 const getPublicQueueStatusUseCase = new GetPublicQueueStatusUseCase(clinicRepo, doctorRepo, appointmentRepo, counterRepo);
 const confirmAppointmentPaymentUseCase = new ConfirmAppointmentPaymentUseCase(appointmentRepo, sseService);
+
+// Conflicts
+const getPendingConflictsUseCase = new GetPendingConflictsUseCase(appointmentRepo);
+const resolveAppointmentConflictUseCase = new ResolveAppointmentConflictUseCase(appointmentRepo, doctorRepo, clinicRepo, notificationService, sseService, tokenStrategyFactory);
 
 // Prescriptions
 const createPrescriptionUseCase = new CreatePrescriptionUseCase(prescriptionRepo);
@@ -465,6 +472,11 @@ const publicBookingController = new PublicBookingController(
   clinicRepo
 );
 
+const conflictController = new ConflictController(
+  getPendingConflictsUseCase,
+  resolveAppointmentConflictUseCase
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Exports — the route files import exactly what they need
 // ═══════════════════════════════════════════════════════════════════════════
@@ -488,6 +500,7 @@ export const container = {
   sseController,
   superAdminController,
   publicBookingController,
+  conflictController,
 
   // Exposed for middleware factory and inline route handlers
   verifySessionUseCase,

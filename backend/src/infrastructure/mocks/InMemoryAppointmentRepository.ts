@@ -133,6 +133,22 @@ export class InMemoryAppointmentRepository implements IAppointmentRepository {
     this.appointments = [...appointments];
   }
 
+  // --- Conflict resolution stubs (not exercised by unit/integration tests) ---
+  async findConflictsByClinic(clinicId: string): Promise<Appointment[]> {
+    return this.appointments.filter(a => a.clinicId === clinicId && a.conflictStatus === 'PENDING');
+  }
+  async markAsConflict(appointmentIds: string[], clinicId: string, _metadata: { originalTime: string; originalDate: string; reason: string }, _transaction?: ITransaction): Promise<void> {
+    for (const id of appointmentIds) {
+      await this.update(id, clinicId, { conflictStatus: 'PENDING' } as any);
+    }
+  }
+  async clearSlotLocks(_doctorId: string, _date: string, _transaction?: ITransaction): Promise<void> {
+    // no-op in memory
+  }
+  async purgeStaleGhosts(_threshold: Date): Promise<number> {
+    return 0;
+  }
+
   // --- Unimplemented/Not needed for these tests ---
   async findAll(_params?: PaginationParams): Promise<PaginatedResponse<Appointment> | Appointment[]> { return []; }
   async findAllGlobal(_startDate: Date, _endDate: Date): Promise<Appointment[]> { return []; }

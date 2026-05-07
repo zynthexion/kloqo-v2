@@ -41,7 +41,7 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
   const { user } = useAuth();
   const { refresh } = useNurseDashboardContext();
   const { toast } = useToast();
-  const { isPending: hookPending, addOverride, markLeave } = useDateOverrides(doctor, async () => {
+  const { isPending: hookPending, addOverride, markLeave, getPreview } = useDateOverrides(doctor, async () => {
     await refresh();
   });
 
@@ -56,6 +56,29 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
   const [isOff, setIsOff] = useState(false);
   const [sessions, setSessions] = useState<{ from: string; to: string }[]>([{ from: '09:00', to: '17:00' }]);
   const [conflictError, setConflictError] = useState<string | null>(null);
+  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
+  // Preview logic
+  useEffect(() => {
+    if (!isModalOpen || !selectedDate) return;
+    
+    const fetchPreview = async () => {
+      setIsPreviewLoading(true);
+      try {
+        const override: DoctorOverride = { isOff, slots: isOff ? undefined : sessions };
+        const result = await getPreview(selectedDate, override);
+        setPreviewCount(result.conflictCount);
+      } catch (err) {
+        console.error("Preview fetch failed", err);
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    };
+
+    const timer = setTimeout(fetchPreview, 500);
+    return () => clearTimeout(timer);
+  }, [selectedDate, isOff, sessions, isModalOpen]);
 
   // Identity Gating
   const isSelf = user?.id === doctor.userId || user?.id === doctor.id;
@@ -266,6 +289,39 @@ export function NurseDateOverrideManager({ doctor, clinicId }: NurseDateOverride
                         </div>
                       </div>
                     )}
+
+                    {/* Impact Preview Section */}
+                    <div className={cn(
+                      "p-4 rounded-2xl border-2 transition-all duration-300",
+                      previewCount && previewCount > 0 
+                        ? "bg-amber-50 border-amber-100/50" 
+                        : "bg-slate-50 border-slate-100/50"
+                    )}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Users className={cn("w-4 h-4", previewCount && previewCount > 0 ? "text-amber-600" : "text-slate-400")} />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Impact Analysis</span>
+                        </div>
+                        {isPreviewLoading && <Loader2 className="w-3 h-3 animate-spin text-slate-400" />}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-xs font-black text-slate-900">{previewCount ?? '0'}</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Affected Appts</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-black text-emerald-600">Dynamic</p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Capacity Status</p>
+                        </div>
+                      </div>
+
+                      {previewCount !== null && previewCount > 0 && (
+                        <p className="mt-3 text-[10px] text-amber-700 font-medium leading-tight">
+                          Note: Applying this override will trigger the <span className="font-black uppercase">Triage Action Center</span> for {previewCount} appointments.
+                        </p>
+                      )}
+                    </div>
 
                     <Button 
                       onClick={() => handleAddOverride(false)} 

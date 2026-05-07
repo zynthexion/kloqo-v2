@@ -127,9 +127,12 @@ export class GetAvailableSlotsUseCase {
 
     // ── 4. Build booked slot index map ────────────────────────────────────────
     //    Any appointment in an active status occupies a slot.
+    //    EXCEPTION: Appointments with conflictStatus === 'PENDING' are ignored (Rule: Conflict = Void Slot)
     const bookedMap = new Map<number, string>();
     appointments.forEach(a => {
-      if (['Pending', 'Confirmed', 'Completed', 'Attended'].includes(a.status)) {
+      const isConflicted = a.conflictStatus === 'PENDING';
+      
+      if (!isConflicted && ['Pending', 'Confirmed', 'Completed', 'Attended'].includes(a.status)) {
         if (typeof a.slotIndex === 'number') {
           bookedMap.set(a.slotIndex, a.tokenNumber ?? 'BOOKED');
         }

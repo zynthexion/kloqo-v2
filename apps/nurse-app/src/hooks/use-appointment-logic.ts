@@ -33,6 +33,7 @@ export function useAppointmentLogic({
   
   const pressStartTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number>(0);
+  const processingSkipsRef = useRef<Set<string>>(new Set());
 
   const calculateLiveDelay = useCallback((appt: Appointment) => {
     const doctor = doctors.find(d => d.id === appt.doctorId);
@@ -132,7 +133,7 @@ export function useAppointmentLogic({
     const gracePeriod = doctor?.gracePeriodMinutes || 15;
     const liveDelay = calculateLiveDelay(appt);
 
-    const baseDate = currentTime || getClinicNow();
+    const baseDate = appt.date ? new Date(`${appt.date}T00:00:00`) : (currentTime || getClinicNow());
     const scheduledTime = parseClinicTime(appt.time, baseDate);
 
     const deadline = new Date(scheduledTime.getTime() + (liveDelay + gracePeriod) * 60 * 1000);
@@ -159,10 +160,11 @@ export function useAppointmentLogic({
 
     const checkSkips = () => {
       appointments.forEach(appt => {
-        if (appt.status === 'Pending') {
+        if (appt.status === 'Pending' && !processingSkipsRef.current.has(appt.id)) {
           const { deadline } = calculateDeadlineInfo(appt);
           if (deadline && currentTime > deadline) {
             console.log(`[Auto-Skip] Skipping ${appt.patientName} (${appt.id}) - Deadline was ${deadline.toLocaleTimeString()}`);
+            processingSkipsRef.current.add(appt.id);
             onUpdateStatus(appt.id, 'Skipped');
           }
         }

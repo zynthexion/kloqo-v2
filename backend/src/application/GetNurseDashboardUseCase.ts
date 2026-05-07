@@ -97,6 +97,7 @@ export class GetNurseDashboardUseCase {
     // 🔒 SECURITY: BKP-01 Staff Blinding
     let filteredAppointments = (appointments || []).filter(apt => {
       if (apt.isSystemBlocker) return false;
+      if (apt.conflictStatus === 'PENDING') return false; // 🛡️ CONFLICT_CENTER: Hide until RESOLVED
       const isUnpaidPending = apt.status === 'Pending' && (apt.paymentStatus === 'Unpaid' || !apt.paymentStatus);
       
       if (apt.bookedVia === 'Advanced Booking') return true;

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Radio, List, Calendar, Settings, ChevronRight, User, Power, Loader2 } from 'lucide-react';
+import { Home, Radio, List, Calendar, Settings, ChevronRight, User, Power, Loader2, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNurseDashboard } from '@/hooks/useNurseDashboard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,6 +12,7 @@ import { RoleSwitcher } from './RoleSwitcher';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveIdentity } from "@/hooks/useActiveIdentity";
 import { useSidebarBehavior } from "@/hooks/useSidebarBehavior";
+import { useConflictTriage } from "@/hooks/useConflictTriage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,9 +43,12 @@ export function Sidebar() {
 
   if (hideSidebar) return null;
 
+  const { conflicts } = useConflictTriage();
+
   const navItems = [
     { href: '/', icon: Home, label: 'Overview' },
     { href: '/dashboard', icon: Radio, label: 'Live' },
+    { href: '/action-center', icon: ShieldAlert, label: 'Alerts', badgeCount: conflicts.length },
     { href: '/appointments', icon: List, label: 'Bookings' },
     { href: '/appointments/schedule', icon: Calendar, label: 'Schedule' },
     { href: '/settings', icon: Settings, label: 'Settings' },
@@ -128,6 +132,14 @@ export function Sidebar() {
                     : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
                 )}>
                   <item.icon className={cn("h-7 w-7 transition-transform", isActive ? "scale-110 stroke-[2.5px]" : "group-hover:scale-110")} />
+                  
+                  {/* Badge for Alerts/Conflicts */}
+                  {(item as any).badgeCount !== undefined && (item as any).badgeCount > 0 && (
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-white flex items-center justify-center animate-bounce shadow-lg shadow-rose-200 z-10">
+                      <span className="text-[10px] text-white font-black">{(item as any).badgeCount}</span>
+                    </div>
+                  )}
+
                   {isActive && (
                     <div className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1.5 h-8 bg-primary rounded-r-full" />
                   )}

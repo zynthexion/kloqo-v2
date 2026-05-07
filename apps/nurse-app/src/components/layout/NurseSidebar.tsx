@@ -10,8 +10,10 @@ import {
   Activity,
   LogOut,
   User,
-  Map
+  Map,
+  ShieldAlert
 } from 'lucide-react';
+import { useConflictTriage } from '@/hooks/useConflictTriage';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -24,15 +26,21 @@ interface SidebarItemProps {
   active: boolean;
 }
 
-const SidebarItem = ({ href, icon: Icon, label, active }: SidebarItemProps) => (
+const SidebarItem = ({ href, icon: Icon, label, active, badgeCount }: SidebarItemProps & { badgeCount?: number }) => (
   <Link href={href} className={cn(
-    "flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 gap-1 group",
+    "flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-300 gap-1 group relative",
     active 
       ? "bg-primary text-white shadow-lg scale-105" 
       : "text-slate-400 hover:bg-slate-100/50 hover:text-slate-600"
   )}>
     <Icon className={cn("h-6 w-6 transition-transform group-hover:scale-110", active ? "text-white" : "text-slate-400")} />
     <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+    
+    {badgeCount !== undefined && badgeCount > 0 && (
+      <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-white flex items-center justify-center animate-bounce shadow-lg shadow-rose-200 z-10">
+        <span className="text-[10px] text-white font-black">{badgeCount}</span>
+      </div>
+    )}
   </Link>
 );
 
@@ -40,9 +48,12 @@ export function NurseSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
 
+  const { conflicts } = useConflictTriage();
+
   const menuItems = [
     { href: '/day-snapshot', icon: LayoutDashboard, label: 'Dash' },
     { href: '/dashboard', icon: Activity, label: 'Live' },
+    { href: '/action-center', icon: ShieldAlert, label: 'Alerts', badgeCount: conflicts.length },
     { href: '/appointments', icon: CalendarDays, label: 'Appts' },
     { href: '/settings', icon: Settings, label: 'Setup' },
   ];
@@ -66,6 +77,7 @@ export function NurseSidebar() {
             icon={item.icon}
             label={item.label}
             active={pathname === item.href}
+            badgeCount={(item as any).badgeCount}
           />
         ))}
       </nav>

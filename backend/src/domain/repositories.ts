@@ -55,6 +55,7 @@ export interface IAppointmentRepository {
   runTransaction<T>(action: (transaction: ITransaction) => Promise<T>): Promise<T>;
   createSlotLock(lockId: string, data: { appointmentId: string; doctorId: string; date: string; sessionIndex: number; slotIndex: number }, transaction: ITransaction): Promise<void>;
   releaseSlotLock(lockId: string, transaction?: ITransaction): Promise<void>;
+  clearSlotLocks(doctorId: string, date: string, transaction?: ITransaction): Promise<void>;
 
   /**
    * Atomically increments or decrements the session's booked-count counter.
@@ -65,6 +66,8 @@ export interface IAppointmentRepository {
   updateBookedCount(clinicId: string, doctorId: string, date: string, sessionIndex: number, delta: 1 | -1, transaction: ITransaction): Promise<void>;
   findByIdGlobal(id: string, transaction?: ITransaction): Promise<Appointment | null>;
   purgeStaleGhosts(threshold: Date): Promise<number>;
+  findConflictsByClinic(clinicId: string): Promise<Appointment[]>;
+  markAsConflict(appointmentIds: string[], clinicId: string, metadata: { originalTime: string; originalDate: string; reason: string }, transaction?: ITransaction): Promise<void>;
 }
 
 export interface IDoctorRepository {

@@ -74,7 +74,7 @@ export class QueueBubblingService {
 
       const allAppointments = await this.appointmentRepo.findByDoctorAndDate(doctorId, clinicId, date);
       const sessionAppointments = allAppointments.filter(
-        a => a.sessionIndex === sessionIndex && !a.isDeleted
+        a => a.sessionIndex === sessionIndex && !a.isDeleted && a.conflictStatus !== 'PENDING'
       );
 
       // 1. Identify "Protected Zone" — Dual-Phase Consultation Boundary Lock

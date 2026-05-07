@@ -59,22 +59,24 @@ export function useAppointmentManagement() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch appointments for selected date
+  // Sync today's appointments from context (SSE updates)
   useEffect(() => {
     if (!clinicId || !selectedDoctor) return;
     const isToday = isSameDay(selectedDate, new Date());
     
-    // For today on real-time dash, we might want everything, 
-    // but the user specifically asked for pagination on /appointments list.
-    // So we apply it here.
-    
-
     if (isToday && data?.appointments && !debouncedSearch) {
       setDateAppointments(data.appointments);
       setTotalCount(data.appointments.length);
       setHasMore(false);
-      return;
     }
+  }, [clinicId, selectedDoctor, selectedDate, data?.appointments, debouncedSearch]);
+
+  // Fetch appointments for other dates or when searching
+  useEffect(() => {
+    if (!clinicId || !selectedDoctor) return;
+    const isToday = isSameDay(selectedDate, new Date());
+    
+    if (isToday && !debouncedSearch) return;
 
     const fetchData = async () => {
       setDateLoading(true);
@@ -86,20 +88,11 @@ export function useAppointmentManagement() {
         const res = await fetch(`${API_URL}/appointments/dashboard?clinicId=${clinicId}&date=${encodeURIComponent(dateStr)}&page=${page}&limit=${limit}${searchPart}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('[Appointments] Fetch Response:', res.status, res.statusText);
         if (res.ok) {
           const json = await res.json();
-          console.log('[Appointments] Data Received:', {
-            count: json.appointments?.length,
-            total: json.totalCount,
-            hasMore: json.hasMore
-          });
           setDateAppointments(json.appointments ?? []);
           setTotalCount(json.totalCount ?? 0);
           setHasMore(json.hasMore ?? false);
-        } else {
-          const err = await res.text();
-          console.error('[Appointments] Fetch Error Payload:', err);
         }
       } catch (e) {
         console.error('[Appointments] Fetch Error:', e);
@@ -108,7 +101,7 @@ export function useAppointmentManagement() {
       }
     };
     fetchData();
-  }, [clinicId, selectedDate, selectedDoctor, data?.appointments, page, debouncedSearch]);
+  }, [clinicId, selectedDate, selectedDoctor, page, debouncedSearch]);
 
   // Reset page when date or doctor changes
   useEffect(() => {

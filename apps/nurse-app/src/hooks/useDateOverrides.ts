@@ -55,6 +55,23 @@ export function useDateOverrides(doctor: Doctor, onUpdate: (newOverrides: Record
     await updateOverrides(newOverrides);
   };
 
+  const getPreview = async (date: Date, override: DoctorOverride) => {
+    const dateKey = getClinicISODateString(date);
+    const newOverrides = {
+      ...(doctor.dateOverrides || {}),
+      [dateKey]: override,
+    };
+    
+    return await apiRequest<{ conflictCount: number }>(`/doctors/${doctor.id}/availability`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        doctorId: doctor.id,
+        dateOverrides: newOverrides,
+        isDryRun: true
+      }),
+    });
+  };
+
   const markLeave = async (startDate: Date, endDate?: Date, force: boolean = false) => {
     setIsPending(true);
     try {
@@ -90,6 +107,7 @@ export function useDateOverrides(doctor: Doctor, onUpdate: (newOverrides: Record
     isPending,
     addOverride,
     removeOverride,
+    getPreview,
     markLeave,
   };
 }

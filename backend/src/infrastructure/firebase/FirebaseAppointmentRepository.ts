@@ -564,6 +564,23 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     }
   }
 
+  async clearSlotLocks(doctorId: string, date: string, transaction?: ITransaction): Promise<void> {
+    const locksQuery = db.collection('slot-locks')
+      .where('doctorId', '==', doctorId)
+      .where('date', '==', date);
+    
+    if (transaction) {
+      const t = transaction as admin.firestore.Transaction;
+      const snapshot = await t.get(locksQuery);
+      snapshot.docs.forEach(doc => t.delete(doc.ref));
+    } else {
+      const snapshot = await locksQuery.get();
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
+  }
+
   /**
    * Atomically updates the session-level booked-count Firestore document.
    * MUST be called inside the same transaction as the appointment write.
@@ -614,5 +631,52 @@ export class FirebaseAppointmentRepository implements IAppointmentRepository {
     await batch.commit();
     console.log(`[REPOSITORY] Successfully purged ${snapshot.size} ghosts.`);
     return snapshot.size;
+  }
+
+  async findConflictsByClinic(clinicId: string): Promise<Appointment[]> {
+    const snapshot = await this.collection
+      .where('clinicId', '==', clinicId)
+      .where('conflictStatus', '==', 'PENDING')
+      .get();
+    
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as Appointment))
+      .filter(a => !a.isDeleted);
+  }
+
+  async markAsConflict(
+    appointmentIds: string[], 
+    clinicId: string, 
+    metadata: { originalTime: string; originalDate: string; reason: string },
+    transaction?: ITransaction
+  ): Promise<void> {
+    if (appointmentIds.length === 0) return;
+
+    const updateData = {
+      conflictStatus: 'PENDING',
+      conflictMetadata: metadata,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    if (transaction) {
+      const t = transaction as admin.firestore.Transaction;
+      for (const id of appointmentIds) {
+        t.update(this.collection.doc(id), updateData);
+      }
+    } else {
+      // Chunk for Firestore batch limits (500)
+      const chunks: string[][] = [];
+      for (let i = 0; i < appointmentIds.length; i += 500) {
+        chunks.push(appointmentIds.slice(i, i + 500));
+      }
+
+      await Promise.all(chunks.map(async (chunk) => {
+        const batch = db.batch();
+        chunk.forEach(id => {
+          batch.update(this.collection.doc(id), updateData);
+        });
+        await batch.commit();
+      }));
+    }
   }
 }

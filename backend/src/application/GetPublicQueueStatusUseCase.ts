@@ -87,7 +87,7 @@ export class GetPublicQueueStatusUseCase {
 
     // 1. Unified Active Queue (Includes InConsultation, Confirmed, and Pending)
     const activeQueue = realAppointments
-      .filter(apt => ['Confirmed', 'InConsultation', 'Pending'].includes(apt.status))
+      .filter(apt => ['Confirmed', 'InConsultation', 'Pending'].includes(apt.status) && apt.conflictStatus !== 'PENDING')
       .sort(tokenDistribution === 'advanced' ? compareAppointments : compareAppointmentsClassic);
 
     // 2. Arrived Queue (subset for current consultation fallback)
@@ -230,7 +230,7 @@ export class GetPublicQueueStatusUseCase {
           const feedQueue: any[] = [];
           
           // Include Pending patients in the feed search as well
-          const feedAppointments = realAppointments.filter(a => ['Confirmed', 'Pending', 'InConsultation'].includes(a.status));
+          const feedAppointments = realAppointments.filter(a => ['Confirmed', 'Pending', 'InConsultation'].includes(a.status) && a.conflictStatus !== 'PENDING');
 
           // Take the first 15 slots starting from the current one to show in the feed
           for (const slot of slotsFromCurrent.slice(0, 15)) {

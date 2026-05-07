@@ -118,6 +118,7 @@ export class BookAdvancedAppointmentUseCase {
           a.patientId === finalPatientId &&
           a.sessionIndex === sessionIndex &&
           a.status !== 'Cancelled' &&
+          a.conflictStatus !== 'PENDING' &&
           a.id !== request.rescheduleFromId
         );
 
