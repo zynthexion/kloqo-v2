@@ -168,7 +168,7 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach,
         </Button>
       </DialogTrigger>
       
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden border-none bg-[#F8FAFC] shadow-2xl rounded-[3rem]">
+      <DialogContent className="sm:max-w-none w-[98vw] h-[98dvh] flex flex-col p-0 overflow-hidden border-none bg-[#F8FAFC] shadow-2xl rounded-[2rem]">
         {/* Header Section */}
         <div className="px-10 py-8 bg-white border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center justify-between mb-8">
@@ -216,7 +216,7 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach,
               <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">No Historical Data Found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6 gap-6 pb-10">
                {filteredHistory.map((appt) => {
                   const completedAt = toDate(appt.completedAt);
                   return (
@@ -254,7 +254,7 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach,
         {/* Prescription Viewer Layer */}
         {selectedHistoryAppt && (
           <div className="absolute inset-0 z-[100] bg-slate-900/95 backdrop-blur-2xl flex flex-col animate-in fade-in duration-300">
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center px-6 py-4 border-b border-white/10 flex-shrink-0 bg-slate-900/50">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center px-6 pt-12 pb-4 border-b border-white/10 flex-shrink-0 bg-slate-900/50">
                  {/* Left: Info */}
                  <div className="flex items-center gap-3 overflow-hidden">
                     <div className="p-2.5 bg-white/10 rounded-xl hidden md:flex flex-shrink-0">
@@ -348,15 +348,23 @@ export function PatientHistoryOverlay({ selectedAppointment, clinicId, onAttach,
                     </Button>
                  </div>
               </div>
-             <div className="flex-1 overflow-hidden p-8 flex items-center justify-center">
-                <div className="relative h-full aspect-[1/1.414] bg-white rounded-xl shadow-2xl overflow-hidden w-full max-w-4xl">
-                   <iframe 
-                    src={selectedHistoryAppt.prescriptionUrl} 
-                    className="w-full h-full border-none"
-                    title="Prescription Preview"
-                   />
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-slate-950/50 custom-scrollbar">
+                <div className="relative w-full max-w-5xl bg-white rounded-xl shadow-2xl overflow-hidden min-h-min">
+                   {selectedHistoryAppt.prescriptionUrl?.toLowerCase().includes('.pdf') || selectedHistoryAppt.prescriptionUrl?.toLowerCase().includes('view=fit') ? (
+                     <iframe 
+                      src={`${selectedHistoryAppt.prescriptionUrl}${selectedHistoryAppt.prescriptionUrl.includes('?') ? '#' : '#'}toolbar=1&view=FitH`} 
+                      className="w-full h-[150vh] md:h-[200vh] border-none"
+                      title="Prescription Preview"
+                     />
+                   ) : (
+                     <img 
+                      src={selectedHistoryAppt.prescriptionUrl} 
+                      alt="Prescription Preview"
+                      className="w-full h-auto block"
+                     />
+                   )}
                 </div>
-             </div>
+              </div>
           </div>
         )}
 

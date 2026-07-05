@@ -62,8 +62,9 @@ export function usePrescriptionDrawing({
 
   // AUTO-SAVE LOGIC (Debounced to 1.5s)
   useEffect(() => {
-    // Don't save if it's the initial empty state
+    // If empty, ensure we clear any existing draft to avoid stale rehydration on refresh
     if (pages.length === 1 && pages[0].strokes.length === 0 && !pages[0].text && !pages[0].backgroundUrl) {
+      PrescriptionDraftService.clear(appointment.id);
       return;
     }
 
@@ -86,7 +87,7 @@ export function usePrescriptionDrawing({
 
   useEffect(() => {
     redrawPage(currentPageIndex);
-  }, [currentPageIndex, redrawPage]);
+  }, [currentPageIndex, pages, redrawPage]);
 
   const undo = useCallback(() => {
     setPages(prev => {

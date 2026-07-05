@@ -24,12 +24,8 @@ export function useDrawingEngine({
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  const pagesRef = useRef(pages);
-  const currentPageIndexRef = useRef(currentPageIndex);
-  useEffect(() => { pagesRef.current = pages; }, [pages]);
-  useEffect(() => { currentPageIndexRef.current = currentPageIndex; }, [currentPageIndex]);
-
-  const pressureToRadius = (pressure: number) => 0.4 + (pressure || 0.5) * 1.0;
+  // Remove stale refs to ensure reactive updates
+  const pressureToRadius = (pressure: number) => 0.3 + (pressure || 0.5) * 0.6;
 
   const redrawPage = useCallback((pageIndex?: number) => {
     if (isDrawingRef.current) return;
@@ -41,8 +37,8 @@ export function useDrawingEngine({
     const dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
-    const idx = pageIndex ?? currentPageIndexRef.current;
-    const page = pagesRef.current[idx];
+    const idx = pageIndex ?? currentPageIndex;
+    const page = pages[idx];
     const strokes = page?.strokes ?? [];
     const backgroundUrl = page?.backgroundUrl;
 
@@ -105,7 +101,7 @@ export function useDrawingEngine({
     } else {
       drawStrokes();
     }
-  }, [imageCacheRef, setIsLoadingBackground, setLoadError]);
+  }, [pages, currentPageIndex, imageCacheRef, setIsLoadingBackground, setLoadError]);
 
   const setupCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -189,10 +185,11 @@ export function useDrawingEngine({
       currentStrokeRef.current = [];
       if (points.length > 1) {
         const rect = canvas.getBoundingClientRect();
-        const pageIdx = currentPageIndexRef.current;
+        const pageIdx = currentPageIndex;
         queueMicrotask(() => {
           setPages(prev => {
             const next = [...prev];
+            if (!next[pageIdx]) return prev;
             next[pageIdx] = {
               ...next[pageIdx],
               strokes: [...next[pageIdx].strokes, { 
@@ -222,7 +219,7 @@ export function useDrawingEngine({
       canvas.removeEventListener('touchstart', preventDefault);
       canvas.removeEventListener('touchmove', preventDefault);
     };
-  }, [setPages]);
+  }, [setPages, currentPageIndex, pages.length]);
 
   return { canvasRef, redrawPage, setupCanvas };
 }

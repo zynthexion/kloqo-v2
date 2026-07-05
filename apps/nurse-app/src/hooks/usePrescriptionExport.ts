@@ -30,7 +30,7 @@ export function usePrescriptionExport({
     if (!fctx) return null;
 
     const exportOptions = {
-      size: 3.5,
+      size: 1.2,
       thinning: 0.6,
       smoothing: 0.5,
       streamline: 0.85,
@@ -197,12 +197,11 @@ export function usePrescriptionExport({
 
       page.strokes.forEach(s => {
         const scaleX = A4_WIDTH / (s.canvasWidth || 1);
-        const scaleY = A4_HEIGHT / (s.canvasHeight || 1);
-        const avgScale = (scaleX + scaleY) / 2;
+        const scaleY = scaleX; // Use uniform scale to prevent "squeezed" look
         const scaledPoints = s.points.map(([x, y, p]) => [x * scaleX, y * scaleY, p]);
         const outlinePoints = getStroke(scaledPoints, {
           ...exportOptions,
-          size: exportOptions.size * avgScale,
+          size: exportOptions.size * scaleX,
         });
         
         if (!outlinePoints.length) return;
@@ -252,7 +251,7 @@ export function usePrescriptionExport({
     if (!fctx) return null;
 
     const exportOptions = {
-      size: 3.5,
+      size: 1.2,
       thinning: 0.6,
       smoothing: 0.5,
       streamline: 0.85,
@@ -288,12 +287,11 @@ export function usePrescriptionExport({
 
       page.strokes.forEach(s => {
         const scaleX = A4_WIDTH / (s.canvasWidth || 1);
-        const scaleY = A4_HEIGHT / (s.canvasHeight || 1);
-        const avgScale = (scaleX + scaleY) / 2;
+        const scaleY = scaleX; // Use uniform scale to prevent "squeezed" look
         const scaledPoints = s.points.map(([x, y, p]) => [x * scaleX, y * scaleY, p]);
         const outlinePoints = getStroke(scaledPoints, {
           ...exportOptions,
-          size: exportOptions.size * avgScale,
+          size: exportOptions.size * scaleX,
         });
         
         if (!outlinePoints.length) return;
