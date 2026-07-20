@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Users, Power, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, Power, AlertCircle, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Appointment, Doctor, Clinic, Patient } from '@kloqo/shared';
 import { TabletDashboardLayout } from '@/components/layout/TabletDashboardLayout';
 import { TabletFocusLayout } from '@/components/layout/TabletFocusLayout';
@@ -9,7 +9,28 @@ import { TabletQueue } from '@/components/prescription/TabletQueue';
 import { PrescriptionCanvas, PrescriptionCanvasHandle } from '@/components/prescription/PrescriptionCanvas';
 import { PatientHistoryOverlay } from '@/components/prescription/PatientHistoryOverlay';
 import { Button } from '@/components/ui/button';
-import { PrescriptionDraftService } from '@kloqo/shared-core';
+import { cn } from '@/lib/utils';
+import { PrescriptionDraftService, getClinicNow } from '@kloqo/shared-core';
+import { DoctorSidebarPanel } from './DoctorSidebarPanel';
+import { apiRequest } from '@/lib/api-client';
+import { differenceInDays, format, isValid } from 'date-fns';
+
+function toDate(val: any): Date | null {
+  if (!val) return null;
+  try {
+    if (val?.toDate && typeof val.toDate === 'function') {
+      return val.toDate();
+    }
+    if (typeof val._seconds === 'number') {
+      const d = new Date(val._seconds * 1000);
+      return isValid(d) ? d : null;
+    }
+    const d = new Date(val);
+    return isValid(d) ? d : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 interface NurseTabletDashboardProps {
   data: {
@@ -46,6 +67,82 @@ export function NurseTabletDashboard({
   const currentDoctor = selectedAppointment 
     ? data.doctors.find(d => d.id === selectedAppointment.doctorId) || data.doctors[0]
     : data.doctors[0];
+
+  const [followUpStatus, setFollowUpStatus] = useState<{
+    loading: boolean;
+    isFree: boolean;
+    daysSinceLastVisit: number | null;
+    lastVisitDate: Date | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!selectedAppointment || !user?.clinicId) {
+      setFollowUpStatus(null);
+      return;
+    }
+
+    let active = true;
+    const checkFollowUp = async () => {
+      setFollowUpStatus({ loading: true, isFree: false, daysSinceLastVisit: null, lastVisitDate: null });
+      try {
+        const response = await apiRequest<Appointment[]>(
+          `/prescriptions/patient/${selectedAppointment.patientId}?clinicId=${user.clinicId}`
+        );
+        if (!active) return;
+
+        const doctorId = selectedAppointment.doctorId;
+        // Filter for completed/prescribed appointments for the SAME doctor, excluding the current appointment
+        const doctorAppointments = (response || [])
+          .filter(appt => appt.doctorId === doctorId && appt.id !== selectedAppointment.id && appt.status === 'Completed')
+          .map(appt => ({
+            ...appt,
+            completedDate: toDate(appt.completedAt || appt.date)
+          }))
+          .filter(appt => appt.completedDate !== null)
+          .sort((a, b) => b.completedDate!.getTime() - a.completedDate!.getTime());
+
+        const lastCompletedAppt = doctorAppointments[0];
+
+        if (lastCompletedAppt) {
+          const lastVisitDate = lastCompletedAppt.completedDate!;
+          const today = getClinicNow();
+          const daysSinceLastVisit = differenceInDays(today, lastVisitDate);
+          
+          const freeDays = currentDoctor?.freeFollowUpDays ?? 0;
+          const isFree = freeDays > 0 && daysSinceLastVisit <= freeDays;
+
+          setFollowUpStatus({
+            loading: false,
+            isFree,
+            daysSinceLastVisit,
+            lastVisitDate
+          });
+        } else {
+          setFollowUpStatus({
+            loading: false,
+            isFree: false,
+            daysSinceLastVisit: null,
+            lastVisitDate: null
+          });
+        }
+      } catch (err) {
+        console.error('Error checking follow-up status', err);
+        if (active) {
+          setFollowUpStatus({
+            loading: false,
+            isFree: false,
+            daysSinceLastVisit: null,
+            lastVisitDate: null
+          });
+        }
+      }
+    };
+
+    checkFollowUp();
+    return () => {
+      active = false;
+    };
+  }, [selectedAppointment?.id, selectedAppointment?.patientId, selectedAppointment?.doctorId, user?.clinicId, currentDoctor?.freeFollowUpDays]);
 
   const currentPatient = selectedAppointment ? {
     id: selectedAppointment.patientId,
@@ -97,7 +194,16 @@ export function NurseTabletDashboard({
   );
 
   return (
-    <TabletDashboardLayout noPadding headerActions={headerActions}>
+    <TabletDashboardLayout
+      noPadding
+      headerActions={headerActions}
+      rightPanel={
+        <DoctorSidebarPanel
+          onSelectAppointment={setSelectedAppointment}
+          selectedAppointmentId={selectedAppointment?.id}
+        />
+      }
+    >
       <TabletFocusLayout 
         queue={
           <TabletQueue 
@@ -162,6 +268,46 @@ export function NurseTabletDashboard({
                       <p className="text-lg font-black text-slate-800">{selectedAppointment.time || 'Walk-in'}</p>
                     </div>
                   </div>
+
+                  {/* Follow-up / Payment Status Verification */}
+                  {followUpStatus && !followUpStatus.loading && (
+                    <div className={cn(
+                      "p-6 rounded-[2rem] border flex items-start gap-4 transition-all duration-300",
+                      followUpStatus.isFree 
+                        ? "bg-emerald-50 border-emerald-100 text-emerald-800" 
+                        : "bg-rose-50 border-rose-100 text-rose-800"
+                    )}>
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                        followUpStatus.isFree ? "bg-white text-emerald-500" : "bg-white text-rose-500"
+                      )}>
+                        {followUpStatus.isFree ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <h4 className="text-xs font-black uppercase tracking-wider leading-none">
+                          {followUpStatus.isFree ? "Free Follow-up Consultation" : "Consultation Fee Required"}
+                        </h4>
+                        <p className="text-[11px] font-bold mt-2 opacity-90 leading-relaxed">
+                          {followUpStatus.isFree ? (
+                            `Payment is free this time. The patient's last completed visit was ${followUpStatus.daysSinceLastVisit} days ago (on ${format(followUpStatus.lastVisitDate!, 'MMMM d, yyyy')}), which is within the ${currentDoctor?.freeFollowUpDays || 0}-day free follow-up period.`
+                          ) : (
+                            followUpStatus.lastVisitDate ? (
+                              `The patient needs to pay the consultation fee. The last completed visit was ${followUpStatus.daysSinceLastVisit} days ago (on ${format(followUpStatus.lastVisitDate, 'MMMM d, yyyy')}), which is outside the ${currentDoctor?.freeFollowUpDays || 0}-day free follow-up period.`
+                            ) : (
+                              `The patient needs to pay the consultation fee. No previous completed consultation was found for this doctor.`
+                            )
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {followUpStatus?.loading && (
+                    <div className="p-6 rounded-[2rem] border border-slate-100 bg-slate-50/50 flex items-center justify-center gap-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                      <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Checking follow-up status…</span>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-4">
                     <Button 
