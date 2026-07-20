@@ -143,6 +143,7 @@ import { EndSessionCleanupUseCase } from '../../../application/EndSessionCleanup
 import { PurgeStaleGhostsUseCase } from '../../../application/PurgeStaleGhostsUseCase';
 import { GetPendingConflictsUseCase } from '../../../application/GetPendingConflictsUseCase';
 import { ResolveAppointmentConflictUseCase } from '../../../application/ResolveAppointmentConflictUseCase';
+import { SeedLocalClinicDataUseCase } from '../../../application/SeedLocalClinicDataUseCase';
 
 // ── Interfaces: Controllers ────────────────────────────────────────────────
 import { AppointmentController } from '../../../interfaces/AppointmentController';
@@ -480,6 +481,16 @@ const conflictController = new ConflictController(
 
 const utilityController = new UtilityController();
 
+// ── Local Standalone: Seed Use Case ────────────────────────────────────────────────
+// Used only when IS_LOCAL_STANDALONE=true to seed the local database from cloud
+const seedLocalClinicDataUseCase = new SeedLocalClinicDataUseCase(
+  clinicRepo,
+  doctorRepo,
+  departmentRepo,
+  userRepo,
+  notificationRepo,
+);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Exports — the route files import exactly what they need
 // ═══════════════════════════════════════════════════════════════════════════
@@ -518,4 +529,5 @@ export const container = {
   notificationService,
   purgeStaleGhostsUseCase,
   userRepo,
+  seedLocalClinicDataUseCase,
 };

@@ -1,0 +1,117 @@
+# ============================================================================
+# Kloqo V2 — Local Standalone Docker Compose
+# ============================================================================
+#
+# This file runs Kloqo as a completely self-contained local application.
+# All patient and clinic data is stored 100% on the clinic's local PC.
+#
+# Services:
+#   1. firestore-emulator  — Local database (replaces Google Cloud Firestore)
+#   2. kloqo-backend       — The Kloqo Node.js API server
+#   3. kloqo-clinic-web    — The Clinic Admin & Nurse Next.js frontend
+#
+# Usage:
+#   First time:  docker compose -f docker-compose.local.yml up --build
+#   Daily start: docker compose -f docker-compose.local.yml up -d
+#   Stop:        docker compose -f docker-compose.local.yml down
+#
+# Requirements:
+#   - Docker Desktop (https://www.docker.com/products/docker-desktop/)
+#   - A configured .env.local file (copy from .env.local.example and fill in)
+# ============================================================================
+
+version: '3.8'
+
+# ── Shared Network ────────────────────────────────────────────────────────────
+# All services communicate within this private Docker network.
+# Only the backend port (3001) and frontend port (3000) are exposed to the
+# local machine's network so that Nurse and Doctor PCs can connect.
+networks:
+  kloqo-local-net:
+    driver: bridge
+
+# ── Persistent Volumes ────────────────────────────────────────────────────────
+# Firestore data and uploaded files survive container restarts.
+volumes:
+  firestore-data:        # Local Firestore Emulator data
+    driver: local
+  kloqo-uploads:         # Local uploads (prescriptions, logos, avatars)
+    driver: local
+
+services:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Service 1: Firebase Firestore Local Emulator
+  # ────────────────────────────────────────────────────────────────────────────
+  # This replaces Google Cloud Firestore. All data stays on the clinic PC.
+  # No data is sent to Google servers.
+  firestore-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    container_name: kloqo-firestore-emulator
+    command: >
+      bash -c "gcloud beta emulators firestore start
+               --host-port=0.0.0.0:8080
+               --project=kloqo-local"
+    ports:
+      - "8080:8080"    # Firestore Emulator API port
+    volumes:
+      - firestore-data:/root/.config/gcloud/emulators/firestore
+    networks:
+      - kloqo-local-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Service 2: Kloqo Backend (Node.js / Express API)
+  # ────────────────────────────────────────────────────────────────────────────
+  kloqo-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.local
+    container_name: kloqo-backend
+    depends_on:
+      firestore-emulator:
+        condition: service_healthy
+    ports:
+      - "3001:3001"    # Exposed to LAN — Nurse/Doctor/Pharmacy PCs connect here
+    env_file:
+      - .env.local     # Clinic-specific local environment variables
+    environment:
+      # Override these to point to the local emulator inside Docker network
+      IS_LOCAL_STANDALONE: "true"
+      FIRESTORE_EMULATOR_HOST: "firestore-emulator:8080"
+      GCLOUD_PROJECT: "kloqo-local"
+      PORT: "3001"
+    volumes:
+      - kloqo-uploads:/app/uploads   # Persist uploaded files to local disk
+    networks:
+      - kloqo-local-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Service 3: Kloqo Clinic Admin (Next.js Web App)
+  # ────────────────────────────────────────────────────────────────────────────
+  # The reception, doctor, and (via Tailscale) pharmacy all use this web app.
+  kloqo-clinic-web:
+    build:
+      context: .
+      dockerfile: apps/clinic-admin/Dockerfile.local
+    container_name: kloqo-clinic-web
+    depends_on:
+      kloqo-backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"    # Exposed to LAN — open http://<clinic-pc-ip>:3000 on any device
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"  # Frontend calls local backend
+    networks:
+      - kloqo-local-net
+    restart: unless-stopped

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { VerifySessionUseCase } from '../../../application/VerifySessionUseCase';
 import { RBACUtils, KloqoRole, KLOQO_ROLES } from '@kloqo/shared';
+import { LicenseHeartbeatService } from '../../../domain/services/LicenseHeartbeatService';
 
 /**
  * Middleware factory — requires VerifySessionUseCase to be passed in.
@@ -62,3 +63,52 @@ export function createMiddleware(verifySessionUseCase: VerifySessionUseCase) {
 
   return { auth, checkRole, checkPermission };
 }
+
+// ── Local Standalone License Middleware ─────────────────────────────────────
+
+/**
+ * createLicenseMiddleware
+ *
+ * Factory for the SaaS license enforcement middleware used in standalone
+ * local Kloqo deployments. When called, it returns an Express middleware
+ * function that checks if the clinic's monthly subscription is valid before
+ * allowing any protected API call.
+ *
+ * The check uses the locally-cached subscription status (updated every 24h by
+ * LicenseHeartbeatService) — it does NOT make a network call on every request.
+ *
+ * A 7-day grace period is respected before the system goes into lockdown.
+ *
+ * Usage (in index.ts for local mode):
+ *   const verifyLicense = createLicenseMiddleware(licenseHeartbeatService);
+ *   app.use('/appointments', verifyLicense, appointmentRoutes);
+ *
+ * HTTP Responses:
+ *   - 402 Payment Required → Subscription expired and grace period ended.
+ *   - Passes through        → Subscription is active or in grace period.
+ */
+export function createLicenseMiddleware(heartbeatService: LicenseHeartbeatService) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    // Always allow the health check, seed, and license sync endpoints
+    // so clinic staff can troubleshoot connectivity even when locked.
+    const alwaysAllowedPaths = ['/health', '/api/v1/system/seed-local', '/api/v1/system/sync-subscription'];
+    if (alwaysAllowedPaths.some((p) => req.path.startsWith(p))) {
+      return next();
+    }
+
+    const { active, reason } = await heartbeatService.isLocallyActive();
+
+    if (!active) {
+      console.warn(`[LicenseMiddleware] Blocked request to ${req.path}: ${reason}`);
+      return res.status(402).json({
+        error: 'Subscription Required',
+        message: reason,
+        code: 'LICENSE_EXPIRED',
+        renewUrl: 'https://kloqo.com/billing',
+      });
+    }
+
+    next();
+  };
+}
+

@@ -1,0 +1,32 @@
+# ============================================================================
+# Clinic Admin Frontend Production Dockerfile (No Raw Source Code Included)
+# ============================================================================
+# Stage 1: Build Stage (Compiles Next.js & React to Minified JS)
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY package*.json ./
+COPY packages ./packages
+COPY apps/clinic-admin/package*.json ./apps/clinic-admin/
+COPY apps/clinic-admin ./apps/clinic-admin
+
+RUN npm install
+RUN npm run build --workspace=@kloqo/shared
+RUN npm run build --workspace=clinic-admin
+
+# ────────────────────────────────────────────────────────────────────────────
+# Stage 2: Production Stage (Contains ONLY minified .next build output)
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/clinic-admin/package*.json ./apps/clinic-admin/
+COPY --from=builder /app/apps/clinic-admin/.next ./apps/clinic-admin/.next
+COPY --from=builder /app/apps/clinic-admin/public ./apps/clinic-admin/public
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start", "--workspace=clinic-admin"]
