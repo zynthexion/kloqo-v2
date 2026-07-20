@@ -149,7 +149,7 @@ export class UpdateAppointmentStatusUseCase {
           const newSlot = require('../domain/services/WalkInPlacementService').WalkInPlacementService.findOptimalWalkInSlot(
             sessionSlots,
             sessionAppts,
-            getClinicNow(),
+            new Date(),
             effectiveDistribution as any,
             doctor.walkInTokenAllotment || clinic?.walkInTokenAllotment || 0,
             appointment.isPriority,
@@ -348,7 +348,7 @@ export class UpdateAppointmentStatusUseCase {
   }
 
   private async triggerBufferRefill(clinicId: string, doctorId: string, doctorName: string) {
-    const now = getClinicNow();
+    const now = new Date();
     const today = getClinicISODateString(now);
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
 

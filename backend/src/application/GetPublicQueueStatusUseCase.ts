@@ -51,7 +51,7 @@ export class GetPublicQueueStatusUseCase {
       throw new Error('Clinic or Doctor not found');
     }
 
-    const now = getClinicNow();
+    const now = new Date();
     const todayStrIst = getClinicISOString(now);
     const todayBaselineIst = parseClinicDate(todayStrIst);
     const requestedDate = parseClinicDate(date);

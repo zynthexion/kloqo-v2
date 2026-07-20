@@ -80,7 +80,7 @@ export class CreateWalkInAppointmentUseCase {
       }
     }
 
-    const now = getClinicNow();
+    const now = new Date();
     
     // 1. READ ALL CURRENT APPOINTMENTS (to find a gap)
     const allAppointments = await this.appointmentRepo.findByDoctorAndDate(dto.doctorId, dto.clinicId, firestoreDateStr);
@@ -240,7 +240,7 @@ export class CreateWalkInAppointmentUseCase {
    * Re-evaluates the top of the queue and updates buffer/lock tags.
    */
   private async triggerBufferRefill(clinicId: string, doctorId: string) {
-    const now = getClinicNow();
+    const now = new Date();
     const today = getClinicISODateString(now);
     const appointments = await this.appointmentRepo.findByClinicAndDate(clinicId, today);
     

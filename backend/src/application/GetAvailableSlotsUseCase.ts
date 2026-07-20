@@ -67,7 +67,7 @@ export class GetAvailableSlotsUseCase {
     }
 
     // ── 2. Date parsing & guard rails (Rules 8 & 14) ─────────────────────────
-    const now              = getClinicNow();
+    const now              = new Date();
     const todayStrIst      = getClinicISOString(now);
     const todayBaselineIst = parseClinicDate(todayStrIst);
 
